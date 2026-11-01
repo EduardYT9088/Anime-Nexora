@@ -27,16 +27,29 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Instalar dependencias
-        run: npm install
+      - name: Preparar proyecto (funciona solo con index.html en la raíz)
+        run: |
+          mkdir -p www
+          if [ ! -f www/index.html ]; then cp index.html www/index.html; fi
+          if [ ! -f package.json ]; then
+            npm init -y
+            npm pkg set name=animes-nexora
+          fi
+          npm install @capacitor/core@6 @capacitor/android@6 @capacitor/app@6 @capacitor/browser@6
+          npm install -D @capacitor/cli@6
+          if [ ! -f capacitor.config.json ]; then
+            printf '%s\n' '{"appId":"com.nexora.animes","appName":"Animes Nexora","webDir":"www","backgroundColor":"#0A0B14"}' > capacitor.config.json
+          fi
 
       - name: Crear proyecto Android
         run: npx cap add android
 
-      - name: Aplicar icono de Nexora
+      - name: Aplicar icono de Nexora (si existe)
         run: |
-          rm -rf android/app/src/main/res/mipmap-*
-          cp -r resources/android/mipmap-* android/app/src/main/res/
+          if [ -d resources/android ]; then
+            rm -rf android/app/src/main/res/mipmap-*
+            cp -r resources/android/mipmap-* android/app/src/main/res/
+          fi
 
       - name: Sincronizar la web con Android
         run: npx cap sync android

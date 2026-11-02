@@ -139,6 +139,22 @@ svg.i{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-l
 #splash svg{width:104px;height:104px;animation:pop .9s cubic-bezier(.2,.9,.3,1.2)}
 #splash p{margin-top:18px;font-size:21px;font-weight:700}
 @keyframes pop{from{transform:scale(.55) rotate(-24deg);opacity:0}}
+/* reproductor */
+#player{position:fixed;inset:0;z-index:80;background:var(--bg);display:none;flex-direction:column;overflow-y:auto}
+#player.on{display:flex}
+.ptop{display:flex;align-items:center;gap:12px;padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 10px}
+.ptop b{display:block;font-size:15px;line-height:1.25}
+.ptop small{color:var(--mut);font-size:12.5px}
+#pv{width:100%;aspect-ratio:16/9;background:#000;flex:none}
+.pbar{padding:16px 18px 40px}
+.pbar h4{font-size:13.5px;color:var(--mut);font-weight:600;margin:16px 0 8px}
+.pnav{display:flex;gap:10px;margin-top:16px}
+.epgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.epb{height:42px;border-radius:12px;background:var(--panel);text-align:center;font-weight:600;font-size:13.5px}
+.epb.on{background:var(--vio);color:#fff}
+.credit{margin-top:18px;padding:12px 14px;border-radius:14px;background:var(--panel);color:var(--mut);font-size:12.5px}
+.line textarea,.line input.wide{width:100%}
+.fld{display:block;width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;color:var(--txt);font:inherit;outline:0;margin-top:8px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -188,6 +204,11 @@ svg.i{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-l
   <button class="back" id="sback" aria-label="Cerrar"></button>
   <div id="sbody"></div>
 </section>
+<section id="player" aria-label="Reproductor">
+  <div class="ptop"><button class="iconbtn" id="pclose" aria-label="Cerrar reproductor"></button><div><b id="ptitle"></b><small id="psub"></small></div></div>
+  <video id="pv" controls playsinline></video>
+  <div class="pbar" id="pbar"></div>
+</section>
 <div id="toast" role="status"></div>
 
 <script>
@@ -236,7 +257,7 @@ const LIST=`query($page:Int,$perPage:Int,$sort:[MediaSort],$season:MediaSeason,$
 const DETAIL=`query($id:Int){Media(id:$id,type:ANIME){id title{romaji english native} coverImage{extraLarge large color} bannerImage description(asHtml:false) episodes duration status format season seasonYear averageScore genres studios(isMain:true){nodes{name}} trailer{id site} externalLinks{site url type color} nextAiringEpisode{episode timeUntilAiring} streamingEpisodes{title thumbnail url site} relations{edges{relationType node{id type format title{romaji english} coverImage{large color} averageScore seasonYear}}} recommendations(perPage:8,sort:RATING_DESC){nodes{mediaRecommendation{id title{romaji english} coverImage{large color} averageScore format seasonYear}}}}}`;
 
 /* ---------- estado ---------- */
-let settings=Object.assign({name:'',titles:'romaji',score:true},store.get('settings',{}));
+let settings=Object.assign({name:'',titles:'romaji',score:true,src:'',credit:'',autonext:true},store.get('settings',{}));
 let mylist=store.get('list',{});
 const saveSettings=()=>store.set('settings',settings);
 const saveList=()=>store.set('list',mylist);
@@ -281,6 +302,7 @@ function go(t,focus){
 }
 function closeSheet(){$('#sheet').classList.remove('open')}
 function back(){
+  if($('#player').classList.contains('on')){closePlayer();return true}
   if($('#sheet').classList.contains('open')){closeSheet();return true}
   if(tab!=='home'){go('home');return true}
   return false;
@@ -404,6 +426,7 @@ function renderDetail(m){
     ${tr?`<button class="btn pri" data-open="${esc(tr)}">${I('play')}Ver tráiler</button>`:`<button class="btn pri" data-open="https://anilist.co/anime/${m.id}">${I('play')}Más información</button>`}
     <button class="btn sq" data-share aria-label="Compartir">${I('share')}</button>
   </div>
+  ${settings.src?'<div class="blk" id="srcbox"><h3>Episodios</h3><div class="sk" style="height:48px;border-radius:12px"></div></div>':''}
   <div class="blk"><h3>Mi lista</h3>
     <div class="wrap">${LSTAT.map(x=>`<button class="chip${inList&&inList.ls===x[0]?' on':''}" data-ls="${x[0]}">${x[1]}</button>`).join('')}${inList?'<button class="chip" data-ls="">Quitar</button>':''}</div>
   </div>
@@ -413,16 +436,68 @@ function renderDetail(m){
   </div>
   <div class="blk"><div class="wrap">${m.genres.map(g=>`<button class="chip" data-g="${esc(g)}">${esc(gName(g))}</button>`).join('')}</div></div>
   <div class="blk"><h3>Dónde verlo</h3>
-    ${links.length?`<div class="wrap">${links.map(l=>`<button class="pill" style="--c:${esc(l.color||'#8B6CFF')}" data-open="${esc(l.url)}"><i></i>${esc(l.site)}</button>`).join('')}</div><p class="note">Se abre en la plataforma oficial. Nexora no aloja videos.</p>`:`<p class="syn">No hay plataformas oficiales registradas todavía.</p>`}
+    ${links.length?`<div class="wrap">${links.map(l=>`<button class="pill" style="--c:${esc(l.color||'#8B6CFF')}" data-open="${esc(l.url)}"><i></i>${esc(l.site)}</button>`).join('')}</div><p class="note">Se abre en la plataforma oficial.</p>`:`<p class="syn">No hay plataformas oficiales registradas todavía.</p>`}
   </div>
   ${eps.length?`<div class="blk"><h3>Episodios disponibles</h3>${eps.map(e=>`<button class="ep" data-open="${esc(e.url)}"><img loading="lazy" src="${esc(e.thumbnail||'')}" alt=""><span>${esc(e.title)}</span></button>`).join('')}</div>`:''}
   ${rel.length?`<section class="sec"><h3>Relacionados</h3><div class="row">${rel.map(e=>relCard(e.node,RELT[e.relationType]||'')).join('')}</div></section>`:''}
   ${rec.length?`<section class="sec"><h3>Te puede gustar</h3><div class="row">${rec.map(r=>relCard(r,'')).join('')}</div></section>`:''}
   <div style="height:48px"></div>`;
+  if(settings.src)loadSrc(m);
 }
 
+/* ---------- fuente propia y reproductor ---------- */
+let curEps=[],pl={i:0,lang:null,title:''},hls=null;
+function srcUrl(id){const b=settings.src.trim();return b.includes('{id}')?b.replace('{id}',id):b.replace(/\/$/,'')+'/anime/'+id+'.json'}
+async function loadSrc(m){
+  const box=$('#srcbox');if(!box)return;
+  try{
+    const r=await fetch(srcUrl(m.id));
+    if(r.status===404){box.innerHTML='<h3>Episodios</h3><p class="syn">Este anime todavía no está en tu fuente.</p>';return}
+    if(!r.ok)throw new Error('http');
+    const j=await r.json();
+    curEps=(j.episodes||[]).filter(e=>e.sources&&e.sources.length);
+    if(!curEps.length){box.innerHTML='<h3>Episodios</h3><p class="syn">Tu fuente no devolvió episodios para este anime.</p>';return}
+    const langs=[...new Set(curEps.flatMap(e=>e.sources.map(x=>x.label)))];
+    box.innerHTML=`<h3>Episodios</h3><div class="epgrid">${curEps.map((e,i)=>`<button class="epb" data-ep="${i}">${esc(e.number)}</button>`).join('')}</div><p class="note">Versiones: ${esc(langs.join(', '))}${settings.credit?'. Cortesía de '+esc(settings.credit):''}</p>`;
+  }catch(e){box.innerHTML='<h3>Episodios</h3><p class="syn">No se pudo leer tu fuente. Revisa que la dirección sea https y permita el acceso desde la app (CORS).</p>'}
+}
+function loadHls(){return new Promise((ok,no)=>{if(window.Hls)return ok();const t=document.createElement('script');t.src='https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js';t.onload=ok;t.onerror=no;document.head.appendChild(t)})}
+function openPlayer(i){
+  pl.i=i;pl.title=cur?T(cur):'';
+  const e=curEps[i];if(!pl.lang||!e.sources.some(x=>x.label===pl.lang))pl.lang=e.sources[0].label;
+  $('#pclose').innerHTML=I('close');
+  $('#player').classList.add('on');
+  drawPlayer();playNow();
+}
+function drawPlayer(){
+  const e=curEps[pl.i];
+  $('#ptitle').textContent=pl.title;
+  $('#psub').textContent='Episodio '+e.number+(e.title?', '+e.title:'');
+  const langs=[...new Set(e.sources.map(x=>x.label))];
+  $('#pbar').innerHTML=`<h4>Versión</h4><div class="wrap">${langs.map(l=>`<button class="chip${l===pl.lang?' on':''}" data-pl="${esc(l)}">${esc(l)}</button>`).join('')}</div>
+  <div class="pnav"><button class="btn" data-pn="-1"${pl.i===0?' disabled style="opacity:.4"':''}>Anterior</button><button class="btn pri" data-pn="1"${pl.i>=curEps.length-1?' disabled style="opacity:.4"':''}>Siguiente</button></div>
+  <h4>Episodios</h4><div class="epgrid">${curEps.map((x,i)=>`<button class="epb${i===pl.i?' on':''}" data-ep="${i}">${esc(x.number)}</button>`).join('')}</div>
+  ${settings.credit?`<div class="credit">Videos cedidos por <b>${esc(settings.credit)}</b>. Reproductor de Animes Nexora, creado por Nexora Eduard Gamer.</div>`:''}`;
+}
+async function playNow(){
+  const v=$('#pv'),e=curEps[pl.i];
+  const s=e.sources.find(x=>x.label===pl.lang)||e.sources[0];
+  if(hls){hls.destroy();hls=null}
+  const isHls=s.type==='hls'||/\.m3u8(\?|$)/i.test(s.url);
+  try{
+    if(isHls&&!v.canPlayType('application/vnd.apple.mpegurl')){
+      await loadHls();
+      if(window.Hls&&window.Hls.isSupported()){hls=new window.Hls();hls.loadSource(s.url);hls.attachMedia(v)}else v.src=s.url;
+    }else v.src=s.url;
+    v.play().catch(()=>{});
+  }catch(x){toast('No se pudo cargar el reproductor')}
+}
+function closePlayer(){const v=$('#pv');v.pause();v.removeAttribute('src');v.load();if(hls){hls.destroy();hls=null}$('#player').classList.remove('on')}
+$('#pv').addEventListener('ended',()=>{if(settings.autonext&&pl.i<curEps.length-1){pl.i++;drawPlayer();playNow()}});
+$('#pv').addEventListener('error',()=>{if($('#player').classList.contains('on'))toast('No se pudo reproducir. Prueba otra versión.')});
+
 /* ---------- ajustes ---------- */
-const LICENSE='Licencia Nexora Eduard Gamer\nCopyright (c) 2026 Nexora Eduard Gamer\n\nPuedes usar, copiar y modificar esta aplicación conservando este aviso y el nombre del autor. Si publicas una versión modificada, debes cambiarle el nombre y el logo.\n\nEl catálogo, las portadas y la información pertenecen a AniList y a sus respectivos titulares. Nexora no aloja ni reproduce videos.\n\nEl software se entrega tal cual, sin garantías.';
+const LICENSE='Licencia Nexora Eduard Gamer\nCopyright (c) 2026 Nexora Eduard Gamer\n\nPuedes usar, copiar y modificar esta aplicación conservando este aviso y el nombre del autor. Si publicas una versión modificada, debes cambiarle el nombre y el logo.\n\nEl catálogo, las portadas y la información pertenecen a AniList y a sus respectivos titulares. Los videos provienen de la fuente que configura el propietario de la app, quien declara contar con los permisos necesarios.\n\nEl software se entrega tal cual, sin garantías.';
 function renderSettings(){
   $('#set-body').innerHTML=`
   <div class="set"><h3>Perfil</h3>
@@ -432,11 +507,17 @@ function renderSettings(){
     <div class="line"><span>Idioma de los títulos</span><div class="seg"><button data-t="romaji" class="${settings.titles==='romaji'?'on':''}">Original</button><button data-t="english" class="${settings.titles==='english'?'on':''}">Inglés</button></div></div>
     <div class="line"><span>Mostrar puntuación<small>En las portadas</small></span><button class="sw${settings.score?' on':''}" data-sw role="switch" aria-checked="${settings.score}" aria-label="Mostrar puntuación"></button></div>
   </div>
+  <div class="set"><h3>Fuente de videos</h3>
+    <div class="line" style="display:block"><span>Dirección de tu fuente<small>https, con tus videos autorizados. Usa {id} para el número del anime</small></span><input class="fld" id="srcurl" type="url" inputmode="url" autocapitalize="off" placeholder="https://tuservidor.com/anime/{id}.json" value="${esc(settings.src)}"></div>
+    <div class="line" style="display:block"><span>Crédito del proveedor<small>Se muestra en el reproductor</small></span><input class="fld" id="srccred" type="text" maxlength="60" placeholder="Nombre de quien cede los videos" value="${esc(settings.credit)}"></div>
+    <div class="line"><span>Siguiente episodio automático</span><button class="sw${settings.autonext?' on':''}" data-an role="switch" aria-checked="${settings.autonext}" aria-label="Siguiente episodio automático"></button></div>
+  </div>
   <div class="set"><h3>Datos</h3>
     <button class="line" data-clear><span>Vaciar mi lista<small>${Object.keys(mylist).length} guardados</small></span></button>
   </div>
   <div class="set"><h3>Acerca de</h3>
     <div class="line"><span>Animes Nexora</span><small>Versión 1.0.0</small></div>
+    <div class="line" style="display:block"><span>Créditos</span><small>App creada por Nexora Eduard Gamer. Catálogo e imágenes: AniList. Reproducción HLS: hls.js.${settings.credit?' Videos cedidos por '+esc(settings.credit)+'.':''}</small></div>
     <p class="lic">${esc(LICENSE)}</p>
   </div>`;
 }
@@ -472,12 +553,17 @@ document.addEventListener('click',e=>{
     else{try{navigator.clipboard.writeText(url);toast('Enlace copiado')}catch(x){toast(url)}}
     return;
   }
+  if(n=c('[data-ep]')){openPlayer(+n.dataset.ep);return}
+  if(n=c('[data-pl]')){pl.lang=n.dataset.pl;drawPlayer();playNow();return}
+  if(n=c('[data-pn]')){const k=pl.i+ +n.dataset.pn;if(k>=0&&k<curEps.length){pl.i=k;drawPlayer();playNow()}return}
+  if(c('#pclose')){closePlayer();return}
+  if(c('[data-an]')){settings.autonext=!settings.autonext;saveSettings();renderSettings();return}
   if(c('#sback')){closeSheet();return}
   if(n=c('[data-t]')){settings.titles=n.dataset.t;saveSettings();homeKey='';renderSettings();return}
   if(c('[data-sw]')){settings.score=!settings.score;saveSettings();homeKey='';renderSettings();return}
   if(c('[data-clear]')){if(Object.keys(mylist).length&&confirm('¿Vaciar toda tu lista?')){mylist={};saveList();homeKey='';renderSettings();toast('Lista vaciada')}return}
 });
-document.addEventListener('input',e=>{if(e.target.id==='nm'){settings.name=e.target.value.trim();saveSettings();hello()}});
+document.addEventListener('input',e=>{if(e.target.id==='srcurl'){settings.src=e.target.value.trim();saveSettings()}if(e.target.id==='srccred'){settings.credit=e.target.value.trim();saveSettings()}if(e.target.id==='nm'){settings.name=e.target.value.trim();saveSettings();hello()}});
 
 /* ---------- inicio de la app ---------- */
 $('.iconbtn[data-go]').innerHTML=I('search');

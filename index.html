@@ -262,10 +262,10 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:16px;
     <div class="group">
       <h4>CONEXIÓN</h4>
       <div class="set"><div class="l"><b>Fuente del catálogo</b><small>Directo no necesita servidor</small></div>
-        <select id="s-src"><option value="direct">Directo</option><option value="api">Mi API</option></select></div>
+        <select id="s-src"><option value="direct">Directo</option><option value="api">Mi servidor</option></select></div>
       <div id="api-fields">
-      <div class="field"><label>URL de tu API (anime1v-api)</label><input id="s-base" type="url" inputmode="url" placeholder="https://mi-api.onrender.com" autocapitalize="off" autocomplete="off"></div>
-      <div class="field" style="padding-top:0"><label>API Key</label><input id="s-key" type="text" placeholder="dev-anime1v-key" autocapitalize="off" autocomplete="off"></div>
+      <div class="field"><label>URL de tu servidor</label><input id="s-base" type="url" inputmode="url" placeholder="https://nexora-api.onrender.com" autocapitalize="off" autocomplete="off"></div>
+      <div class="field" style="padding-top:0"><label>API Key</label><input id="s-key" type="text" placeholder="nexora-plus-key" autocapitalize="off" autocomplete="off"></div>
       </div>
     </div>
     <div class="sbtn"><button class="btn" id="s-test">Probar conexión</button><button class="btn pri" id="s-save">Guardar</button></div>
@@ -280,10 +280,10 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:16px;
     </div>
     <div class="group">
       <h4>DATOS</h4>
-      <div class="set"><div class="l"><b>Proxy de imágenes</b><small>Solo con Mi API: portadas vía tu servidor</small></div><label class="sw"><input type="checkbox" id="s-px"><span></span></label></div>
+      <div class="set"><div class="l"><b>Proxy de imágenes</b><small>Solo con Mi servidor: portadas vía tu servidor</small></div><label class="sw"><input type="checkbox" id="s-px"><span></span></label></div>
       <div class="set"><button id="s-clear" style="color:var(--bad);font-weight:700;font-size:14px">Borrar favoritos e historial</button></div>
     </div>
-    <div class="foot"><b>Animes Nexora Plus</b> · v1.0<br>Licencia Nexora Eduard Gamer<br>Catálogo: AnimeAV1 y AnimeFLV (directo) o tu anime1v-api.</div>
+    <div class="foot"><b>Animes Nexora Plus</b> · v1.0<br>Licencia Nexora Eduard Gamer<br>Catálogo y streaming en línea.</div>
   </section>
 
   <nav id="nav">
@@ -360,7 +360,7 @@ const cap=window.Capacitor, native=!!(cap&&cap.isNativePlatform&&cap.isNativePla
 const plug=n=>{try{return native?cap.registerPlugin(n):null}catch(e){return null}};
 const App=plug('App'), Orient=plug('ScreenOrientation'), SBar=plug('StatusBar');
 
-let cfg=Object.assign({source:'direct',apiBase:'',apiKey:'dev-anime1v-key',autoNext:true,countdown:8,lang:'sub',rot:true,proxy:true},store.get('nx_cfg',{}));
+let cfg=Object.assign({source:'direct',apiBase:'',apiKey:'nexora-plus-key',autoNext:true,countdown:8,lang:'sub',rot:true,proxy:true},store.get('nx_cfg',{}));
 let favs=store.get('nx_fav',[]), hist=store.get('nx_hist',{});
 const cache=new Map();
 const saveCfg=()=>store.set('nx_cfg',cfg);
@@ -387,18 +387,19 @@ const FF='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Fir
 const NH=native?((cap.Plugins&&cap.Plugins.CapacitorHttp)||plug('CapacitorHttp')):null;
 const hostOf=u=>{try{return new URL(u).hostname.replace(/^www\d*\./,'')}catch(e){return u}};
 const abs=(u,b)=>{try{return u?new URL(u,b).href:null}catch(e){return null}};
+const srcLabel=u=>/animeav1/i.test(u)?'La fuente principal':/animeflv/i.test(u)?'La fuente alterna':'El servidor de video';
 const isO=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
 async function get(url,headers={}){
   const h={'User-Agent':UA,'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8','Accept-Language':'es-ES,es;q=0.9,en;q=0.8',...headers};
   if(NH){
     let r;
     try{r=await NH.request({url,method:'GET',headers:h,responseType:'text',connectTimeout:15000,readTimeout:25000})}
-    catch(e){throw new Error('Sin conexión con '+hostOf(url))}
-    if(r.status>=400)throw new Error(`${hostOf(url)} respondió ${r.status}`);
+    catch(e){throw new Error(srcLabel(url)+' no responde')}
+    if(r.status>=400)throw new Error(`${srcLabel(url)} respondió ${r.status}`);
     return{data:typeof r.data==='string'?r.data:JSON.stringify(r.data),url:r.url||url};
   }
-  let r;try{r=await fetch(url)}catch(e){throw new Error('Abre la app instalada (APK): el navegador bloquea '+hostOf(url))}
-  if(!r.ok)throw new Error(`${hostOf(url)} respondió ${r.status}`);
+  let r;try{r=await fetch(url)}catch(e){throw new Error('Abre la app instalada (APK): el navegador bloquea esta conexión')}
+  if(!r.ok)throw new Error(`${srcLabel(url)} respondió ${r.status}`);
   return{data:await r.text(),url:r.url||url};
 }
 const parseDoc=h=>new DOMParser().parseFromString(h,'text/html');
@@ -442,7 +443,7 @@ function filterByQuery(list,q){const nq=normQ(q),terms=nq.split(/\s+/).filter(t=
     .filter(x=>x.sc>0).sort((a,b)=>b.sc-a.sc).map(x=>x.r)}
 const isMega=l=>/mega/i.test((l.server||'')+' '+l.url);
 
-/* ---------- AnimeAV1 ---------- */
+/* ---------- Fuente principal ---------- */
 const AV='https://animeav1.com';
 function avBestArray(root){let best=null,bs=-1;const arrs=[];walk(root,n=>{if(Array.isArray(n)&&n.length&&n.length<=300)arrs.push(n)});
   for(const a of arrs){let tot=0,o=0;for(const it of a){if(!isO(it))continue;o++;let s=0;
@@ -476,7 +477,7 @@ function avStreamLinks(root,html){
 const AVP={
   async catalog(page,genre){const r=await avList(`${AV}/catalogo?page=${page}${genre?'&genre='+encodeURIComponent(genre):''}`);return{results:r,hasMore:r.length>=12}},
   async search(q){let best=[];for(const k of['search','q']){let r=await avList(`${AV}/catalogo?${k}=${encodeURIComponent(q)}`);r=filterByQuery(r,q);if(r.length>best.length)best=r;if(best.length>=5)break}return best},
-  async info(url){const{data}=await get(url);const sd=await svelteData(data);if(!sd)throw new Error('AnimeAV1 cambió su página');
+  async info(url){const{data}=await get(url);const sd=await svelteData(data);if(!sd)throw new Error('La fuente principal cambió su página');
     const cands=[];walk(sd,n=>{if(isO(n)&&(isO(n.media)))cands.push(n.media);if(isO(n)&&typeof n.title==='string'&&(Array.isArray(n.episodes)||n.description))cands.push(n)});
     let m=null,bs=-1;cands.forEach(c=>{let s=0;if(typeof c.title==='string')s+=3;if(Array.isArray(c.episodes))s+=3;if(Array.isArray(c.genres))s++;if(c.description)s++;if(c.poster||c.image)s++;if(c.id)s++;if(s>bs){bs=s;m=c}});
     if(!m)throw new Error('No se encontró información');
@@ -489,7 +490,7 @@ const AVP={
   async episode(url){const{data}=await get(url);const sd=await svelteData(data);return avStreamLinks(sd||{},data)}
 };
 
-/* ---------- AnimeFLV ---------- */
+/* ---------- Fuente alterna ---------- */
 const FLV='https://www3.animeflv.net';
 function flvCards(html){const d=parseDoc(html),out=[];
   d.querySelectorAll('ul.ListAnimes li article, article.Anime').forEach(c=>{const a=c.querySelector('a[href*="/anime/"]')||c.querySelector('a');const href=a?.getAttribute('href');
@@ -609,8 +610,8 @@ document.addEventListener('click',e=>{
 
 /* ================= INICIO ================= */
 let slideT,slideI=0,homeLoaded=false;
-const ROWS_DIRECT=[['animeav1','Tendencias · AnimeAV1',1],['animeflv','Novedades · AnimeFLV',1],['animeav1','Más para descubrir',2],['animeflv','Más en AnimeFLV',2]];
-const ROWS_API=[['animeav1','Tendencias',1],['animeflv','Novedades · AnimeFLV',1],['jkanime','Descubre · JKAnime',1]];
+const ROWS_DIRECT=[['animeav1','Tendencias',1],['animeflv','Novedades',1],['animeav1','Más para descubrir',2],['animeflv','Más novedades',2]];
+const ROWS_API=[['animeav1','Tendencias',1],['animeav1','Más para descubrir',2],['animeflv','Novedades',1],['jkanime','Descubre',1]];
 async function loadHome(){
   homeLoaded=true;
   const sb=$('#setup');
@@ -665,7 +666,7 @@ async function runSearch(v){
 }
 
 /* ================= EXPLORAR ================= */
-const PROVS=[['animeav1','AnimeAV1'],['animeflv','AnimeFLV'],['jkanime','JKAnime'],['tioanime','TioAnime'],['monoschinos','MonosChinos']];
+const PROVS=[['animeav1','Principal'],['animeflv','Alterno'],['jkanime','Fuente 3'],['tioanime','Fuente 4'],['monoschinos','Fuente 5']];
 const GENRES=[['','Todos'],['accion','Acción'],['aventura','Aventura'],['comedia','Comedia'],['drama','Drama'],['fantasia','Fantasía'],['romance','Romance'],['ciencia-ficcion','Sci-Fi'],['terror','Terror'],['misterio','Misterio'],['deportes','Deportes'],['sobrenatural','Sobrenatural']];
 let exploreInit=false,exObs=null,E={prov:'animeav1',genre:'',page:1,more:true,busy:false,seq:0};
 function initExplore(){
@@ -923,17 +924,30 @@ function paintSettings(){
 $('#s-cd').onchange=e=>{cfg.countdown=+e.target.value;saveCfg()};
 $('#s-lang').onchange=e=>{cfg.lang=e.target.value;saveCfg()};
 $('#s-src').onchange=e=>{cfg.source=e.target.value;saveCfg();paintSrc();exploreInit=false;$('#e-grid').innerHTML='';loadHome()};
-$('#s-save').onclick=()=>{cfg.apiBase=$('#s-base').value.trim();cfg.apiKey=$('#s-key').value.trim()||'dev-anime1v-key';saveCfg();toast('Guardado');exploreInit=false;$('#e-grid').innerHTML='';loadHome();go('home')};
+$('#s-save').onclick=()=>{cfg.apiBase=$('#s-base').value.trim();cfg.apiKey=$('#s-key').value.trim()||'nexora-plus-key';saveCfg();toast('Guardado');exploreInit=false;$('#e-grid').innerHTML='';loadHome();go('home')};
+/* Prueba completa: catálogo → ficha → episodio → servidores → video */
+async function selfTest(){
+  const rows=[],paint=()=>sheet(`<h3>Prueba de conexión</h3><p style="color:var(--mu);font-size:12px;margin:-6px 0 12px">${useApi()?'Modo: Mi servidor':'Modo: Directo'}</p>`+rows.map(r=>`<div class="opt"><span>${r.n}<br><small>${esc(r.d)}</small></span><small style="color:${r.ok===null?'var(--mu)':r.ok?'var(--ac2)':'var(--bad)'}">${r.ok===null?'…':r.ok?'OK':'Falla'}</small></div>`).join(''));
+  const step=async(n,fn)=>{const r={n,d:'Probando…',ok:null};rows.push(r);paint();try{const v=await fn();r.ok=true;r.d=v.msg;paint();return v}catch(e){r.ok=false;r.d=e.message||'Error';paint();return null}};
+  $('#toast').classList.remove('on');
+  const cat=await step('Catálogo',async()=>{const r=await SRC.catalog('animeav1',1);if(!r.results.length)throw new Error('0 títulos');return{msg:r.results.length+' títulos encontrados',list:r.results}});
+  if(!cat)return;
+  let info=null,item=null;
+  for(const it of cat.list.slice(0,4)){item=it;info=await SRC.info(it.url).catch(()=>null);if(info&&info.episodes&&info.episodes.length)break}
+  const fi=await step('Ficha del anime',async()=>{if(!info)throw new Error('No se pudo abrir la ficha');if(!info.episodes?.length)throw new Error('Sin episodios');return{msg:`${info.title||item.title} · ${info.episodes.length} episodios`}});
+  if(!fi)return;
+  const ep=info.episodes.slice().sort((a,b)=>a.number-b.number)[0];
+  const sv=await step('Servidores del episodio',async()=>{const s=await SRC.episode(ep.url);const n=(s.sub||[]).length+(s.dub||[]).length;if(!n)throw new Error('Sin servidores');return{msg:`${(s.sub||[]).length} SUB · ${(s.dub||[]).length} LAT`,s}});
+  if(!sv)return;
+  await step('Video directo',async()=>{const all=[...(sv.s.sub||[]),...(sv.s.dub||[])];const ok=all.filter(x=>SRC.canResolve(x));
+    if(!ok.length)throw new Error('Solo hay servidores web (se abrirán en reproductor web)');
+    const r=await SRC.resolve(ok.map(x=>x.url));return{msg:`Listo (${r.mediaType==='hls'?'HLS':'MP4'})`}});
+}
 $('#s-test').onclick=async()=>{
   const old={...cfg};
-  if(cfg.source==='api'){cfg.apiBase=$('#s-base').value.trim();cfg.apiKey=$('#s-key').value.trim()||'dev-anime1v-key';
-    if(!cfg.apiBase){toast('Escribe primero la URL de tu API');cfg=old;return}}
-  toast('Probando…');
-  try{
-    if(useApi()){const r=await SRC.catalog('animeav1',1);toast(`Conectado · ${r.results.length} títulos`)}
-    else{const rs=await Promise.allSettled(DIRECT_PROVS.map(p=>SRC.catalog(p,1)));$('#toast').classList.remove('on');
-      sheet(`<h3>Prueba de conexión</h3>`+rs.map((r,i)=>`<div class="opt"><span>${['AnimeAV1','AnimeFLV'][i]}<br><small>${r.status==='fulfilled'?r.value.results.length+' títulos encontrados':esc(r.reason?.message||'Error')}</small></span><small style="color:${r.status==='fulfilled'&&r.value.results.length?'var(--ac2)':'var(--bad)'}">${r.status==='fulfilled'&&r.value.results.length?'OK':'Falla'}</small></div>`).join(''))}
-  }catch(e){toast('Error: '+e.message)}finally{cfg=old}
+  if(cfg.source==='api'){cfg.apiBase=$('#s-base').value.trim();cfg.apiKey=$('#s-key').value.trim()||'nexora-plus-key';
+    if(!cfg.apiBase){toast('Escribe primero la URL de tu servidor');cfg=old;return}}
+  try{await selfTest()}finally{cfg=old}
 };
 $('#s-clear').onclick=()=>{if(!confirm('¿Borrar favoritos e historial?'))return;favs=[];hist={};store.set('nx_fav',favs);store.set('nx_hist',hist);toast('Datos borrados');renderLib();renderContinue()};
 

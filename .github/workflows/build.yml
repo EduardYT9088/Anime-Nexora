@@ -51,7 +51,7 @@ jobs:
             "backgroundColor": "#070611",
             "server": { "androidScheme": "http", "cleartext": true },
             "android": { "allowMixedContent": true },
-            "plugins": { "CapacitorHttp": { "enabled": true } }
+            "plugins": { "CapacitorHttp": { "enabled": false } }
           }
           EOF
           npx cap add android

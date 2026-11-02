@@ -139,6 +139,13 @@ svg.i{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-l
 #splash svg{width:104px;height:104px;animation:pop .9s cubic-bezier(.2,.9,.3,1.2)}
 #splash p{margin-top:18px;font-size:21px;font-weight:700}
 @keyframes pop{from{transform:scale(.55) rotate(-24deg);opacity:0}}
+/* canales oficiales */
+.yt{flex:0 0 220px;border-radius:16px;background:var(--panel);padding:14px;display:flex;flex-direction:column;gap:6px;min-height:118px}
+.yt b{font-size:14.5px;line-height:1.25}
+.yt small{color:var(--mut);font-size:12px}
+.yt .badge{align-self:flex-start;font-size:11px;font-weight:700;color:var(--aqua);background:rgba(61,227,208,.12);padding:3px 8px;border-radius:99px}
+.form{margin:0 18px;background:var(--panel);border-radius:18px;padding:14px 16px}
+.form .btn{margin-top:12px}
 /* reproductor */
 #player{position:fixed;inset:0;z-index:80;background:var(--bg);display:none;flex-direction:column;overflow-y:auto}
 #player.on{display:flex}
@@ -153,7 +160,7 @@ svg.i{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-l
 .epb{height:42px;border-radius:12px;background:var(--panel);text-align:center;font-weight:600;font-size:13.5px}
 .epb.on{background:var(--vio);color:#fff}
 .credit{margin-top:18px;padding:12px 14px;border-radius:14px;background:var(--panel);color:var(--mut);font-size:12.5px}
-.line textarea,.line input.wide{width:100%}
+.line textarea,.line input.wide,.line input.fld,.line .btn{width:100%}
 .fld{display:block;width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;color:var(--txt);font:inherit;outline:0;margin-top:8px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -206,7 +213,7 @@ svg.i{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-l
 </section>
 <section id="player" aria-label="Reproductor">
   <div class="ptop"><button class="iconbtn" id="pclose" aria-label="Cerrar reproductor"></button><div><b id="ptitle"></b><small id="psub"></small></div></div>
-  <video id="pv" controls playsinline></video>
+  <video id="pv" controls playsinline></video><iframe id="pf" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen referrerpolicy="origin" style="display:none;width:100%;aspect-ratio:16/9;border:0;background:#000;flex:none"></iframe>
   <div class="pbar" id="pbar"></div>
 </section>
 <div id="toast" role="status"></div>
@@ -254,7 +261,7 @@ async function gql(query,variables,ttl){
 }
 const CARD='id title{romaji english} coverImage{large extraLarge color} bannerImage averageScore format seasonYear genres';
 const LIST=`query($page:Int,$perPage:Int,$sort:[MediaSort],$season:MediaSeason,$seasonYear:Int,$status:MediaStatus,$search:String,$genre:String){Page(page:$page,perPage:$perPage){pageInfo{hasNextPage}media(type:ANIME,isAdult:false,sort:$sort,season:$season,seasonYear:$seasonYear,status:$status,search:$search,genre:$genre){${CARD}}}}`;
-const DETAIL=`query($id:Int){Media(id:$id,type:ANIME){id title{romaji english native} coverImage{extraLarge large color} bannerImage description(asHtml:false) episodes duration status format season seasonYear averageScore genres studios(isMain:true){nodes{name}} trailer{id site} externalLinks{site url type color} nextAiringEpisode{episode timeUntilAiring} streamingEpisodes{title thumbnail url site} relations{edges{relationType node{id type format title{romaji english} coverImage{large color} averageScore seasonYear}}} recommendations(perPage:8,sort:RATING_DESC){nodes{mediaRecommendation{id title{romaji english} coverImage{large color} averageScore format seasonYear}}}}}`;
+const DETAIL=`query($id:Int){Media(id:$id,type:ANIME){id title{romaji english native} coverImage{extraLarge large color} bannerImage description(asHtml:false) episodes duration status format season seasonYear averageScore genres studios(isMain:true){nodes{name}} externalLinks{site url type color} nextAiringEpisode{episode timeUntilAiring} streamingEpisodes{title thumbnail url site} relations{edges{relationType node{id type format title{romaji english} coverImage{large color} averageScore seasonYear}}} recommendations(perPage:8,sort:RATING_DESC){nodes{mediaRecommendation{id title{romaji english} coverImage{large color} averageScore format seasonYear}}}}}`;
 
 /* ---------- estado ---------- */
 let settings=Object.assign({name:'',titles:'romaji',score:true,src:'',credit:'',autonext:true},store.get('settings',{}));
@@ -314,7 +321,7 @@ let homeKey='';
 async function loadHome(){
   hello();
   const el=$('#home-body');
-  const key=settings.titles+Object.keys(mylist).length;
+  const key=settings.titles+Object.keys(mylist).length+'|'+ytl.length;
   if(homeKey&&el.children.length&&homeKey===key)return;
   const se=season();
   const defs=[
@@ -323,7 +330,7 @@ async function loadHome(){
     ['Populares de siempre',{sort:['POPULARITY_DESC']}],
     ['Mejor valorados',{sort:['SCORE_DESC']}]
   ];
-  el.innerHTML=`<div class="hero" id="hero">${'<div class="slide sk"></div>'.repeat(2)}</div>`+defs.map((d,i)=>`<section class="sec"><h3>${esc(d[0])}</h3><div class="row" id="r${i}">${skCards(6)}</div></section>`).join('');
+  el.innerHTML=`<div class="hero" id="hero">${'<div class="slide sk"></div>'.repeat(2)}</div>`+ytSection()+defs.map((d,i)=>`<section class="sec"><h3>${esc(d[0])}</h3><div class="row" id="r${i}">${skCards(6)}</div></section>`).join('');
   try{
     const h=await gql(LIST,{page:1,perPage:8,sort:['TRENDING_DESC']});
     $('#hero').innerHTML=h.Page.media.map(m=>{
@@ -402,13 +409,13 @@ function relCard(m,tag){
   return `<button class="card rel" data-id="${m.id}"><span class="poster" style="--c:${esc(m.coverImage.color||'#222')}"><img loading="lazy" src="${esc(m.coverImage.large)}" alt="">${tag?`<i class="rt">${esc(tag)}</i>`:''}</span><b>${esc(T(m))}</b><small>${esc(meta(m))}</small></button>`;
 }
 function renderDetail(m){
+  const linked=ytl.find(x=>x.anime===m.id);
   const s=sc(m),inList=mylist[m.id],desc=clean(m.description);
   const studio=m.studios&&m.studios.nodes[0]?m.studios.nodes[0].name:'';
   const links=(m.externalLinks||[]).filter(l=>l.type==='STREAMING');
   const eps=(m.streamingEpisodes||[]).slice(0,12);
   const rel=((m.relations&&m.relations.edges)||[]).filter(e=>e.node.type==='ANIME');
   const rec=((m.recommendations&&m.recommendations.nodes)||[]).map(n=>n.mediaRecommendation).filter(Boolean);
-  const tr=m.trailer&&m.trailer.site==='youtube'?`https://www.youtube.com/watch?v=${m.trailer.id}`:null;
   const sub=[STAT[m.status],studio].filter(Boolean).join(', ');
   $('#sbody').innerHTML=`
   <div class="dh"><img src="${esc(m.bannerImage||m.coverImage.extraLarge)}" alt=""></div>
@@ -423,7 +430,7 @@ function renderDetail(m){
     <div><b>${m.seasonYear||'-'}</b><small>Año</small></div>
   </div>
   <div class="acts">
-    ${tr?`<button class="btn pri" data-open="${esc(tr)}">${I('play')}Ver tráiler</button>`:`<button class="btn pri" data-open="https://anilist.co/anime/${m.id}">${I('play')}Más información</button>`}
+    ${linked?`<button class="btn pri" data-yt="${ytl.indexOf(linked)}">${I('play')}Ver serie completa</button>`:settings.src?`<button class="btn pri" data-first>${I('play')}Ver episodio 1</button>`:`<button class="btn pri" data-link-yt>${I('plus')}Vincular lista oficial</button>`}
     <button class="btn sq" data-share aria-label="Compartir">${I('share')}</button>
   </div>
   ${settings.src?'<div class="blk" id="srcbox"><h3>Episodios</h3><div class="sk" style="height:48px;border-radius:12px"></div></div>':''}
@@ -447,6 +454,35 @@ function renderDetail(m){
 
 /* ---------- fuente propia y reproductor ---------- */
 let curEps=[],pl={i:0,lang:null,title:''},hls=null;
+/* ---------- listas oficiales de YouTube ---------- */
+const CHANNELS=[
+  {name:'Toei Animation Latinoamérica',note:'Dragon Ball, Digimon, Caballeros del Zodiaco',q:'Toei Animation Latinoamérica'},
+  {name:'TMS Anime Latino',note:'Dr. Stone, Megalobox, Lupin III',q:'TMS Anime Latino'}
+];
+let ytl=store.get('yt',[]),linkFor=null;
+const saveYt=()=>store.set('yt',ytl);
+function plId(u){u=String(u||'').trim();const m=u.match(/[?&]list=([A-Za-z0-9_-]{10,})/);if(m)return m[1];return /^(PL|OL|UU|FL)[A-Za-z0-9_-]{10,}$/.test(u)?u:null}
+function ytSection(){
+  return `<section class="sec"><h3>Gratis y oficial</h3><div class="row">
+  ${ytl.map((x,i)=>`<button class="yt" data-yt="${i}"><span class="badge">Serie completa</span><b>${esc(x.title)}</b><small>${esc(x.channel)}</small></button>`).join('')}
+  ${CHANNELS.map(c=>`<button class="yt" data-open="https://www.youtube.com/results?search_query=${encodeURIComponent(c.q)}"><span class="badge">Canal oficial</span><b>${esc(c.name)}</b><small>${esc(c.note)}</small></button>`).join('')}
+  <button class="yt" data-go="settings"><span class="badge">Agregar</span><b>Añadir una lista oficial</b><small>Pega el enlace de una lista de reproducción</small></button>
+  </div></section>`;
+}
+function openYt(x){
+  curEps=[];pl.title=x.title;
+  $('#pclose').innerHTML=I('close');
+  const v=$('#pv'),f=$('#pf');
+  v.pause();v.removeAttribute('src');v.load();v.style.display='none';
+  f.style.display='block';
+  f.src='https://www.youtube-nocookie.com/embed/videoseries?list='+encodeURIComponent(x.id)+'&rel=0&playsinline=1&hl=es';
+  $('#ptitle').textContent=x.title;
+  $('#psub').textContent=x.channel;
+  $('#pbar').innerHTML=`<p class="syn" style="font-size:13.5px">Usa el botón de lista del reproductor para elegir el episodio.</p>
+  <div class="pnav"><button class="btn" data-open="https://www.youtube.com/playlist?list=${esc(x.id)}">Abrir en YouTube</button></div>
+  <div class="credit">Video publicado por <b>${esc(x.channel)}</b> en su canal oficial de YouTube. Reproductor integrado de Animes Nexora, creado por Nexora Eduard Gamer.</div>`;
+  $('#player').classList.add('on');
+}
 function srcUrl(id){const b=settings.src.trim();return b.includes('{id}')?b.replace('{id}',id):b.replace(/\/$/,'')+'/anime/'+id+'.json'}
 async function loadSrc(m){
   const box=$('#srcbox');if(!box)return;
@@ -483,6 +519,9 @@ async function playNow(){
   const v=$('#pv'),e=curEps[pl.i];
   const s=e.sources.find(x=>x.label===pl.lang)||e.sources[0];
   if(hls){hls.destroy();hls=null}
+  const f=$('#pf');
+  if(s.type==='embed'){v.pause();v.removeAttribute('src');v.load();v.style.display='none';f.style.display='block';f.src=s.url;return}
+  f.style.display='none';f.src='about:blank';v.style.display='block';
   const isHls=s.type==='hls'||/\.m3u8(\?|$)/i.test(s.url);
   try{
     if(isHls&&!v.canPlayType('application/vnd.apple.mpegurl')){
@@ -492,7 +531,7 @@ async function playNow(){
     v.play().catch(()=>{});
   }catch(x){toast('No se pudo cargar el reproductor')}
 }
-function closePlayer(){const v=$('#pv');v.pause();v.removeAttribute('src');v.load();if(hls){hls.destroy();hls=null}$('#player').classList.remove('on')}
+function closePlayer(){$('#pf').src='about:blank';const v=$('#pv');v.pause();v.removeAttribute('src');v.load();if(hls){hls.destroy();hls=null}$('#player').classList.remove('on')}
 $('#pv').addEventListener('ended',()=>{if(settings.autonext&&pl.i<curEps.length-1){pl.i++;drawPlayer();playNow()}});
 $('#pv').addEventListener('error',()=>{if($('#player').classList.contains('on'))toast('No se pudo reproducir. Prueba otra versión.')});
 
@@ -507,6 +546,13 @@ function renderSettings(){
     <div class="line"><span>Idioma de los títulos</span><div class="seg"><button data-t="romaji" class="${settings.titles==='romaji'?'on':''}">Original</button><button data-t="english" class="${settings.titles==='english'?'on':''}">Inglés</button></div></div>
     <div class="line"><span>Mostrar puntuación<small>En las portadas</small></span><button class="sw${settings.score?' on':''}" data-sw role="switch" aria-checked="${settings.score}" aria-label="Mostrar puntuación"></button></div>
   </div>
+  <div class="set"><h3>Listas oficiales de YouTube</h3>
+    <div class="line" style="display:block"><span>Enlace de la lista<small>Solo de canales oficiales, por ejemplo Toei Animation Latinoamérica</small></span><input class="fld" id="ytu" type="url" inputmode="url" autocapitalize="off" placeholder="https://www.youtube.com/playlist?list=..."></div>
+    <div class="line" style="display:block"><span>Nombre de la serie</span><input class="fld" id="ytt" type="text" maxlength="60" placeholder="Ej. Digimon Adventure"></div>
+    <div class="line" style="display:block"><span>Canal oficial</span><input class="fld" id="ytc" type="text" maxlength="60" placeholder="Ej. Toei Animation Latinoamérica"></div>
+    <div class="line" style="display:block"><button class="btn pri" data-yt-add>Guardar lista</button></div>
+    ${ytl.map((x,i)=>`<div class="line"><span>${esc(x.title)}<small>${esc(x.channel)}${x.anime?', vinculada a un anime':''}</small></span><button class="chip" data-yt-del="${i}">Quitar</button></div>`).join('')}
+  </div>
   <div class="set"><h3>Fuente de videos</h3>
     <div class="line" style="display:block"><span>Dirección de tu fuente<small>https, con tus videos autorizados. Usa {id} para el número del anime</small></span><input class="fld" id="srcurl" type="url" inputmode="url" autocapitalize="off" placeholder="https://tuservidor.com/anime/{id}.json" value="${esc(settings.src)}"></div>
     <div class="line" style="display:block"><span>Crédito del proveedor<small>Se muestra en el reproductor</small></span><input class="fld" id="srccred" type="text" maxlength="60" placeholder="Nombre de quien cede los videos" value="${esc(settings.credit)}"></div>
@@ -517,7 +563,7 @@ function renderSettings(){
   </div>
   <div class="set"><h3>Acerca de</h3>
     <div class="line"><span>Animes Nexora</span><small>Versión 1.0.0</small></div>
-    <div class="line" style="display:block"><span>Créditos</span><small>App creada por Nexora Eduard Gamer. Catálogo e imágenes: AniList. Reproducción HLS: hls.js.${settings.credit?' Videos cedidos por '+esc(settings.credit)+'.':''}</small></div>
+    <div class="line" style="display:block"><span>Créditos</span><small>App creada por Nexora Eduard Gamer. Catálogo e imágenes: AniList. Reproducción HLS: hls.js. Listas de YouTube: publicadas por sus canales oficiales.${settings.credit?' Videos cedidos por '+esc(settings.credit)+'.':''}</small></div>
     <p class="lic">${esc(LICENSE)}</p>
   </div>`;
 }
@@ -553,6 +599,16 @@ document.addEventListener('click',e=>{
     else{try{navigator.clipboard.writeText(url);toast('Enlace copiado')}catch(x){toast(url)}}
     return;
   }
+  if(n=c('[data-yt]')){const x=ytl[+n.dataset.yt];if(x)openYt(x);return}
+  if(c('[data-yt-add]')){
+    const id=plId($('#ytu').value),t=$('#ytt').value.trim(),ch=$('#ytc').value.trim();
+    if(!id){toast('Pega el enlace completo de una lista de YouTube');return}
+    if(!t||!ch){toast('Escribe el nombre de la serie y del canal');return}
+    ytl.push({id,title:t,channel:ch,anime:linkFor||null});linkFor=null;saveYt();homeKey='';renderSettings();toast('Lista guardada');return;
+  }
+  if(n=c('[data-yt-del]')){ytl.splice(+n.dataset.ytDel,1);saveYt();homeKey='';renderSettings();return}
+  if(c('[data-link-yt]')){if(!cur)return;linkFor=cur.id;const t=T(cur);closeSheet();go('settings');setTimeout(()=>{$('#ytt').value=t;$('#ytu').focus();toast('Pega el enlace de la lista oficial de esta serie')},50);return}
+  if(c('[data-first]')){if(curEps.length)openPlayer(0);else toast('Este anime aún no tiene episodios en tu fuente');return}
   if(n=c('[data-ep]')){openPlayer(+n.dataset.ep);return}
   if(n=c('[data-pl]')){pl.lang=n.dataset.pl;drawPlayer();playNow();return}
   if(n=c('[data-pn]')){const k=pl.i+ +n.dataset.pn;if(k>=0&&k<curEps.length){pl.i=k;drawPlayer();playNow()}return}

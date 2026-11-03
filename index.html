@@ -472,11 +472,16 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
       <div class="set"><div class="l"><b>Girar a horizontal</b><small>Al abrir un episodio</small></div><label class="sw"><input type="checkbox" id="s-rot"><span></span></label></div>
     </div>
     <div class="group">
+      <h4>AVISOS</h4>
+      <div class="set"><div class="l"><b>Episodios nuevos</b><small>Notificación cuando sale un capítulo nuevo de un anime de Mi lista</small></div><label class="sw"><input type="checkbox" id="s-ntf"><span></span></label></div>
+      <div class="set"><button id="s-ntest" style="color:var(--ac2);font-weight:700;font-size:14px">Probar notificación</button></div>
+    </div>
+    <div class="group">
       <h4>DATOS</h4>
       <div class="set"><div class="l"><b>Proxy de imágenes</b><small>Solo con Mi servidor: portadas vía tu servidor</small></div><label class="sw"><input type="checkbox" id="s-px"><span></span></label></div>
       <div class="set"><button id="s-clear" style="color:var(--bad);font-weight:700;font-size:14px">Borrar favoritos e historial</button></div>
     </div>
-    <div class="about"><svg><use href="#i-logo"/></svg><small>Animes Nexora Plus · v1.0.8</small><small>© 2026 Nexora Eduard Gamer</small></div>
+    <div class="about"><svg><use href="#i-logo"/></svg><small>Animes Nexora Plus · v1.0.9</small><small>© 2026 Nexora Eduard Gamer</small></div>
     <div class="sbtn"><button class="btn" id="s-lic">Ver licencia</button></div>
     <div class="foot">Proyecto educativo sin fines de lucro.<br>Los títulos, imágenes y videos pertenecen a sus respectivos dueños.</div>
   </section>
@@ -584,9 +589,9 @@ const fmt=s=>{if(!isFinite(s))return'0:00';s=Math.floor(s);const h=Math.floor(s/
 let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2600)}
 const cap=window.Capacitor, native=!!(cap&&cap.isNativePlatform&&cap.isNativePlatform());
 const plug=n=>{try{return native?((cap.Plugins&&cap.Plugins[n])||cap.registerPlugin(n)):null}catch(e){return null}};
-const App=plug('App'), Orient=plug('ScreenOrientation'), SBar=plug('StatusBar');
+const App=plug('App'), Orient=plug('ScreenOrientation'), SBar=plug('StatusBar'), LN=plug('LocalNotifications'), BGR=plug('BackgroundRunner');
 
-let cfg=Object.assign({source:'direct',apiBase:'',apiKey:'nexora-plus-key',autoNext:true,countdown:8,lang:'dub',rot:true,proxy:true,askLang:true,esTitles:true},store.get('nx_cfg',{}));
+let cfg=Object.assign({source:'direct',apiBase:'',apiKey:'nexora-plus-key',autoNext:true,notify:true,countdown:8,lang:'dub',rot:true,proxy:true,askLang:true,esTitles:true},store.get('nx_cfg',{}));
 if(!cfg.v101){cfg.lang='dub';cfg.askLang=true;cfg.esTitles=true;cfg.v101=true;try{localStorage.setItem('nx_cfg',JSON.stringify(cfg))}catch(e){}}
 let favs=store.get('nx_fav',[]), hist=store.get('nx_hist',{});
 const cache=new Map();
@@ -1150,7 +1155,7 @@ async function loadRecs(d,my){
 }
 $('#d-more').onclick=()=>{const o=$('#d-syn').classList.toggle('open');$('#d-more').classList.toggle('up',o)};
 $('#d-back').onclick=()=>closeTop();
-$('#d-fav').onclick=()=>{const c=cache.get(D.url)||{};if(isFav(D.url)){favs=favs.filter(f=>f.url!==D.url);toast('Quitado de Mi lista')}else{favs.unshift({url:D.url,title:D.data?.title||c.title,image:D.data?.image||c.image,type:c.type,id:c.id});toast('Añadido a Mi lista')}store.set('nx_fav',favs);paintFav()};
+$('#d-fav').onclick=()=>{const c=cache.get(D.url)||{};if(isFav(D.url)){favs=favs.filter(f=>f.url!==D.url);toast('Quitado de Mi lista')}else{favs.unshift({url:D.url,title:D.data?.title||c.title,image:D.data?.image||c.image,type:c.type,id:c.id,last:D.eps.length?Math.max(...D.eps.map(e=>+e.number||0)):0});askNotify();toast('Añadido a Mi lista')}store.set('nx_fav',favs);paintFav();syncNotify()};
 
 /* ================= EPISODIOS (pantalla aparte) ================= */
 function openEpisodes(){
@@ -1458,6 +1463,29 @@ $('#s-clear').onclick=()=>{if(!confirm('¿Borrar favoritos e historial?'))return
 const LICENSE_TXT='Licencia Nexora Eduard Gamer\nCopyright (c) 2026 Nexora Eduard Gamer.\n\n1. PERMISO\nPuedes usar, copiar y modificar esta app de forma gratuita y sin fines comerciales, conservando este aviso.\n\n2. NOMBRE Y LOGOTIPO\n"Nexora", "Animes Nexora Plus" y el logotipo de la N con orejas de gato, corona y órbita pertenecen a Nexora Eduard Gamer. Los personajes que aparecen en el logotipo (Naruto y Sasuke) pertenecen a sus respectivos titulares. Las versiones modificadas que se publiquen deben usar otro nombre y otro logotipo.\n\n3. PROHIBIDO VENDERLA\nNo se permite vender esta app ni presentarla como creación propia.\n\n4. CONTENIDO DE TERCEROS\nNexora no aloja videos ni imágenes. Los títulos, sinopsis, portadas y videos se cargan desde sitios y servicios externos y pertenecen a sus respectivos titulares; esta licencia no los cubre. El usuario es responsable del uso que haga de ese contenido.\n\n5. SIN GARANTÍA\nLa app se entrega "tal cual", sin garantía de ningún tipo. El autor no es responsable de daños derivados de su uso.';
 paintSettings();loadHome();paintPP();
 setTimeout(()=>$('#intro').classList.add('off'),1300);
+
+/* ================= AVISOS DE EPISODIOS NUEVOS ================= */
+async function askNotify(){if(!LN||!cfg.notify)return;try{const p=await LN.checkPermissions();if(p.display!=='granted')await LN.requestPermissions()}catch(e){}}
+function syncNotify(){if(!BGR)return;try{BGR.dispatchEvent({label:'com.nexora.animesplus.check',event:'syncFavs',details:{on:cfg.notify,favs:favs.map(f=>({url:f.url,title:esTitle(f),last:f.last||0}))}}).catch(()=>{})}catch(e){}}
+async function notify(title,body,extra){
+  if(LN){try{await LN.schedule({notifications:[{id:Math.floor(Math.random()*2e9),title,body,extra,smallIcon:'ic_stat_nexora'}]});return}catch(e){}}
+  toast(body)}
+async function latestEp(url){const d=await SRC.info(url);return(d.episodes||[]).reduce((m,e)=>Math.max(m,+e.number||0),0)}
+/* Revisión al abrir y al volver a la app (en segundo plano la hace el revisor nativo cada 30 min) */
+let lastCheck=0;
+async function checkFavs(force){
+  if(!cfg.notify||!favs.length||(!force&&Date.now()-lastCheck<10*60e3))return;lastCheck=Date.now();
+  const news=[];
+  for(const f of favs.slice(0,25)){try{const mx=await latestEp(f.url);if(mx&&f.last&&mx>f.last)news.push({f,mx});if(mx)f.last=mx}catch(e){}}
+  store.set('nx_fav',favs);syncNotify();
+  for(const n of news)notify('Nuevo episodio en Nexora',`${esTitle(n.f)} · Episodio ${n.mx} ya disponible`,{url:n.f.url,ep:String(n.mx)});
+}
+if(LN)LN.addListener('localNotificationActionPerformed',a=>{const x=a?.notification?.extra;if(x&&x.url)openDetail(x.url,x.ep?{openEps:true}:null)}).catch?.(()=>{});
+if(App)App.addListener('appStateChange',st=>{if(st.isActive)checkFavs()});
+$('#s-ntf').onchange=e=>{cfg.notify=e.target.checked;saveCfg();syncNotify();if(cfg.notify)askNotify()};
+$('#s-ntest').onclick=async()=>{await askNotify();notify('Nuevo episodio en Nexora','Así te avisaremos cuando salga un capítulo nuevo de Mi lista',{})};
+$('#s-ntf').checked=cfg.notify;
+setTimeout(()=>{syncNotify();checkFavs(true)},8000);
 </script>
 </body>
 </html>

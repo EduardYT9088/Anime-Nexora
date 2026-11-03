@@ -439,6 +439,15 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
   .uwrap{max-width:1000px;flex-direction:row;align-items:center;gap:56px}
   .uhero{flex:1}.ubody{flex:1.1;display:flex;flex-direction:column;gap:14px}
 }
+/* ===== Modo rendimiento ===== */
+.lite *,.lite *:before,.lite *:after{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important;transition:none!important;animation-duration:.001s!important;animation-iteration-count:1!important}
+.lite .spin{animation:rot .8s linear infinite!important}
+.lite .art .bgb{filter:none!important;opacity:.28!important}
+.lite .sk{animation:none!important;background:var(--s2)!important}
+.lite .logo,.lite #intro .il,.lite .about svg{filter:none!important}
+.lite #nav{background:#141130}
+.lite .poster img{transition:none!important}
+.lite .uring,.lite .ulogo{animation:none!important}
 </style>
 </head>
 <body>
@@ -544,6 +553,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
         <select id="s-lang"><option value="dub">Latino</option><option value="sub">Subtitulado</option></select></div>
       <div class="set"><div class="l"><b>Preguntar idioma</b><small>Preguntar Latino o Subtitulado la primera vez que ves un anime</small></div><label class="sw"><input type="checkbox" id="s-ask"><span></span></label></div>
       <div class="set"><div class="l"><b>Títulos traducidos</b><small>Nombre en español o inglés cuando exista</small></div><label class="sw"><input type="checkbox" id="s-es"><span></span></label></div>
+      <div class="set"><div class="l"><b>Modo rendimiento</b><small>Menos efectos para que vaya fluida en TV y equipos lentos</small></div><label class="sw"><input type="checkbox" id="s-lite"><span></span></label></div>
       <div class="set"><div class="l"><b>Girar a horizontal</b><small>Al abrir un episodio</small></div><label class="sw"><input type="checkbox" id="s-rot"><span></span></label></div>
     </div>
     <div class="group">
@@ -808,7 +818,9 @@ const avName=v=>isO(v)?v.name:v;
 function avItem(it){if(!isO(it))return null;const title=it.title||it.name;if(!title)return null;
   const slug=it.slug||null,url=abs(it.url||it.href||(slug?'/media/'+slug:null),AV);if(!url)return null;
   let img=it.poster||it.image||it.cover||(it.id?`https://cdn.animeav1.com/covers/${it.id}.jpg`:null);
-  return{id:it.id??null,title,slug,url,image:abs(img,AV),backdrop:abs(it.backdrop||it.banner,AV),type:avName(it.category)||it.type||null,year:it.year?String(it.year):null,alt:altTitles(it),esTitle:akaEs(it.aka),provider:'animeav1'}}
+  return{id:it.id??null,title,slug,url,image:abs(img,AV),backdrop:abs(it.backdrop||it.banner,AV),type:avName(it.category)||it.type||null,year:it.year?String(it.year):null,dub:dubHint(it),alt:altTitles(it),esTitle:akaEs(it.aka),provider:'animeav1'}}
+function dubHint(it){try{for(const[k,v]of Object.entries(it)){if(/dub|latin|lat$|doblad/i.test(k)&&v&&v!=='0'&&v!==false)return true;
+  if(/lang|idioma|audio|variant/i.test(k)&&JSON.stringify(v).match(/dub|latin|lat\b/i))return true}}catch(e){}return false}
 function akaEs(a){if(!isO(a))return null;for(const k of Object.keys(a))if(/^es/i.test(k)&&typeof a[k]==='string'&&a[k].trim())return a[k].trim();return null}
 function altTitles(m){const out=[];const add=v=>{if(typeof v==='string'&&v.trim())out.push(v.trim());else if(Array.isArray(v))v.forEach(add);else if(isO(v))Object.values(v).forEach(add)};
   [m.aka,m.synonyms,m.altTitles,m.alternativeTitles,m.titleEnglish,m.title_english,m.titleJapanese,m.englishTitle].forEach(add);return[...new Set(out)].filter(t=>t!==m.title)}
@@ -1052,7 +1064,7 @@ const ROWS=[
   {t:'Animes más vistos',k:'top'},
   {t:'Animes en Latino',k:'lat'},
   {t:'Recién agregados',k:'cat',pg:1,order:'latest_added'},
-  {t:'Más para descubrir',k:'cat',pg:2},
+  {t:'Más para descubrir',k:'cat',pg:4},
   {t:'Acción',k:'cat',pg:1,genre:'accion'},{t:'Romance',k:'cat',pg:1,genre:'romance'},
   {t:'Comedia',k:'cat',pg:1,genre:'comedia'},{t:'Fantasía',k:'cat',pg:1,genre:'fantasia'}];
 const FEATURED=['One Piece'];
@@ -1070,13 +1082,18 @@ async function mostViewed(sigs){
 let DUB=store.get('nx_dub',{});const dubQ=[];let dubBusy=0,dubSaveT;
 function langsOf(u){const v=DUB[u];return v&&Date.now()-v.t<7*864e5?v:null}
 function checkEp(u,front){return new Promise(res=>{const c=langsOf(u);if(c)return res(c);const job={u,res};front?dubQ.unshift(job):dubQ.push(job);pumpDub()})}
-function pumpDub(){while(dubBusy<3&&dubQ.length){const j=dubQ.shift();const c=langsOf(j.u);if(c){j.res(c);continue}dubBusy++;
+function pumpDub(){while(dubBusy<(cfg.lite?2:3)&&dubQ.length){const j=dubQ.shift();const c=langsOf(j.u);if(c){j.res(c);continue}dubBusy++;
   (async()=>{let v=null;try{const s=await SRC.episode(j.u);v={s:(s.sub||[]).length?1:0,d:(s.dub||[]).length?1:0,t:Date.now()};DUB[j.u]=v;
     clearTimeout(dubSaveT);dubSaveT=setTimeout(()=>{const k=Object.keys(DUB);if(k.length>3000)k.slice(0,1000).forEach(x=>delete DUB[x]);store.set('nx_dub',DUB)},1500)}catch(e){}
     j.res(v);dubBusy--;pumpDub()})()}}
 const ep1=a=>/\/media\/[^/]+$/.test(new URL(a.url).pathname)?a.url.replace(/\/$/,'')+'/1':null;
 function hasLatino(a){const u=ep1(a);return u?checkEp(u).then(v=>!!(v&&v.d)):Promise.resolve(false)}
-function latBadge(a){const u=ep1(a),v=u&&langsOf(u);return v&&v.d?'<span class="lat-tag">LAT</span>':''}
+function latBadge(a){const u=ep1(a),v=u&&langsOf(u);return(v&&v.d)||a.dub?'<span class="lat-tag">LAT</span>':''}
+/* revisa en segundo plano las portadas que se ven en pantalla y les pone LAT si tienen doblaje */
+const latObs=new IntersectionObserver(en=>en.forEach(x=>{if(!x.isIntersecting)return;const c=x.target;latObs.unobserve(c);
+  const a=cache.get(c.dataset.url);if(!a||!ep1(a))return;
+  hasLatino(a).then(ok=>{if(ok&&!c.querySelector('.lat-tag')){const p=c.querySelector('.poster');if(p)p.insertAdjacentHTML('beforeend','<span class="lat-tag">LAT</span>')}})}),{rootMargin:'150px'});
+let latT;function scheduleLat(){clearTimeout(latT);latT=setTimeout(()=>$$('.card[data-url]:not([data-lc])').forEach(c=>{c.dataset.lc=1;if(!c.querySelector('.lat-tag'))latObs.observe(c)}),350)}
 function epCard(a){return card(a,`<span class="ep-tag">EP ${esc(a.epNum)}</span>`).replace('<button class="card"',`<button class="card" data-ep="${esc(a.epNum)}"`)}
 async function loadHome(){
   homeLoaded=true;
@@ -1091,13 +1108,16 @@ async function loadHome(){
   renderContinue();
   let heroDone=false;const fails=[],sigs=new Set();const hideRow=i=>{const el=$('#rs'+i);if(el)el.remove()};
   const show=(i,list,isEp)=>{const sig=list.slice(0,4).map(a=>a.url).join('|');if(!list.length||(!isEp&&sigs.has(sig))){hideRow(i);return false}if(!isEp)sigs.add(sig);
-    $('#r'+i).innerHTML=list.map(a=>isEp?epCard(a):card(a)).join('');return true};
+    $('#r'+i).innerHTML=list.map(a=>isEp?epCard(a):card(a)).join('');scheduleLat();return true};
   const load=async(r,i)=>{
     try{
       if(r.k==='eps'){show(i,await AVP.latest(),true);return}
       if(r.k==='top'){const l=await mostViewed(sigs);seenAll.push(...l);show(i,l);return}
       if(r.k==='lat')return;
-      let list=(await SRC.catalog('animeav1',r.pg,r.genre||'',r.order||'')).results;seenAll.push(...list);
+      let list=(await SRC.catalog('animeav1',r.pg,r.genre||'',r.order||'')).results;
+      if(r.hero){const more=await Promise.all([2,3].map(pg=>SRC.catalog('animeav1',pg).then(x=>x.results).catch(()=>[])));
+        const u=new Set(list.map(a=>a.url));more.flat().forEach(a=>{if(!u.has(a.url)){u.add(a.url);list.push(a)}})}
+      seenAll.push(...list);
       if(r.hero)sigs.add(list.slice(0,4).map(a=>a.url).join('|'));
       if(r.hero){const f=await feat;list=[...f,...list.filter(a=>!f.some(x=>x.url===a.url))]}
       if(show(i,list)&&r.hero&&!heroDone&&list.some(a=>a.image)){heroDone=true;buildHero(list)}
@@ -1124,7 +1144,7 @@ function buildHero(list){
   $('#dots').innerHTML=items.map((_,i)=>`<i class="${i?'':'on'}"></i>`).join('');
   const sl=$('#slides');slideI=0;sl.scrollLeft=0;
   sl.onscroll=()=>{const i=Math.round(sl.scrollLeft/sl.clientWidth);slideI=i;$$('#dots i').forEach((d,k)=>d.classList.toggle('on',k===i))};
-  clearInterval(slideT);slideT=setInterval(()=>{if(tab!=='home'||!items.length)return;slideI=(slideI+1)%items.length;sl.scrollTo({left:slideI*sl.clientWidth,behavior:'smooth'})},6000);
+  clearInterval(slideT);slideT=setInterval(()=>{if(tab!=='home'||!items.length||stack.length)return;slideI=(slideI+1)%items.length;sl.scrollTo({left:slideI*sl.clientWidth,behavior:cfg.lite?'auto':'smooth'})},cfg.lite?9000:6000);
 }
 function renderContinue(){
   const el=$('#r-cont');if(!el)return;
@@ -1144,7 +1164,7 @@ async function runSearch(v){
   if(v.length<2){out.innerHTML=empty('¿Qué quieres ver hoy?','Escribe el nombre de una serie para buscarla en todos los proveedores.');return}
   const my=++qSeq;out.innerHTML=`<div class="grid">${skCards(9)}</div>`;
   try{const r=await SRC.search(v);if(my!==qSeq)return;
-    out.innerHTML=r.length?`<div class="grid">${r.map(a=>card(a)).join('')}</div>`:empty('Sin resultados','Prueba con el nombre en español, inglés o japonés.')}
+    if(r.length)setTimeout(scheduleLat,0);out.innerHTML=r.length?`<div class="grid">${r.map(a=>card(a)).join('')}</div>`:empty('Sin resultados','Prueba con el nombre en español, inglés o japonés.')}
   catch(e){if(my===qSeq)out.innerHTML=empty('No se pudo buscar',esc(e.message))}
 }
 
@@ -1171,7 +1191,7 @@ async function exploreLoad(reset){
     const r=await SRC.catalog(E.prov,E.page,E.genre,E.order);if(my!==E.seq)return;
     if(reset)$('#e-grid').innerHTML='';
     if(!r.results.length&&reset)$('#e-grid').innerHTML=`<div style="grid-column:1/-1">${empty('Nada por aquí','Este proveedor no devolvió resultados para ese filtro.')}</div>`;
-    else if(!E.lat)$('#e-grid').insertAdjacentHTML('beforeend',r.results.map(a=>card(a)).join(''));
+    else if(!E.lat){$('#e-grid').insertAdjacentHTML('beforeend',r.results.map(a=>card(a)).join(''));scheduleLat()}
     else{$('#e-note').classList.remove('hide');$('#e-note').textContent='Buscando animes con doblaje latino…';
       $('#e-grid').insertAdjacentHTML('beforeend',r.results.map(a=>card(a).replace('class="card"','class="card pend"')).join(''));
       const cards=[...$$('#e-grid .card.pend')].slice(-r.results.length);
@@ -1267,7 +1287,7 @@ async function loadFranchise(d,my){
     return/pel[ií]cula|movie|film|gekijou/i.test(t)?'Película':/\bova\b|\boad\b/i.test(t)?'OVA':/especial|special|recap/i.test(t)?'Especial':'Serie relacionada'};
   const extra=items.length-ss.length;
   $('#d-frc').textContent='· '+(ss.length>1?`${ss.length} temporadas`:'1 temporada')+(extra>0?` · ${extra} ${extra===1?'extra':'extras'}`:'');
-  $('#d-frow').innerHTML=items.map((x,i)=>(i?'<span class="arr">›</span>':'')+card(x,(x.url===D.url?'<span class="now-tag">ACTUAL</span>':'')+`<span class="fr-lab">${esc(lab(x))}</span>`).replace('class="card"',x.url===D.url?'class="card now"':'class="card"')).join('');
+  setTimeout(scheduleLat,0);$('#d-frow').innerHTML=items.map((x,i)=>(i?'<span class="arr">›</span>':'')+card(x,(x.url===D.url?'<span class="now-tag">ACTUAL</span>':'')+`<span class="fr-lab">${esc(lab(x))}</span>`).replace('class="card"',x.url===D.url?'class="card now"':'class="card"')).join('');
   $('#d-fr').classList.remove('hide');
 }
 async function loadRecs(d,my){
@@ -1275,7 +1295,7 @@ async function loadRecs(d,my){
   if(!r.length&&d.genres&&d.genres.length){const g=d.genres[0];const slug=g.slug||normQ(g.name).replace(/\s+/g,'-');
     try{r=(await SRC.catalog('animeav1',1,slug)).results.filter(x=>x.url!==D.url).slice(0,15)}catch(e){}}
   if(my!==D.seq||!r.length)return;
-  $('#d-recrow').innerHTML=r.map(x=>card(x)).join('');$('#d-rec').classList.remove('hide');
+  $('#d-recrow').innerHTML=r.map(x=>card(x)).join('');scheduleLat();$('#d-rec').classList.remove('hide');
 }
 $('#d-more').onclick=()=>{const o=$('#d-syn').classList.toggle('open');$('#d-more').classList.toggle('up',o)};
 $('#d-back').onclick=()=>closeTop();
@@ -1595,6 +1615,7 @@ function paintSettings(){
   $('#s-lang').value=cfg.lang;$('#s-rot').checked=cfg.rot;$('#s-px').checked=cfg.proxy;$('#s-ask').checked=cfg.askLang;$('#s-es').checked=cfg.esTitles;
 }
 $('#s-lic').onclick=()=>sheet(`<h3>Licencia</h3><pre class="lic">${esc(LICENSE_TXT)}</pre>`);
+$('#s-lite').onchange=e=>{cfg.lite=e.target.checked;saveCfg();applyLite();toast(cfg.lite?'Modo rendimiento activado':'Efectos completos activados')};
 ['s-auto','s-rot','s-px','s-ask','s-es'].forEach(id=>$('#'+id).onchange=()=>{cfg.autoNext=$('#s-auto').checked;cfg.rot=$('#s-rot').checked;cfg.proxy=$('#s-px').checked;cfg.askLang=$('#s-ask').checked;cfg.esTitles=$('#s-es').checked;saveCfg()});
 $('#s-cd').onchange=e=>{cfg.countdown=+e.target.value;saveCfg()};
 $('#s-lang').onchange=e=>{cfg.lang=e.target.value;saveCfg()};
@@ -1634,6 +1655,10 @@ setTimeout(()=>$('#intro').classList.add('off'),2800);
 /* ================= CONTROL REMOTO (Android TV) ================= */
 let KBD=false;
 const isTV=/Android TV|AFT|BRAVIA|GoogleTV|SMART-TV|SmartTV/i.test(navigator.userAgent)||(matchMedia('(pointer:none)').matches&&innerWidth>innerHeight);
+const lowEnd=(navigator.hardwareConcurrency||8)<=4||(navigator.deviceMemory||8)<=2;
+if(cfg.lite===undefined){cfg.lite=isTV||lowEnd;saveCfg()}
+function applyLite(){document.documentElement.classList.toggle('lite',!!cfg.lite);const el=$('#s-lite');if(el)el.checked=!!cfg.lite}
+applyLite();
 if(isTV){document.documentElement.classList.add('tv');KBD=true;document.documentElement.classList.add('kbd')}
 const FOC='button:not([disabled]),input,select,a[href],[tabindex]:not([tabindex="-1"])';
 function shown(el){const r=el.getBoundingClientRect();if(r.width<2||r.height<2)return false;const c=getComputedStyle(el);return c.visibility!=='hidden'&&c.display!=='none'&&!el.closest('.hide,.pend')}
@@ -1653,7 +1678,7 @@ function moveFocus(dir){
     else if(dir==='d'){if(q.top<r.bottom-6)continue;main=y-cy;cross=Math.abs(x-cx)}
     else{if(q.bottom>r.top+6)continue;main=cy-y;cross=Math.abs(x-cx)}
     const sc2=main+cross*2.2;if(sc2<bs){bs=sc2;best=el}}
-  if(best){best.focus({preventScroll:true});best.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'})}
+  if(best){best.focus({preventScroll:true});best.scrollIntoView({block:'nearest',inline:'nearest',behavior:cfg.lite?'auto':'smooth'})}
 }
 const DIRS={ArrowUp:'u',ArrowDown:'d',ArrowLeft:'l',ArrowRight:'r'};
 document.addEventListener('pointerdown',()=>{if(!isTV){KBD=false;document.documentElement.classList.remove('kbd')}},true);
@@ -1689,8 +1714,8 @@ document.addEventListener('keydown',e=>{
     e.preventDefault();moveFocus(dir)}
 });
 /* al abrir hojas o el selector, el foco entra en ellas */
-new MutationObserver(()=>{if(!KBD)return;const l=layer();if(!l.contains(document.activeElement))setTimeout(()=>focusFirst(l),60)})
-  .observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});
+{const mo=new MutationObserver(()=>{if(!KBD)return;const l=layer();if(!l.contains(document.activeElement))setTimeout(()=>focusFirst(l),60)});
+  ['spov','langdlg','psheet','sheet'].forEach(id=>mo.observe($('#'+id),{attributes:true,attributeFilter:['class']}))}
 
 /* ================= ACTUALIZACIÓN AUTOMÁTICA ================= */
 const APP_VER='__APP_VERSION__'.startsWith('__')?'0.0.0-dev':'__APP_VERSION__';

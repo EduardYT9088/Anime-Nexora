@@ -15,7 +15,7 @@ permissions:
 
 env:
   APP_NAME: "Animes Nexora Plus"
-  APP_VERSION: "1.2.0"   # <- cambia aquí la versión del APK
+  APP_VERSION: "1.2.1"   # <- cambia aquí la versión del APK
   APP_ID: "com.nexora.animesplus"
   # Pega aquí la dirección de tu servidor en Render (déjalo vacío si no usas servidor)
   SERVER_URL: ""
@@ -52,11 +52,14 @@ jobs:
         run: |
           mkdir -p _build/www
           cp index.html _build/www/index.html
+          # la versión de la app sale de APP_VERSION (se usa para avisar actualizaciones)
+          sed -i "s/__APP_VERSION__/${APP_VERSION}/g" _build/www/index.html
           cd _build
           npm init -y > /dev/null
           npm i @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 \
                 @capacitor/app@6 @capacitor/screen-orientation@6 @capacitor/status-bar@6 \
                 @capacitor/local-notifications@6 @capacitor/background-runner@2.0.0 \
+                @capacitor/filesystem@6 @capawesome-team/capacitor-file-opener@6 \
                 hls.js@1.5.17
           cp node_modules/hls.js/dist/hls.min.js www/hls.min.js
           # Revisión en segundo plano: avisa cuando sale un episodio nuevo de "Mi lista"
@@ -172,6 +175,8 @@ jobs:
                 android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"/>
           </vector>
           EOF
+          # permiso para instalar la actualización descargada desde la app
+          grep -q REQUEST_INSTALL_PACKAGES AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <application|' AndroidManifest.xml
           grep -q POST_NOTIFICATIONS AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application|' AndroidManifest.xml
           cat > $RES/drawable/nx_icon_mono.xml <<'EOF'
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -214,6 +219,17 @@ jobs:
           sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/" build.gradle
           sed -i "s/versionName \"1.0\"/versionName \"${APP_VERSION}\"/" build.gradle
 
+      - name: Firma fija del APK (para poder actualizar sin desinstalar)
+        env:
+          NEXORA_KEYSTORE: ${{ secrets.NEXORA_KEYSTORE }}
+        run: |
+          if [ -n "$NEXORA_KEYSTORE" ]; then
+            for d in "$HOME/.android" "${ANDROID_USER_HOME:-$HOME/.android}"; do mkdir -p "$d"; echo "$NEXORA_KEYSTORE" | base64 -d > "$d/debug.keystore"; done
+            echo "Firma Nexora OK"
+          else
+            echo "::warning::Falta el secreto NEXORA_KEYSTORE. El APK se firmará con una clave temporal y no se podrá instalar encima de la versión anterior."
+          fi
+
       - name: Compilar APK
         run: |
           cd _build/android
@@ -240,7 +256,5 @@ jobs:
           name: Animes Nexora Plus v${{ env.APP_VERSION }}
           make_latest: true
           body: |
-            APK compilado automáticamente.
-            Descarga el archivo .apk de abajo e instálalo en tu Android.
-            Licencia: Nexora Eduard Gamer
+            ${{ github.event.head_commit.message || 'Nueva versión de Animes Nexora Plus' }}
           files: out/*.apk

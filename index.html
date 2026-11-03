@@ -388,6 +388,22 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 .about svg:first-child{width:170px;height:170px}
 .about b{margin-top:12px;font-size:17px;letter-spacing:.18em}.about small{color:var(--mu);font-size:12px;margin-top:4px}
 .lic{white-space:pre-wrap;font-size:12px;line-height:1.55;color:#cfcbee;font-family:inherit}
+/* ===== Android TV / control remoto ===== */
+:focus{outline:none}
+.kbd :focus-visible{outline:3px solid var(--ac2);outline-offset:3px;border-radius:14px;box-shadow:0 0 0 6px rgba(34,211,238,.18)}
+.kbd .card:focus-visible{outline:none;box-shadow:none}
+.kbd .card:focus-visible .poster{outline:3px solid var(--ac2);outline-offset:2px;transform:scale(1.05);transition:transform .15s}
+.kbd .card:focus-visible .ct{color:#fff}
+.kbd .epr:focus-visible{transform:scale(1.04);transition:transform .15s}
+.tv .grid{grid-template-columns:repeat(6,1fr)}
+.kbd button,.kbd input,.kbd select{scroll-margin:90px 24px 120px}
+.tv #nav{left:50%;right:auto;width:min(720px,92vw);transform:translateX(-50%)}
+.tv .row{padding-left:24px;padding-right:24px;scroll-padding:0 24px}
+.tv .card{flex-basis:150px}
+.tv .eplist.g{grid-template-columns:repeat(6,1fr)}
+.tv .sl{height:min(62vh,460px)}
+.tv .dhero{height:340px}
+.tv .dwrap,.tv .epwrap{max-width:1100px;margin-left:auto;margin-right:auto}
 </style>
 </head>
 <body>
@@ -503,7 +519,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
       <div class="set"><div class="l"><b>Proxy de imágenes</b><small>Solo con Mi servidor: portadas vía tu servidor</small></div><label class="sw"><input type="checkbox" id="s-px"><span></span></label></div>
       <div class="set"><button id="s-clear" style="color:var(--bad);font-weight:700;font-size:14px">Borrar favoritos e historial</button></div>
     </div>
-    <div class="about"><svg><use href="#i-logo"/></svg><small>Animes Nexora Plus · v1.1.1</small><small>© 2026 Nexora Eduard Gamer</small></div>
+    <div class="about"><svg><use href="#i-logo"/></svg><small>Animes Nexora Plus · v1.2.0</small><small>© 2026 Nexora Eduard Gamer</small></div>
     <div class="sbtn"><button class="btn" id="s-lic">Ver licencia</button></div>
     <div class="foot">Proyecto educativo sin fines de lucro.<br>Los títulos, imágenes y videos pertenecen a sus respectivos dueños.</div>
   </section>
@@ -1303,7 +1319,7 @@ $('#langdlg').onclick=e=>{if(e.target.id==='langdlg')closeLang()};
 
 /* ================= Pila de pantallas (botón atrás) ================= */
 const stack=[];
-function pushOv(id){if(stack.includes(id))return;stack.push(id);$('#'+id).classList.add('on')}
+function pushOv(id){if(stack.includes(id))return;stack.push(id);$('#'+id).classList.add('on');if(KBD)setTimeout(()=>focusFirst($('#'+id)),380)}
 function closeTop(){
   const id=stack.pop();if(!id)return false;
   if(id==='player')stopPlayer();
@@ -1540,6 +1556,67 @@ $('#s-clear').onclick=()=>{if(!confirm('¿Borrar favoritos e historial?'))return
 const LICENSE_TXT='Licencia Nexora Eduard Gamer\nCopyright (c) 2026 Nexora Eduard Gamer.\n\n1. PERMISO\nPuedes usar, copiar y modificar esta app de forma gratuita y sin fines comerciales, conservando este aviso.\n\n2. NOMBRE Y LOGOTIPO\n"Nexora", "Animes Nexora Plus" y el logotipo de la N con orejas de gato, corona y órbita pertenecen a Nexora Eduard Gamer. Los personajes que aparecen en el logotipo (Naruto y Sasuke) pertenecen a sus respectivos titulares. Las versiones modificadas que se publiquen deben usar otro nombre y otro logotipo.\n\n3. PROHIBIDO VENDERLA\nNo se permite vender esta app ni presentarla como creación propia.\n\n4. CONTENIDO DE TERCEROS\nNexora no aloja videos ni imágenes. Los títulos, sinopsis, portadas y videos se cargan desde sitios y servicios externos y pertenecen a sus respectivos titulares; esta licencia no los cubre. El usuario es responsable del uso que haga de ese contenido.\n\n5. SIN GARANTÍA\nLa app se entrega "tal cual", sin garantía de ningún tipo. El autor no es responsable de daños derivados de su uso.';
 paintSettings();loadHome();paintPP();
 setTimeout(()=>$('#intro').classList.add('off'),2800);
+
+/* ================= CONTROL REMOTO (Android TV) ================= */
+let KBD=false;
+const isTV=/Android TV|AFT|BRAVIA|GoogleTV|SMART-TV|SmartTV/i.test(navigator.userAgent)||(matchMedia('(pointer:none)').matches&&innerWidth>innerHeight);
+if(isTV){document.documentElement.classList.add('tv');KBD=true;document.documentElement.classList.add('kbd')}
+const FOC='button:not([disabled]),input,select,a[href],[tabindex]:not([tabindex="-1"])';
+function shown(el){const r=el.getBoundingClientRect();if(r.width<2||r.height<2)return false;const c=getComputedStyle(el);return c.visibility!=='hidden'&&c.display!=='none'&&!el.closest('.hide,.pend')}
+function layer(){
+  for(const id of['spov','langdlg','psheet','sheet'])if($('#'+id).classList.contains('on'))return $('#'+id);
+  if(stack.length)return $('#'+stack[stack.length-1]);
+  return $('#app')}
+function focusFirst(sc){sc=sc||layer();const el=[...sc.querySelectorAll(FOC)].find(shown);if(el){el.focus({preventScroll:true});el.scrollIntoView({block:'nearest',inline:'nearest'})}}
+function moveFocus(dir){
+  const sc=layer(),cur=document.activeElement;
+  const cands=[...sc.querySelectorAll(FOC)].filter(el=>el!==cur&&shown(el));
+  if(!cur||cur===document.body||!sc.contains(cur)){focusFirst(sc);return}
+  const r=cur.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;let best=null,bs=Infinity;
+  for(const el of cands){const q=el.getBoundingClientRect(),x=q.left+q.width/2,y=q.top+q.height/2;let main,cross;
+    if(dir==='r'){if(q.left<r.right-6)continue;main=x-cx;cross=Math.abs(y-cy)}
+    else if(dir==='l'){if(q.right>r.left+6)continue;main=cx-x;cross=Math.abs(y-cy)}
+    else if(dir==='d'){if(q.top<r.bottom-6)continue;main=y-cy;cross=Math.abs(x-cx)}
+    else{if(q.bottom>r.top+6)continue;main=cy-y;cross=Math.abs(x-cx)}
+    const sc2=main+cross*2.2;if(sc2<bs){bs=sc2;best=el}}
+  if(best){best.focus({preventScroll:true});best.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'})}
+}
+const DIRS={ArrowUp:'u',ArrowDown:'d',ArrowLeft:'l',ArrowRight:'r'};
+document.addEventListener('pointerdown',()=>{if(!isTV){KBD=false;document.documentElement.classList.remove('kbd')}},true);
+document.addEventListener('keydown',e=>{
+  const k=e.key,dir=DIRS[k];
+  if(!KBD&&(dir||k==='Enter'||k==='Tab')){KBD=true;document.documentElement.classList.add('kbd')}
+  const inPlayer=stack[stack.length-1]==='player'&&!$('#psheet').classList.contains('on');
+  /* teclas multimedia del control */
+  if(inPlayer&&P.mode==='video'){
+    if(k==='MediaPlayPause'||k===' '){e.preventDefault();V.paused?V.play():V.pause();showCtl();return}
+    if(k==='MediaPlay'){V.play();return}if(k==='MediaPause'){V.pause();showCtl(true);return}
+    if(k==='MediaFastForward'){seekBy(30);fx(30);return}if(k==='MediaRewind'){seekBy(-30);fx(-30);return}
+    if(k==='MediaTrackNext'){goEp(1);return}if(k==='MediaTrackPrevious'){goEp(-1);return}
+    /* con los controles ocultos: ← → adelantan/retroceden, OK pausa, ↑ ↓ muestran controles */
+    if($('#ctl').classList.contains('off')&&!P.locked){
+      if(k==='ArrowLeft'||k==='ArrowRight'){e.preventDefault();const f=k==='ArrowLeft'?-10:10;seekBy(f);fx(f);return}
+      if(k==='Enter'){e.preventDefault();V.paused?V.play():V.pause();showCtl();return}
+      if(dir){e.preventDefault();showCtl(true);setTimeout(()=>$('#p-pp').focus(),30);return}
+    }
+    if(dir||k==='Enter')showCtl();
+  }
+  if(P.locked&&inPlayer){if(k==='Enter'||dir){e.preventDefault();flashLock()}return}
+  if(k==='Escape'||k==='GoBack'||k==='BrowserBack'||(k==='Backspace'&&!/INPUT|TEXTAREA/.test(document.activeElement?.tagName))){
+    e.preventDefault();
+    if($('#spov').classList.contains('on')){$('#spov').classList.remove('on');return}
+    if($('#langdlg').classList.contains('on')){closeLang();return}
+    if($('#psheet').classList.contains('on')){$('#psheet').classList.remove('on');return}
+    if($('#sheet').classList.contains('on')){$('#sheet').classList.remove('on');return}
+    if(!closeTop()&&tab!=='home')go('home');return}
+  if(dir){const a=document.activeElement;
+    if(a&&a.tagName==='INPUT'&&(dir==='l'||dir==='r'))return;
+    if(a&&a.type==='range'&&(dir==='l'||dir==='r')){e.preventDefault();seekBy(dir==='l'?-10:10);return}
+    e.preventDefault();moveFocus(dir)}
+});
+/* al abrir hojas o el selector, el foco entra en ellas */
+new MutationObserver(()=>{if(!KBD)return;const l=layer();if(!l.contains(document.activeElement))setTimeout(()=>focusFirst(l),60)})
+  .observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});
 
 /* ================= AVISOS DE EPISODIOS NUEVOS ================= */
 async function askNotify(){if(!LN||!cfg.notify)return;try{const p=await LN.checkPermissions();if(p.display!=='granted')await LN.requestPermissions()}catch(e){}}

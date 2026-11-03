@@ -15,7 +15,7 @@ permissions:
 
 env:
   APP_NAME: "Animes Nexora Plus"
-  APP_VERSION: "1.1.1"   # <- cambia aquí la versión del APK
+  APP_VERSION: "1.2.0"   # <- cambia aquí la versión del APK
   APP_ID: "com.nexora.animesplus"
   # Pega aquí la dirección de tu servidor en Render (déjalo vacío si no usas servidor)
   SERVER_URL: ""
@@ -112,7 +112,11 @@ jobs:
           cd _build/android/app/src/main
           RES=res
           # Permitir APIs http:// y pantalla completa de video
-          sed -i 's/<application/<application android:usesCleartextTraffic="true"/' AndroidManifest.xml
+          sed -i 's/<application/<application android:usesCleartextTraffic="true" android:banner="@drawable\/nx_banner"/' AndroidManifest.xml
+          # Android TV: aparece en el menú del televisor y no exige pantalla táctil
+          sed -i 's|<application|<uses-feature android:name="android.software.leanback" android:required="false"/>\n    <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>\n    <application|' AndroidManifest.xml
+          sed -i -E 's|(<category android:name="android.intent.category.LAUNCHER" ?/>)|\1\n                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>|' AndroidManifest.xml
+          grep -q LEANBACK_LAUNCHER AndroidManifest.xml && echo "Android TV OK" || { echo "No se pudo agregar Android TV"; exit 1; }
 
           # Colores propios
           cat > $RES/values/nx_colors.xml <<'EOF'
@@ -153,6 +157,12 @@ jobs:
               ic.save(f'{res}/mipmap-{d}/ic_launcher.png'); ic.save(f'{res}/mipmap-{d}/ic_launcher_round.png')
           os.makedirs(f'{res}/drawable-nodpi', exist_ok=True)
           src.resize((640, 640), Image.LANCZOS).save(f'{res}/drawable-nodpi/nx_logo_img.png')
+          # banner para el menú de Android TV (320x180)
+          os.makedirs(f'{res}/drawable-xhdpi', exist_ok=True)
+          ban = Image.new('RGBA', (320, 180), (11, 8, 26, 255)); g = ImageDraw.Draw(ban)
+          for y in range(180): g.line([(0, y), (320, y)], fill=(int(40-22*y/180), int(22-12*y/180), int(92-50*y/180), 255))
+          lg = src.resize((164, 164), Image.LANCZOS); ban.paste(lg, (78, 8), lg)
+          ban.save(f'{res}/drawable-xhdpi/nx_banner.png')
           print('iconos generados')
           PY
           cat > $RES/drawable/ic_stat_nexora.xml <<'EOF'

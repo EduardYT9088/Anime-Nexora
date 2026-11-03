@@ -452,6 +452,51 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 .setrow{transition:background .15s}
 .kbd .setrow:focus,.kbd .setrow:focus-visible{outline:3px solid var(--ac2);outline-offset:-3px;border-radius:18px;background:rgba(34,211,238,.08)}
 .kbd .setrow select{pointer-events:none}
+/* ===== Ajustes ===== */
+.setwrap{padding-bottom:6px}
+.shero{margin:0 16px 14px;padding:16px;border-radius:22px;display:flex;align-items:center;flex-wrap:wrap;gap:14px;
+  background:linear-gradient(135deg,rgba(124,92,255,.24),rgba(34,211,238,.10) 70%),var(--s1);border:1px solid rgba(139,107,255,.28)}
+.slogo{width:66px;height:66px;flex:none;border-radius:18px;filter:drop-shadow(0 8px 20px rgba(79,140,255,.4))}
+.sh-t{flex:1;min-width:150px}.sh-t b{display:block;font-size:17px;font-weight:800;letter-spacing:-.01em}
+.sh-t small{display:block;color:var(--mu);font-size:12px;margin-top:3px}
+.shero .btn{width:100%;height:46px}
+.donate{margin:0 16px 18px;padding:16px;border-radius:22px;background:var(--s1);border:1px solid rgba(255,92,122,.3);position:relative;overflow:hidden}
+.donate:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 100% 0,rgba(255,92,122,.18),transparent 58%);pointer-events:none}
+.dn-h{display:flex;align-items:center;gap:12px;position:relative}
+.dn-ic{width:44px;height:44px;flex:none;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#ff5c7a,#ff9a5c);color:#fff;box-shadow:0 8px 20px rgba(255,92,122,.35)}
+.dn-ic .i{width:22px;height:22px}
+.dn-h b{display:block;font-size:15.5px;font-weight:800}.dn-h small{display:block;color:var(--mu);font-size:12px;margin-top:2px}
+.donate p{position:relative;font-size:13px;line-height:1.6;color:#d3cfee;margin-top:12px}
+.dn-row{position:relative;display:flex;align-items:center;gap:14px;margin-top:14px}
+.dn-qr{width:108px;height:108px;flex:none;background:#fff;border-radius:16px;padding:7px}
+.dn-qr svg{display:block;width:100%;height:100%}
+.dn-qr:empty{display:none}
+.dn-act{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
+.dn-btn{text-decoration:none;width:100%;height:48px;color:#fff;background:linear-gradient(135deg,#ff5c7a,#ff9a5c);box-shadow:0 10px 24px rgba(255,92,122,.35)}
+.dn-act small{color:var(--mu);font-size:11.5px;word-break:break-all;text-align:center}
+.dn-tv{display:none!important}
+.sic{width:38px;height:38px;flex:none;border-radius:12px;display:grid;place-items:center;background:var(--s2);color:var(--ac2)}
+.sic .i{width:19px;height:19px}
+.set .l{flex:1;min-width:0}
+.set.act{width:100%;text-align:left;color:inherit;border-top:1px solid var(--line)}
+.group h4+.set.act{border-top:0}
+.set .chev{width:9px;height:9px;flex:none;margin-right:6px;border-right:2px solid var(--mu);border-top:2px solid var(--mu);transform:rotate(45deg)}
+.set.danger .sic{color:var(--bad);background:rgba(255,92,122,.12)}.set.danger b{color:var(--bad)}
+.set.info .l small{line-height:1.5}
+.sbtn.in{margin:0 16px 14px}
+/* TV: dos columnas grandes */
+.tv #v-set .title-lg{max-width:1180px;margin:0 auto;padding-left:28px;font-size:30px}
+.tv .setwrap{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:0 22px;max-width:1180px;margin:0 auto;padding:0 28px}
+.tv .setwrap .shero,.tv .setwrap .donate,.tv .setwrap .group{margin-left:0;margin-right:0}
+.tv .set{padding:15px 18px}.tv .set .l b{font-size:15.5px}.tv .set .l small{font-size:12.5px}
+.tv .dn-qr{width:156px;height:156px}
+.tv .dn-tv{display:block!important;color:var(--ac2)!important;word-break:normal!important}
+.kbd .set.act:focus-visible,.kbd .set.act:focus{outline:3px solid var(--ac2);outline-offset:-3px;border-radius:18px;background:rgba(34,211,238,.08)}
+@media (min-width:760px){html:not(.tv) .setwrap{display:grid;grid-template-columns:1fr 1fr;gap:0 4px;max-width:1100px;margin:0 auto}}
+/* ===== Reproductor: aviso de error encima de todo ===== */
+#ploader.err{z-index:30;background:rgba(5,4,14,.94)}
+.pdiag{display:block;margin-top:10px;color:#8f8bb4;font-size:11.5px;font-weight:500;max-width:640px}
+.kbd #ploader .btn:focus-visible,.kbd #ploader .btn:focus{transform:scale(1.07);color:#fff}
 </style>
 </head>
 <body>
@@ -538,41 +583,70 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
   <!-- AJUSTES -->
   <section class="view" id="v-set">
     <div class="title-lg">Ajustes</div>
-    <div class="group">
-      <h4>CONEXIÓN</h4>
-      <div class="set"><div class="l"><b>Fuente del catálogo</b><small>Directo no necesita servidor</small></div>
-        <select id="s-src"><option value="direct">Directo</option><option value="api">Mi servidor</option></select></div>
-      <div id="api-fields">
-      <div class="field"><label>URL de tu servidor</label><input id="s-base" type="url" inputmode="url" placeholder="https://nexora-api.onrender.com" autocapitalize="off" autocomplete="off"></div>
-      <div class="field" style="padding-top:0"><label>API Key</label><input id="s-key" type="text" placeholder="nexora-plus-key" autocapitalize="off" autocomplete="off"></div>
+    <div class="setwrap">
+    <div class="scol">
+      <div class="shero">
+        <svg class="slogo"><use href="#i-logo"/></svg>
+        <div class="sh-t"><b>Animes Nexora Plus</b><small><span class="appver"></span> · <span id="s-eng">Android</span></small><small>© 2026 Nexora Eduard Gamer</small></div>
+        <button class="btn pri" id="s-upd"><svg class="i"><use href="#i-dl"/></svg>Buscar actualizaciones</button>
+      </div>
+      <div class="donate">
+        <div class="dn-h"><span class="dn-ic"><svg class="i"><use href="#i-heart"/></svg></span><div><b>Apoya Animes Nexora Plus</b><small>Donación voluntaria · PayPal</small></div></div>
+        <p>Muchos de ustedes me han preguntado cómo pueden ayudar 💜. Animes Nexora Plus es gratis y sin fines de lucro: es mi proyecto universitario y le dedico mucho tiempo para que funcione en celulares y televisores.</p>
+        <p>Si te gusta la app y quieres que siga mejorando, puedes apoyarme con una donación por PayPal. Cualquier aporte, por pequeño que sea, ayuda muchísimo. ¡Gracias por usar Nexora!</p>
+        <div class="dn-row">
+          <div class="dn-qr" id="s-qr"><!--NX_QR--></div>
+          <div class="dn-act">
+            <a class="btn dn-btn" id="s-donate" href="https://www.paypal.me/EdwardAlvarado285"><svg class="i"><use href="#i-heart"/></svg>Donar con PayPal</a>
+            <small>paypal.me/EdwardAlvarado285</small>
+            <small class="dn-tv">Escanea el código con la cámara de tu celular para donar desde allí.</small>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="sbtn"><button class="btn" id="s-test">Probar conexión</button><button class="btn pri" id="s-save">Guardar</button></div>
-    <div class="group">
-      <h4>REPRODUCTOR</h4>
-      <div class="set"><div class="l"><b>Siguiente episodio automático</b><small>Al terminar, pasa al siguiente</small></div><label class="sw"><input type="checkbox" id="s-auto"><span></span></label></div>
-      <div class="set"><div class="l"><b>Cuenta regresiva</b><small>Segundos antes de saltar</small></div>
-        <select id="s-cd"><option>3</option><option>5</option><option>8</option><option>10</option><option>15</option></select></div>
-      <div class="set"><div class="l"><b>Idioma preferido</b><small>Se usa si el episodio lo tiene</small></div>
-        <select id="s-lang"><option value="dub">Latino</option><option value="sub">Subtitulado</option></select></div>
-      <div class="set"><div class="l"><b>Preguntar idioma</b><small>Preguntar Latino o Subtitulado la primera vez que ves un anime</small></div><label class="sw"><input type="checkbox" id="s-ask"><span></span></label></div>
-      <div class="set"><div class="l"><b>Títulos traducidos</b><small>Nombre en español o inglés cuando exista</small></div><label class="sw"><input type="checkbox" id="s-es"><span></span></label></div>
-      <div class="set"><div class="l"><b>Modo rendimiento</b><small>Menos efectos para que vaya fluida en TV y equipos lentos</small></div><label class="sw"><input type="checkbox" id="s-lite"><span></span></label></div>
-      <div class="set"><div class="l"><b>Girar a horizontal</b><small>Al abrir un episodio</small></div><label class="sw"><input type="checkbox" id="s-rot"><span></span></label></div>
+    <div class="scol">
+      <div class="group">
+        <h4>REPRODUCTOR</h4>
+        <div class="set"><span class="sic"><svg class="i"><use href="#i-next"/></svg></span><div class="l"><b>Siguiente episodio automático</b><small>Al terminar, pasa al siguiente</small></div><label class="sw"><input type="checkbox" id="s-auto"><span></span></label></div>
+        <div class="set"><span class="sic"><svg class="i"><use href="#i-skip"/></svg></span><div class="l"><b>Cuenta regresiva</b><small>Segundos antes de saltar</small></div>
+          <select id="s-cd"><option>3</option><option>5</option><option>8</option><option>10</option><option>15</option></select></div>
+        <div class="set"><span class="sic"><svg class="i"><use href="#i-mic"/></svg></span><div class="l"><b>Idioma preferido</b><small>Se usa si el episodio lo tiene</small></div>
+          <select id="s-lang"><option value="dub">Latino</option><option value="sub">Subtitulado</option></select></div>
+        <div class="set"><span class="sic"><svg class="i"><use href="#i-cc"/></svg></span><div class="l"><b>Preguntar idioma</b><small>Latino o Subtitulado la primera vez que ves un anime</small></div><label class="sw"><input type="checkbox" id="s-ask"><span></span></label></div>
+        <div class="set"><span class="sic"><svg class="i"><use href="#i-rot"/></svg></span><div class="l"><b>Girar a horizontal</b><small>Al abrir un episodio</small></div><label class="sw"><input type="checkbox" id="s-rot"><span></span></label></div>
+      </div>
+      <div class="group">
+        <h4>APARIENCIA</h4>
+        <div class="set"><span class="sic"><svg class="i"><use href="#i-film"/></svg></span><div class="l"><b>Títulos traducidos</b><small>Nombre en español o inglés cuando exista</small></div><label class="sw"><input type="checkbox" id="s-es"><span></span></label></div>
+        <div class="set"><span class="sic"><svg class="i"><use href="#i-spark"/></svg></span><div class="l"><b>Modo rendimiento</b><small>Menos efectos para que vaya fluida en TV y equipos lentos</small></div><label class="sw"><input type="checkbox" id="s-lite"><span></span></label></div>
+      </div>
+      <div class="group">
+        <h4>AVISOS</h4>
+        <div class="set"><span class="sic"><svg class="i"><use href="#i-bell"/></svg></span><div class="l"><b>Episodios nuevos</b><small>Aviso cuando sale un capítulo de un anime de Mi lista</small></div><label class="sw"><input type="checkbox" id="s-ntf"><span></span></label></div>
+        <button class="set act" id="s-ntest"><span class="sic"><svg class="i"><use href="#i-bell"/></svg></span><div class="l"><b>Probar notificación</b><small>Envía un aviso de prueba</small></div><span class="chev"></span></button>
+      </div>
+      <div class="group">
+        <h4>CONEXIÓN</h4>
+        <div class="set"><span class="sic"><svg class="i"><use href="#i-globe"/></svg></span><div class="l"><b>Fuente del catálogo</b><small>Directo no necesita servidor</small></div>
+          <select id="s-src"><option value="direct">Directo</option><option value="api">Mi servidor</option></select></div>
+        <div id="api-fields">
+        <div class="field"><label>URL de tu servidor</label><input id="s-base" type="url" inputmode="url" placeholder="https://nexora-api.onrender.com" autocapitalize="off" autocomplete="off"></div>
+        <div class="field" style="padding-top:0"><label>API Key</label><input id="s-key" type="text" placeholder="nexora-plus-key" autocapitalize="off" autocomplete="off"></div>
+        <div class="sbtn in"><button class="btn" id="s-test">Probar conexión</button><button class="btn pri" id="s-save">Guardar</button></div>
+        </div>
+        <div class="set"><span class="sic"><svg class="i"><use href="#i-srv"/></svg></span><div class="l"><b>Proxy de imágenes</b><small>Solo con Mi servidor: portadas vía tu servidor</small></div><label class="sw"><input type="checkbox" id="s-px"><span></span></label></div>
+      </div>
+      <div class="group">
+        <h4>DATOS</h4>
+        <button class="set act danger" id="s-clear"><span class="sic"><svg class="i"><use href="#i-x"/></svg></span><div class="l"><b>Borrar favoritos e historial</b><small>Mi lista y lo que estabas viendo</small></div><span class="chev"></span></button>
+      </div>
+      <div class="group">
+        <h4>ACERCA DE</h4>
+        <button class="set act" id="s-lic"><span class="sic"><svg class="i"><use href="#i-star"/></svg></span><div class="l"><b>Licencia</b><small>Licencia Nexora Eduard Gamer</small></div><span class="chev"></span></button>
+        <div class="set info"><span class="sic"><svg class="i"><use href="#i-spark"/></svg></span><div class="l"><b>Proyecto educativo</b><small>Sin fines de lucro. Los títulos, imágenes y videos pertenecen a sus respectivos dueños.</small></div></div>
+      </div>
     </div>
-    <div class="group">
-      <h4>AVISOS</h4>
-      <div class="set"><div class="l"><b>Episodios nuevos</b><small>Notificación cuando sale un capítulo nuevo de un anime de Mi lista</small></div><label class="sw"><input type="checkbox" id="s-ntf"><span></span></label></div>
-      <div class="set"><button id="s-ntest" style="color:var(--ac2);font-weight:700;font-size:14px">Probar notificación</button></div>
     </div>
-    <div class="group">
-      <h4>DATOS</h4>
-      <div class="set"><div class="l"><b>Proxy de imágenes</b><small>Solo con Mi servidor: portadas vía tu servidor</small></div><label class="sw"><input type="checkbox" id="s-px"><span></span></label></div>
-      <div class="set"><button id="s-clear" style="color:var(--bad);font-weight:700;font-size:14px">Borrar favoritos e historial</button></div>
-    </div>
-    <div class="about"><svg><use href="#i-logo"/></svg><small>Animes Nexora Plus · <span class="appver"></span></small><small>© 2026 Nexora Eduard Gamer</small></div>
-    <div class="sbtn"><button class="btn" id="s-upd">Buscar actualizaciones</button><button class="btn" id="s-lic">Ver licencia</button></div>
-    <div class="foot">Proyecto educativo sin fines de lucro.<br>Los títulos, imágenes y videos pertenecen a sus respectivos dueños.</div>
   </section>
 
   <nav id="nav">
@@ -677,7 +751,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 
 <!-- REPRODUCTOR -->
 <div class="ov" id="player">
-  <video id="vid" playsinline webkit-playsinline preload="auto"></video>
+  <video id="vid" playsinline webkit-playsinline preload="auto" poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>
   <iframe id="frame" class="hide" allow="autoplay; fullscreen; encrypted-media"></iframe>
   <div id="seekfx"></div>
   <div id="ploader"><div class="spin"></div><div id="ptxt">Cargando…</div></div>
@@ -752,6 +826,9 @@ async function api(path,params={}){
 const UA='Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
 const FF='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0';
 const NH=native?((cap.Plugins&&cap.Plugins.CapacitorHttp)||plug('CapacitorHttp')):null;
+if(!Promise.any)Promise.any=ps=>new Promise((res,rej)=>{const a=[...ps];let n=0;if(!a.length)return rej(new Error('vacío'));a.forEach(p=>Promise.resolve(p).then(res,()=>{if(++n===a.length)rej(new Error('todos fallaron'))}))});
+const diag=t=>{try{(P.diag||(P.diag=[])).push(t)}catch(e){}};
+const mtype=s=>/\.m3u8|\/hls|master/i.test(s)?'hls':'mp4';
 const hostOf=u=>{try{return new URL(u).hostname.replace(/^www\d*\./,'')}catch(e){return u}};
 const abs=(u,b)=>{try{return u?new URL(u,b).href:null}catch(e){return null}};
 const srcLabel=u=>/animeav1/i.test(u)?'La fuente principal':/animeflv/i.test(u)?'La fuente alterna':'El servidor de video';
@@ -918,8 +995,8 @@ function voeDecode(o){try{let s=o.replace(/[A-Za-z]/g,c=>String.fromCharCode(c.c
 async function rVoe(u){let{data:h}=await get(u,{'User-Agent':FF});
   const m=h.match(/window\.location\.href\s*=\s*['"]([^'"]+)['"]/);if(m)h=(await get(m[1],{'User-Agent':FF})).data;
   for(const s of parseDoc(h).querySelectorAll('script[type="application/json"]')){let p;try{p=JSON.parse(s.textContent)}catch(e){continue}
-    if(Array.isArray(p)&&typeof p[0]==='string'){const d=voeDecode(p[0]);const f=d&&(d.direct_access_url||d.source);if(f)return f}}
-  return sniff(h)}
+    if(Array.isArray(p)&&typeof p[0]==='string'){const d=voeDecode(p[0]);const f=d&&[d.direct_access_url,d.source].filter(Boolean);if(f&&f.length)return[...new Set(f)]}}
+  const sn=sniff(h);if(!sn)throw new Error(/captcha|cloudflare|just a moment/i.test(h)?'bloqueado por verificación':'no se encontró el video');return sn}
 function unpack(src){const m=src.match(/\}\s*\(\s*'((?:[^'\\]|\\.)*)'\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*'((?:[^'\\]|\\.)*)'\.split\('\|'\)/);if(!m)return null;
   const p=m[1].replace(/\\'/g,"'").replace(/\\\\/g,'\\'),a=+m[2],k=m[4].split('|');
   const val=ch=>{const c=ch.charCodeAt(0);return c>=48&&c<=57?c-48:c>=97&&c<=122?c-87:c>=65&&c<=90?c-29:-1};
@@ -943,8 +1020,10 @@ function resolverFor(u){const h=hostOf(u);
   if(SWHOST.test(h))return rSw;if(/voe/i.test(h))return rVoe;if(/pixeldrain|pdrain/i.test(h))return rPixel;
   if(/vidhide|filelions|zilla|dropload|streamvid|vidguard/i.test(h))return rGeneric;return null}
 async function resolveDirect(urls){
-  const jobs=urls.map(async u=>{const fn=resolverFor(u);if(!fn)throw 0;const s=await fn(u);if(!s||s===u)throw 0;
-    return{streamUrl:s,mediaType:/\.m3u8|\/hls|master/i.test(s)?'hls':'mp4',resolvedFrom:u}});
+  const jobs=urls.map(async u=>{const fn=resolverFor(u);if(!fn)throw 0;const lb=hostOf(u).replace(/^(player|play|embed|cdn)\d*\./,'').split('.')[0];let s;
+    try{s=await fn(u)}catch(e){diag(lb+': '+((e&&e.message)||'error'));throw e}
+    const arr=(Array.isArray(s)?s:[s]).filter(x=>x&&x!==u);if(!arr.length){diag(lb+': sin enlace de video');throw 0}
+    return{streamUrl:arr[0],alts:arr.slice(1),mediaType:mtype(arr[0]),resolvedFrom:u}});
   try{return await Promise.any(jobs)}catch(e){throw new Error('No se pudo extraer el video')}
 }
 
@@ -1463,7 +1542,7 @@ function paintEpLabel(){$('#p-sub').textContent=`Episodio ${P.ep.number}`;const 
   $('#p-prev').classList.toggle('dim',i<=0);$('#p-nx').classList.toggle('dim',i<0||i>=P.list.length-1)}
 function paintLang(){$('#p-langn').textContent=FLAG[P.lang]+' '+LNAME[P.lang];$('#p-langf').textContent=FLAG[P.lang];$('#p-langb').textContent=LSHORT[P.lang]}
 async function loadEpisode(){
-  const tk=++P.tk;resetMedia();paintLang();loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
+  const tk=++P.tk;P.diag=[];resetMedia();paintLang();loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
   try{
     const s=await SRC.episode(P.ep.url);if(tk!==P.tk)return;
     P.servers={sub:s.sub||[],dub:s.dub||[]};DUB[P.ep.url]={s:P.servers.sub.length?1:0,d:P.servers.dub.length?1:0,t:Date.now()};store.set('nx_dub',DUB);
@@ -1481,7 +1560,7 @@ async function playLang(tk,skip){
     loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
     try{const r=await SRC.resolve(sup.map(x=>x.url));if(tk!==P.tk)return;
       const from=r.resolvedFrom||sup[0].url;skip.add(from);
-      P.idx=Math.max(0,list.findIndex(x=>x.url===from));return attach(r.streamUrl,r.mediaType,tk)}
+      P.idx=Math.max(0,list.findIndex(x=>x.url===from));P.alts=r.alts||[];return attach(r.streamUrl,r.mediaType,tk)}
     catch(e){if(tk!==P.tk)return;sup.forEach(x=>skip.add(x.url))}
   }
   /* sin video directo: en TV se avisa; en el móvil se abre el reproductor web */
@@ -1489,8 +1568,9 @@ async function playLang(tk,skip){
 }
 function noDirect(tk){
   if(tk!==P.tk)return;const o=P.lang==='sub'?'dub':'sub';const alt=(P.servers[o]||[]).some(x=>SRC.canResolve(x));
-  loader(true,'');$('#ploader .spin').style.display='none';
-  $('#ptxt').innerHTML=`<b style="font-size:16px;color:#fff">Este episodio no tiene video directo</b><br><span style="font-weight:500">${alt?`Puedes verlo en ${LNAME[o]}.`:'Los servidores de este episodio no responden ahora. Intenta de nuevo en un rato.'}</span><div class="btnrow" style="justify-content:center;margin-top:14px"><button class="btn sec" id="pe-back">Volver</button>${alt?`<button class="btn pri" id="pe-alt">${FLAG[o]} Ver en ${LNAME[o]}</button>`:''}<button class="btn ${alt?'sec':'pri'}" id="pe-retry">Reintentar</button></div>`;
+  loader(true,'');$('#ploader .spin').style.display='none';$('#ploader').classList.add('err');
+  const dg=[...new Set(P.diag||[])].slice(-3).join(' · ');
+  $('#ptxt').innerHTML=`<b style="font-size:16px;color:#fff">Este episodio no tiene video directo</b><br><span style="font-weight:500">${alt?`Puedes verlo en ${LNAME[o]}.`:'Los servidores de este episodio no responden ahora. Intenta de nuevo en un rato.'}</span><div class="btnrow" style="justify-content:center;margin-top:14px"><button class="btn sec" id="pe-back">Volver</button>${alt?`<button class="btn pri" id="pe-alt">${FLAG[o]} Ver en ${LNAME[o]}</button>`:''}<button class="btn ${alt?'sec':'pri'}" id="pe-retry">Reintentar</button></div>${dg?`<small class="pdiag">Detalle: ${esc(dg)}</small>`:''}`;
   $('#pe-back').onclick=()=>closeTop();
   $('#pe-retry').onclick=()=>{$('#ploader .spin').style.display='';loadEpisode()};
   if(alt)$('#pe-alt').onclick=()=>{$('#ploader .spin').style.display='';P.lang=o;playLang(++P.tk)};
@@ -1505,16 +1585,18 @@ async function attach(url,type,tk){
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}
   P.mode='video';F.classList.add('hide');V.classList.remove('hide');V.style.objectFit=P.fit;
   let failed=false;
-  const fail=()=>{if(tk!==P.tk||failed)return;failed=true;if(P.mode!=='video')return;
-    const l=P.servers[P.lang]||[];const skip=P.skip||new Set();const it=l[P.idx];if(it)skip.add(it.url);
+  const fail=why=>{if(tk!==P.tk||failed)return;failed=true;if(P.mode!=='video')return;
+    const l=P.servers[P.lang]||[];const it0=l[P.idx];diag((it0&&it0.server||'Servidor')+': '+(why||'no se pudo reproducir'));
+    if(P.alts&&P.alts.length){const n=P.alts.shift();V.onerror=null;toast('Probando otra fuente del mismo servidor…');attach(n,mtype(n),tk);return}
+    const skip=P.skip||new Set();const it=l[P.idx];if(it)skip.add(it.url);
     if(l.some(x=>SRC.canResolve(x)&&!skip.has(x.url))){toast('Ese servidor falló, probando otro…');V.onerror=null;playLang(tk,skip);return}
     if(isTV)return noDirect(tk);
     const w=l.find(x=>!SRC.canResolve(x));if(w){toast('El video directo falló, usando reproductor web');P.idx=l.indexOf(w);useFrame(w,tk)}else playerError('No se pudo reproducir el video.')};
-  V.onerror=fail;
+  V.onerror=()=>fail('video '+(V.error?'código '+V.error.code:'con error'));
   if(type==='hls'&&window.Hls&&Hls.isSupported()){
     const h=new Hls({maxBufferLength:40,enableWorker:true});P.hls=h;h.loadSource(url);h.attachMedia(V);
     h.on(Hls.Events.MANIFEST_PARSED,()=>{V.playbackRate=P.speed;V.play().catch(()=>{})});
-    h.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal){if(d.type===Hls.ErrorTypes.NETWORK_ERROR&&!P._retry){P._retry=1;h.startLoad()}else{P._retry=0;fail()}}});
+    h.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal){if(d.type===Hls.ErrorTypes.NETWORK_ERROR&&!P._retry){P._retry=1;h.startLoad()}else{P._retry=0;fail('HLS '+(d.details||d.type))}}});
   }else{V.src=url;V.play().catch(()=>{})}
   updSrvName();
 }
@@ -1529,12 +1611,12 @@ function useFrame(it,tk){
 }
 function updSrvName(){const l=P.servers[P.lang]||[];const it=l[P.idx];$('#p-srvn').textContent=it?(it.server||'Servidor'):'—'}
 function playerError(msg){
-  loader(true,'');$('#ptxt').innerHTML=`<b style="font-size:16px;color:#fff">Sin servidores disponibles</b><br><span style="font-weight:500">${esc(msg)}</span><div class="btnrow" style="justify-content:center;margin-top:14px"><button class="btn sec" id="pe-back">Volver</button><button class="btn pri" id="pe-retry">Reintentar</button></div>`;
+  loader(true,'');$('#ploader').classList.add('err');$('#ptxt').innerHTML=`<b style="font-size:16px;color:#fff">Sin servidores disponibles</b><br><span style="font-weight:500">${esc(msg)}</span><div class="btnrow" style="justify-content:center;margin-top:14px"><button class="btn sec" id="pe-back">Volver</button><button class="btn pri" id="pe-retry">Reintentar</button></div>`;
   $('#ploader .spin').style.display='none';
   $('#pe-back').onclick=()=>closeTop();$('#pe-retry').onclick=()=>{$('#ploader .spin').style.display='';loadEpisode()};
   if(KBD)setTimeout(()=>$('#pe-retry').focus(),60)
 }
-function loader(on,txt){$('#ploader').classList.toggle('on',on);if(on){$('#ploader .spin').style.display='';if(txt!==undefined)$('#ptxt').textContent=txt}}
+function loader(on,txt){$('#ploader').classList.toggle('on',on);if(txt!==''||!on)$('#ploader').classList.remove('err');if(on){$('#ploader .spin').style.display='';if(txt!==undefined)$('#ptxt').textContent=txt}}
 /* Si el sistema no gira la pantalla, se gira el reproductor por CSS */
 function fitRot(){const pl=$('#player');const need=!isTV&&P.rotOn&&stack.includes('player')&&innerHeight>innerWidth;
   pl.classList.toggle('rot',need);if(need){pl.style.width=innerHeight+'px';pl.style.height=innerWidth+'px'}else{pl.style.width='';pl.style.height=''}}
@@ -1626,9 +1708,9 @@ $('#p-srv').onclick=e=>{e.stopPropagation();
 async function pickServer(lang,i){
   $('#psheet').classList.remove('on');const it=(P.servers[lang]||[])[i];if(!it)return;
   P.resume=P.mode==='video'?V.currentTime:0;
-  const tk=++P.tk;P.lang=lang;P.idx=i;resetMedia();paintLang();loader(true,'Conectando con '+(it.server||'servidor')+'…');
+  const tk=++P.tk;P.diag=[];P.alts=[];P.lang=lang;P.idx=i;resetMedia();paintLang();loader(true,'Conectando con '+(it.server||'servidor')+'…');
   if(SRC.canResolve(it)){
-    try{const r=await SRC.resolve([it.url]);if(tk!==P.tk)return;return attach(r.streamUrl,r.mediaType,tk)}catch(e){if(tk!==P.tk)return}
+    try{const r=await SRC.resolve([it.url]);if(tk!==P.tk)return;P.alts=r.alts||[];return attach(r.streamUrl,r.mediaType,tk)}catch(e){if(tk!==P.tk)return}
   }
   useFrame(it,tk)
 }
@@ -1776,6 +1858,8 @@ document.addEventListener('keydown',e=>{
 const APP_VER='__APP_VERSION__'.startsWith('__')?'0.0.0-dev':'__APP_VERSION__';
 const REPO='EduardYT9088/Anime-Nexora';
 $$('.appver').forEach(e=>e.textContent='v'+APP_VER);
+{const m=navigator.userAgent.match(/Chrome\/(\d+)/);const e=$('#s-eng');if(e)e.textContent=(isTV?'Android TV':'Android')+(m?' · Motor '+m[1]:'')}
+$('#s-donate').onclick=e=>{if(isTV){e.preventDefault();toast('Escanea el código QR con tu celular para donar 💜')}};
 const cmpVer=(a,b)=>{const x=String(a).split(/[.-]/).map(n=>parseInt(n)||0),y=String(b).split(/[.-]/).map(n=>parseInt(n)||0);for(let i=0;i<3;i++){if((x[i]||0)!==(y[i]||0))return(x[i]||0)-(y[i]||0)}return 0};
 let UPD=null;
 function notesHTML(t){

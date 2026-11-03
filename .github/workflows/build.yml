@@ -15,7 +15,7 @@ permissions:
 
 env:
   APP_NAME: "Animes Nexora Plus"
-  APP_VERSION: "1.2.5"   # <- cambia aquí la versión del APK
+  APP_VERSION: "1.2.6"   # <- cambia aquí la versión del APK
   APP_ID: "com.nexora.animesplus"
   # Pega aquí la dirección de tu servidor en Render (déjalo vacío si no usas servidor)
   SERVER_URL: ""
@@ -60,8 +60,18 @@ jobs:
                 @capacitor/app@6 @capacitor/screen-orientation@6 @capacitor/status-bar@6 \
                 @capacitor/local-notifications@6 @capacitor/background-runner@2.0.0 \
                 @capacitor/filesystem@6 @capawesome-team/capacitor-file-opener@6 \
-                hls.js@1.5.17
+                hls.js@1.5.17 qrcode@1.5.4
           cp node_modules/hls.js/dist/hls.min.js www/hls.min.js
+          # Código QR de donación (PayPal) dentro de Ajustes
+          cat > qr.js <<'EOF'
+          const Q=require('qrcode'),fs=require('fs');
+          Q.toString('https://www.paypal.me/EdwardAlvarado285',{type:'svg',margin:1,errorCorrectionLevel:'M',color:{dark:'#0b0a1a',light:'#ffffff'}}).then(svg=>{
+            const f='www/index.html';const h=fs.readFileSync(f,'utf8');
+            if(!h.includes('<!--NX_QR-->'))throw new Error('falta el marcador del QR');
+            fs.writeFileSync(f,h.replace('<!--NX_QR-->',svg.replace(/<\?xml[^>]*>/,'').trim()));console.log('QR de donación listo');
+          }).catch(e=>{console.error(e);process.exit(1)});
+          EOF
+          node qr.js
           # Revisión en segundo plano: avisa cuando sale un episodio nuevo de "Mi lista"
           mkdir -p www/runners
           cat > www/runners/nexora.js <<'EOF'

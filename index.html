@@ -123,6 +123,26 @@ h2.sec span{font-size:12px;color:var(--mu);font-weight:600}
 .cw .tx b{display:block;font-size:15px;margin:2px 0 6px}.cw .pb{height:4px;border-radius:9px;background:rgba(255,255,255,.15)}.cw .pb i{display:block;height:100%;border-radius:9px;background:var(--grad)}
 .cw .go{width:44px;height:44px;border-radius:50%;background:var(--grad);display:grid;place-items:center;flex:none}
 .eplist{display:flex;flex-direction:column;gap:8px}
+.evbar{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
+.vseg{display:inline-flex;padding:3px;border-radius:12px;background:var(--s2);border:1px solid var(--line);gap:2px}
+.vseg button{display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:9px;font-size:12px;font-weight:700;color:var(--mu)}
+.vseg button svg{width:15px;height:15px}
+.vseg button.on{background:var(--grad);color:#fff}
+#e-ord{font-size:11.5px;font-weight:700;color:var(--mu)}
+.eplist.g{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media(min-width:560px){.eplist.g{grid-template-columns:repeat(5,1fr)}}
+.ept2{position:relative;aspect-ratio:1/.82;border-radius:18px;padding:10px;background:linear-gradient(160deg,var(--s2),var(--s1));border:1px solid var(--line);display:flex;flex-direction:column;justify-content:space-between;text-align:left;overflow:hidden}
+.ept2:before{content:"";position:absolute;right:-18px;bottom:-18px;width:70px;height:70px;border-radius:50%;background:radial-gradient(circle,rgba(124,92,255,.25),transparent 70%)}
+.ept2 .lb{font-size:10px;font-weight:800;letter-spacing:.12em;color:var(--mu)}
+.ept2 .nm{font-size:28px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.ept2 .bd{display:flex;gap:4px}
+.ept2 .bd span{font-size:9.5px;font-weight:800;padding:3px 6px;border-radius:6px;background:rgba(255,255,255,.08);color:#d9d6f5}
+.ept2 .bd span.l{background:rgba(34,211,238,.16);color:var(--ac2)}
+.ept2 .st{position:absolute;right:9px;top:9px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800}
+.ept2.seen{opacity:.55}.ept2.seen .st{background:rgba(34,211,238,.2);color:var(--ac2)}
+.ept2.cur{border:2px solid var(--ac2);background:linear-gradient(160deg,rgba(124,92,255,.35),rgba(34,211,238,.12))}
+.ept2.cur .st{background:var(--grad)}
+.ept2 .pb{position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,.12)}.ept2 .pb i{display:block;height:100%;background:var(--grad)}
 .epr{display:flex;align-items:center;gap:14px;width:100%;padding:10px 12px;border-radius:16px;background:var(--s1);border:1px solid var(--line);text-align:left}
 .epr .n{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;font-weight:800;font-size:16px;background:var(--s2);flex:none;font-variant-numeric:tabular-nums}
 .epr .tx{flex:1;min-width:0}.epr .tx b{display:block;font-size:14px}.epr .tx small{display:block;font-size:11.5px;color:var(--mu);font-weight:600;margin-top:3px}
@@ -366,6 +386,8 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
   <symbol id="i-skip" viewBox="0 0 24 24"><path d="M3 15a8 8 0 0 1 15-4"/><path d="M19 5v6h-6"/></symbol>
   <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
   <symbol id="i-cc" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 10.5a2 2 0 1 0 0 3M16 10.5a2 2 0 1 0 0 3"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/></symbol>
   <symbol id="i-logo" viewBox="0 0 40 40"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset=".6" stop-color="#4f8cff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect width="40" height="40" rx="12" fill="url(#lg)"/><path d="M12 28V12l16 16V12" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 </svg>
 
@@ -433,7 +455,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
       <div class="set"><div class="l"><b>Proxy de imágenes</b><small>Solo con Mi servidor: portadas vía tu servidor</small></div><label class="sw"><input type="checkbox" id="s-px"><span></span></label></div>
       <div class="set"><button id="s-clear" style="color:var(--bad);font-weight:700;font-size:14px">Borrar favoritos e historial</button></div>
     </div>
-    <div class="foot"><b>Animes Nexora Plus</b> · v1.0.2<br>Licencia Nexora Eduard Gamer<br>Catálogo y streaming en línea.</div>
+    <div class="foot"><b>Animes Nexora Plus</b> · v1.0.3<br>Licencia Nexora Eduard Gamer<br>Catálogo y streaming en línea.</div>
   </section>
 
   <nav id="nav">
@@ -472,6 +494,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
       <div class="mini" id="e-mini"></div>
       <div class="ept"><b id="e-title"></b><small id="e-sub"></small></div>
       <button class="ibtn" id="e-sort" aria-label="Ordenar"><svg class="i"><use href="#i-sort"/></svg></button></div>
+    <div class="evbar"><div class="vseg" id="e-view"><button data-v="grid"><svg class="i"><use href="#i-grid"/></svg>Cuadrícula</button><button data-v="list"><svg class="i"><use href="#i-list"/></svg>Lista</button></div><span id="e-ord"></span></div>
     <div class="seasons" id="e-seasons"></div>
   </div>
   <div class="epwrap"><div id="e-last"></div><div class="eplist" id="ep-grid"></div></div>
@@ -1101,12 +1124,19 @@ function renderEpisodes(){
   if(h){const pct=h.d?Math.min(100,h.t/h.d*100):0;
     $('#e-last').innerHTML=`<button class="cw" id="e-lastb"><div class="mini">${imgTag(D.data||{},'ok')}</div><div class="tx"><small>CONTINUAR</small><b>Episodio ${esc(h.epNum)}</b><div class="pb"><i style="width:${pct}%"></i></div></div><span class="go"><svg class="i"><use href="#i-play"/></svg></span></button>`;
     $('#e-lastb').onclick=()=>{const ep=D.eps.find(x=>String(x.number)===String(h.epNum));if(ep)askLang(ep)}}else $('#e-last').innerHTML='';
+  const view=store.get('nx_epview','grid');$$('#e-view button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
+  $('#e-ord').textContent=D.desc?'Más recientes primero':'Desde el episodio 1';
+  const g=$('#ep-grid');g.classList.toggle('g',view==='grid');
+  if(view==='grid'){const bd=D.avail?['dub','sub'].filter(l=>D.avail[l]).map(l=>`<span class="${l==='dub'?'l':''}">${LSHORT[l]}</span>`).join(''):'';
+    g.innerHTML=list.map(e=>{const n=String(e.number),isCur=h&&String(h.epNum)===n,isSeen=seen.has(n);
+      return`<button class="epr ept2 ${isSeen?'seen':''} ${isCur?'cur':''}" data-n="${esc(n)}"><span class="lb">EPISODIO</span><span class="nm">${esc(n.padStart(2,'0'))}</span><span class="bd">${bd}</span>${isSeen?'<span class="st">✓</span>':isCur?'<span class="st"><svg class="i" style="width:11px;height:11px"><use href="#i-play"/></svg></span>':''}${isCur&&h.d?`<div class="pb"><i style="width:${Math.min(100,h.t/h.d*100)}%"></i></div>`:''}</button>`}).join('');return}
   $('#ep-grid').innerHTML=list.map(e=>{const n=String(e.number),isCur=h&&String(h.epNum)===n,isSeen=seen.has(n);
     const sub=isSeen?'✓ Visto':isCur?`Quedaste en ${fmt(h.t)} de ${fmt(h.d)}`:(langs||'Disponible');
     return`<button class="epr ${isSeen?'seen':''} ${isCur?'cur':''}" data-n="${esc(n)}"><span class="n">${esc(n.padStart(2,'0'))}</span><span class="tx"><b>Episodio ${esc(n)}</b><small>${esc(sub)}</small>${isCur&&h.d?`<div class="pb"><i style="width:${Math.min(100,h.t/h.d*100)}%"></i></div>`:''}</span><span class="pl"><svg class="i" style="width:16px;height:16px"><use href="#i-play"/></svg></span></button>`}).join('');
 }
 $('#ep-grid').onclick=e=>{const b=e.target.closest('.epr');if(!b)return;const ep=D.eps.find(x=>String(x.number)===b.dataset.n);if(ep)askLang(ep)};
-$('#e-sort').onclick=()=>{D.desc=!D.desc;renderEpisodes();toast(D.desc?'Más recientes primero':'Desde el episodio 1')};
+$('#e-sort').onclick=()=>{D.desc=!D.desc;renderEpisodes()};
+$('#e-view').onclick=e=>{const b=e.target.closest('[data-v]');if(!b)return;store.set('nx_epview',b.dataset.v);renderEpisodes()};
 $('#e-back').onclick=()=>closeTop();
 
 /* ================= ¿CÓMO QUIERES VERLO? ================= */

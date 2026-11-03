@@ -216,6 +216,7 @@ h2.sec span{font-size:12px;color:var(--mu);font-weight:600}
 .frow .card{flex:0 0 104px}
 .frow .arr{flex:none;color:var(--mu);font-size:20px;margin-top:-34px}
 .frow .card.now .poster{border:2px solid var(--ac2)}
+.fr-lab{position:absolute;left:0;right:0;bottom:0;z-index:2;padding:14px 6px 6px;font-size:10px;font-weight:800;text-align:center;background:linear-gradient(transparent,rgba(7,6,17,.92));letter-spacing:.02em}
 .now-tag{position:absolute;right:5px;top:5px;z-index:2;font-size:9px;font-weight:800;padding:3px 6px;border-radius:6px;background:var(--grad)}
 .facts div{padding:9px 0;border-top:1px solid var(--line)}.facts div:first-child{border-top:0;padding-top:0}
 .facts b{display:block;font-size:13px}.facts span{font-size:12.5px;color:var(--mu);line-height:1.45}
@@ -481,7 +482,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
       <div class="set"><div class="l"><b>Proxy de imágenes</b><small>Solo con Mi servidor: portadas vía tu servidor</small></div><label class="sw"><input type="checkbox" id="s-px"><span></span></label></div>
       <div class="set"><button id="s-clear" style="color:var(--bad);font-weight:700;font-size:14px">Borrar favoritos e historial</button></div>
     </div>
-    <div class="about"><svg><use href="#i-logo"/></svg><small>Animes Nexora Plus · v1.0.9</small><small>© 2026 Nexora Eduard Gamer</small></div>
+    <div class="about"><svg><use href="#i-logo"/></svg><small>Animes Nexora Plus · v1.1.0</small><small>© 2026 Nexora Eduard Gamer</small></div>
     <div class="sbtn"><button class="btn" id="s-lic">Ver licencia</button></div>
     <div class="foot">Proyecto educativo sin fines de lucro.<br>Los títulos, imágenes y videos pertenecen a sus respectivos dueños.</div>
   </section>
@@ -1139,11 +1140,14 @@ async function loadFranchise(d,my){
   if(my!==D.seq)return;
   const seen=new Set([D.url]),items=[cur];list.forEach(x=>{if(!seen.has(x.url)){seen.add(x.url);items.push(x)}});
   if(items.length<2)return;
-  items.sort((a,b)=>(Number(a.year)||0)-(Number(b.year)||0)||seasonNum(a.title)-seasonNum(b.title));
-  const tv=items.filter(x=>!/pel|movie|film|ova|especial|special/i.test(x.type||'')).length;
-  D.fr=items;if($('#epv').classList.contains('on'))renderSeasons();
-  $('#d-frc').textContent='· '+(tv>1?tv+' temporadas':items.length+' entregas');
-  $('#d-frow').innerHTML=items.map((x,i)=>(i?'<span class="arr">›</span>':'')+card(x,x.url===D.url?'<span class="now-tag">ACTUAL</span>':'').replace('class="card"',x.url===D.url?'class="card now"':'class="card"')).join('');
+  {const bs=baseTitle(d.title||'');const rk=x=>{const i=seasonInfo(x,bs);return i?[0,i.s,i.p]:[1,Number(x.year)||0,0]};
+    items.sort((a,b)=>{const A=rk(a),B=rk(b);return A[0]-B[0]||A[1]-B[1]||A[2]-B[2]})}
+  D.fr=items;const ss=seasonsOf();if($('#epv').classList.contains('on')){renderSeasons();renderEpisodes()}
+  const lab=x=>{const o=ss.find(o=>o.x.url===x.url);if(o)return seasonText(o.i);const t=(x.type||'')+' '+x.title;
+    return/pel[ií]cula|movie|film|gekijou/i.test(t)?'Película':/\bova\b|\boad\b/i.test(t)?'OVA':/especial|special|recap/i.test(t)?'Especial':'Serie relacionada'};
+  const extra=items.length-ss.length;
+  $('#d-frc').textContent='· '+(ss.length>1?`${ss.length} temporadas`:'1 temporada')+(extra>0?` · ${extra} ${extra===1?'extra':'extras'}`:'');
+  $('#d-frow').innerHTML=items.map((x,i)=>(i?'<span class="arr">›</span>':'')+card(x,(x.url===D.url?'<span class="now-tag">ACTUAL</span>':'')+`<span class="fr-lab">${esc(lab(x))}</span>`).replace('class="card"',x.url===D.url?'class="card now"':'class="card"')).join('');
   $('#d-fr').classList.remove('hide');
 }
 async function loadRecs(d,my){
@@ -1164,11 +1168,31 @@ function openEpisodes(){
   $('#e-mini').innerHTML=imgTag(D.data,'ok');$('#e-title').innerHTML=ttSpan(D.data);
   renderSeasons();renderEpisodes();$('#epv').scrollTop=0;pushOv('epv');
 }
-function seasonLabel(x,i){const t=x.type||'';if(/pel|movie|film/i.test(t))return'Película';if(/ova/i.test(t))return'OVA';if(/especial|special/i.test(t+x.title))return'Especial';const n=seasonNum(x.title);return'Temporada '+(n>1?n:i+1)}
+/* ¿Es una temporada de ESTE anime? Solo cuenta si el título es el nombre base + "Season/Temporada/Part N" (películas, OVAs y especiales no) */
+const NOT_SEASON=/pel[ií]cula|movie|\bfilm\b|gekijou|\bova\b|\boad\b|especial|special|recap|resumen|music|chibi|mini\b/i;
+function seasonInfo(x,base){
+  const t=String(x.title||'');if(NOT_SEASON.test((x.type||'')+' '+t))return null;
+  const nt=normQ(t),nb=normQ(base);if(!nb||!nt.startsWith(nb))return null;
+  const rem=nt.slice(nb.length).replace(/^[\s:–\-.,!]+/,'').trim();
+  if(!rem)return{s:1,p:0};
+  let s=null,p=0,m;
+  if((m=rem.match(/(?:season|temporada|saison)\s*(\d+)/)))s=+m[1];
+  else if((m=rem.match(/(\d+)(?:st|nd|rd|th)\s*season/)))s=+m[1];
+  else if((m=rem.match(/^(ii|iii|iv|v|vi)\b/)))s={ii:2,iii:3,iv:4,v:5,vi:6}[m[1]];
+  else if((m=rem.match(/^(\d{1,2})\b/)))s=+m[1];
+  if((m=rem.match(/(?:part|parte|cour)\s*(\d+)/))){p=+m[1];if(s==null)s=1}
+  else if(/final season|temporada final/.test(rem)&&s==null)s=99;
+  return s==null?null:{s,p}}
+const seasonText=i=>i.s===99?'Temporada final':`Temporada ${i.s}${i.p>1?' · Parte '+i.p:''}`;
+function seasonsOf(){
+  const fr=D.fr||[];const base=baseTitle(D.data?.title||'');const out=[],keys=new Set();
+  fr.forEach(x=>{const i=seasonInfo(x,base);if(!i)return;const k=i.s+'.'+i.p;if(keys.has(k)&&x.url!==D.url)return;keys.add(k);out.push({x,i})});
+  if(!out.some(o=>o.x.url===D.url))return[];
+  return out.sort((a,b)=>a.i.s-b.i.s||a.i.p-b.i.p)}
 function renderSeasons(){
-  const fr=D.fr||[];if(fr.length<2){$('#e-seasons').innerHTML='';return}
-  let tvN=0;$('#e-seasons').innerHTML=fr.map(x=>{const isTv=!/pel|movie|film|ova|especial|special/i.test((x.type||'')+' '+x.title);const lab=isTv?seasonLabel(x,tvN++):seasonLabel(x,0);
-    return`<button class="sea ${x.url===D.url?'on':''}" data-su="${esc(x.url)}">${esc(lab)}</button>`}).join('');
+  const ss=seasonsOf();if(ss.length<2){$('#e-seasons').innerHTML='';D.seasonLabel='';return}
+  D.seasonLabel=seasonText(ss.find(o=>o.x.url===D.url).i);
+  $('#e-seasons').innerHTML=ss.map(o=>`<button class="sea ${o.x.url===D.url?'on':''}" data-su="${esc(o.x.url)}">${esc(seasonText(o.i))}</button>`).join('');
   const on=$('#e-seasons .sea.on');if(on)on.scrollIntoView({inline:'center',block:'nearest'});
 }
 $('#e-seasons').onclick=e=>{const b=e.target.closest('.sea');if(!b||b.dataset.su===D.url)return;const u=b.dataset.su;
@@ -1176,7 +1200,7 @@ $('#e-seasons').onclick=e=>{const b=e.target.closest('.sea');if(!b||b.dataset.su
 function renderEpisodes(){
   const h=hist[D.url],seen=new Set(h?.seen||[]);const list=D.desc?[...D.eps].reverse():D.eps;
   const langs=D.avail?['dub','sub'].filter(l=>D.avail[l]).map(l=>LNAME[l]).join(' · '):'';
-  const nl=D.eps.filter(e=>{const v=langsOf(e.url);return v&&v.d}).length;$('#e-sub').textContent=`${D.eps.length} episodios${nl?` · ${nl} en Latino`:langs?' · '+langs:''}`;
+  const nl=D.eps.filter(e=>{const v=langsOf(e.url);return v&&v.d}).length;$('#e-sub').textContent=`${D.seasonLabel?D.seasonLabel+' · ':''}${D.eps.length} episodios${nl?` · ${nl} en Latino`:langs?' · '+langs:''}`;
   if(h){const pct=h.d?Math.min(100,h.t/h.d*100):0;
     $('#e-last').innerHTML=`<button class="cw" id="e-lastb"><div class="mini">${imgTag(D.data||{},'ok')}</div><div class="tx"><small>CONTINUAR</small><b>Episodio ${esc(h.epNum)}</b><div class="pb"><i style="width:${pct}%"></i></div></div><span class="go"><svg class="i"><use href="#i-play"/></svg></span></button>`;
     $('#e-lastb').onclick=()=>{const ep=D.eps.find(x=>String(x.number)===String(h.epNum));if(ep)askLang(ep)}}else $('#e-last').innerHTML='';

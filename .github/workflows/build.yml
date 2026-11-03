@@ -15,7 +15,7 @@ permissions:
 
 env:
   APP_NAME: "Animes Nexora Plus"
-  APP_VERSION: "1.2.4"   # <- cambia aquí la versión del APK
+  APP_VERSION: "1.2.5"   # <- cambia aquí la versión del APK
   APP_ID: "com.nexora.animesplus"
   # Pega aquí la dirección de tu servidor en Render (déjalo vacío si no usas servidor)
   SERVER_URL: ""

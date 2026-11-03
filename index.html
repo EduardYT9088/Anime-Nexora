@@ -448,6 +448,10 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 .lite #nav{background:#141130}
 .lite .poster img{transition:none!important}
 .lite .uring,.lite .ulogo{animation:none!important}
+/* filas de Ajustes con el control */
+.setrow{transition:background .15s}
+.kbd .setrow:focus,.kbd .setrow:focus-visible{outline:3px solid var(--ac2);outline-offset:-3px;border-radius:18px;background:rgba(34,211,238,.08)}
+.kbd .setrow select{pointer-events:none}
 </style>
 </head>
 <body>
@@ -626,7 +630,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
       <div class="dbox unotes"><b>Novedades</b><div id="u-notes"></div></div>
       <div class="uprog hide" id="u-prog"><div class="ubar"><i id="u-bar"></i></div><span id="u-ptxt">Descargando…</span></div>
       <button class="btn pri ubtn" id="u-go"><svg class="i"><use href="#i-dl"/></svg><span>Actualizar ahora</span></button>
-      <button class="ulater" id="u-later">Más tarde</button>
+      <button class="ulater hide" id="u-later"></button>
     </div>
   </div>
 </div>
@@ -1447,10 +1451,10 @@ async function startPlay(ep,lang){
   P.list=D.eps;P.ep=ep;P.lang=lang||D.lang;
   const h=hist[D.url];P.resume=(h&&String(h.epNum)===String(ep.number))?h.t:0;
   pushOv('player');setLock(false);
-  P.rotOn=cfg.rot;
-  if(cfg.rot&&Orient){try{await Orient.lock({orientation:'landscape'})}catch(e){}}
-  if(SBar){try{SBar.hide()}catch(e){}}
-  fitRot();setTimeout(fitRot,400);setTimeout(fitRot,1200);
+  P.rotOn=cfg.rot&&!isTV;
+  if(P.rotOn&&Orient){try{await Orient.lock({orientation:'landscape'});P.oriented=true}catch(e){}}
+  if(SBar&&!isTV){try{SBar.hide()}catch(e){}}
+  if(!isTV){fitRot();setTimeout(fitRot,400);setTimeout(fitRot,1200)}
   $('#p-title').innerHTML=ttSpan(D.data||{title:''});paintEpLabel();
   V.playbackRate=P.speed;cancelNext();showCtl(true);await loadEpisode();
 }
@@ -1467,17 +1471,30 @@ async function loadEpisode(){
     await playLang(tk);
   }catch(e){if(tk===P.tk)playerError(e.message)}
 }
-async function playLang(tk){
+async function playLang(tk,skip){
+  skip=skip||new Set();P.skip=skip;
   const list=P.servers[P.lang];paintLang();
   if(!list.length)return playerError('Este episodio no tiene servidores disponibles.');
-  const sup=list.filter(x=>SRC.canResolve(x));
-  if(sup.length){
+  /* prueba cada servidor directo que aún no falló */
+  while(true){
+    const sup=list.filter(x=>SRC.canResolve(x)&&!skip.has(x.url));if(!sup.length)break;
     loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
     try{const r=await SRC.resolve(sup.map(x=>x.url));if(tk!==P.tk)return;
-      P.idx=list.findIndex(x=>x.url===r.resolvedFrom);return attach(r.streamUrl,r.mediaType,tk)}catch(e){if(tk!==P.tk)return}
+      const from=r.resolvedFrom||sup[0].url;skip.add(from);
+      P.idx=Math.max(0,list.findIndex(x=>x.url===from));return attach(r.streamUrl,r.mediaType,tk)}
+    catch(e){if(tk!==P.tk)return;sup.forEach(x=>skip.add(x.url))}
   }
-  P.idx=0;useFrame(list[0],tk);
+  /* sin video directo: en TV se avisa; en el móvil se abre el reproductor web */
+  const web=list.findIndex(x=>!SRC.canResolve(x));P.idx=web<0?0:web;useFrame(list[P.idx],tk);
 }
+function noDirect(tk){
+  if(tk!==P.tk)return;const o=P.lang==='sub'?'dub':'sub';const alt=(P.servers[o]||[]).some(x=>SRC.canResolve(x));
+  loader(true,'');$('#ploader .spin').style.display='none';
+  $('#ptxt').innerHTML=`<b style="font-size:16px;color:#fff">Este episodio no tiene video directo</b><br><span style="font-weight:500">${alt?`Puedes verlo en ${LNAME[o]}.`:'Los servidores de este episodio no responden ahora. Intenta de nuevo en un rato.'}</span><div class="btnrow" style="justify-content:center;margin-top:14px"><button class="btn sec" id="pe-back">Volver</button>${alt?`<button class="btn pri" id="pe-alt">${FLAG[o]} Ver en ${LNAME[o]}</button>`:''}<button class="btn ${alt?'sec':'pri'}" id="pe-retry">Reintentar</button></div>`;
+  $('#pe-back').onclick=()=>closeTop();
+  $('#pe-retry').onclick=()=>{$('#ploader .spin').style.display='';loadEpisode()};
+  if(alt)$('#pe-alt').onclick=()=>{$('#ploader .spin').style.display='';P.lang=o;playLang(++P.tk)};
+  if(KBD)setTimeout(()=>($('#pe-alt')||$('#pe-retry')).focus(),450)}
 function resetMedia(){
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}
   V.pause();V.removeAttribute('src');V.load();F.src='about:blank';F.classList.add('hide');V.classList.remove('hide');P.mode='video';
@@ -1485,8 +1502,14 @@ function resetMedia(){
 }
 async function attach(url,type,tk){
   await loadHls();if(tk!==P.tk)return;
+  if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}
   P.mode='video';F.classList.add('hide');V.classList.remove('hide');V.style.objectFit=P.fit;
-  const fail=()=>{if(tk!==P.tk)return;const l=P.servers[P.lang];const it=l[P.idx]||l[0];if(it&&P.mode==='video'){toast('El video directo falló, usando reproductor web');useFrame(it,tk)}else playerError('No se pudo reproducir el video.')};
+  let failed=false;
+  const fail=()=>{if(tk!==P.tk||failed)return;failed=true;if(P.mode!=='video')return;
+    const l=P.servers[P.lang]||[];const skip=P.skip||new Set();const it=l[P.idx];if(it)skip.add(it.url);
+    if(l.some(x=>SRC.canResolve(x)&&!skip.has(x.url))){toast('Ese servidor falló, probando otro…');V.onerror=null;playLang(tk,skip);return}
+    if(isTV)return noDirect(tk);
+    const w=l.find(x=>!SRC.canResolve(x));if(w){toast('El video directo falló, usando reproductor web');P.idx=l.indexOf(w);useFrame(w,tk)}else playerError('No se pudo reproducir el video.')};
   V.onerror=fail;
   if(type==='hls'&&window.Hls&&Hls.isSupported()){
     const h=new Hls({maxBufferLength:40,enableWorker:true});P.hls=h;h.loadSource(url);h.attachMedia(V);
@@ -1497,6 +1520,8 @@ async function attach(url,type,tk){
 }
 function useFrame(it,tk){
   if(tk!==P.tk)return;
+  /* en TV el reproductor web no se maneja con el control y muestra publicidad: no se usa */
+  if(isTV)return noDirect(tk);
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}V.pause();V.removeAttribute('src');V.classList.add('hide');
   P.mode='frame';F.classList.remove('hide');F.src=it.url;loader(false);
   $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op').forEach(x=>x.classList.add('hide'));updSrvName();
@@ -1506,18 +1531,19 @@ function updSrvName(){const l=P.servers[P.lang]||[];const it=l[P.idx];$('#p-srvn
 function playerError(msg){
   loader(true,'');$('#ptxt').innerHTML=`<b style="font-size:16px;color:#fff">Sin servidores disponibles</b><br><span style="font-weight:500">${esc(msg)}</span><div class="btnrow" style="justify-content:center;margin-top:14px"><button class="btn sec" id="pe-back">Volver</button><button class="btn pri" id="pe-retry">Reintentar</button></div>`;
   $('#ploader .spin').style.display='none';
-  $('#pe-back').onclick=()=>closeTop();$('#pe-retry').onclick=()=>{$('#ploader .spin').style.display='';loadEpisode()}
+  $('#pe-back').onclick=()=>closeTop();$('#pe-retry').onclick=()=>{$('#ploader .spin').style.display='';loadEpisode()};
+  if(KBD)setTimeout(()=>$('#pe-retry').focus(),60)
 }
 function loader(on,txt){$('#ploader').classList.toggle('on',on);if(on){$('#ploader .spin').style.display='';if(txt!==undefined)$('#ptxt').textContent=txt}}
 /* Si el sistema no gira la pantalla, se gira el reproductor por CSS */
-function fitRot(){const pl=$('#player');const need=P.rotOn&&stack.includes('player')&&innerHeight>innerWidth;
+function fitRot(){const pl=$('#player');const need=!isTV&&P.rotOn&&stack.includes('player')&&innerHeight>innerWidth;
   pl.classList.toggle('rot',need);if(need){pl.style.width=innerHeight+'px';pl.style.height=innerWidth+'px'}else{pl.style.width='';pl.style.height=''}}
 addEventListener('resize',()=>setTimeout(fitRot,60));
 function stopPlayer(){
   P.rotOn=false;setTimeout(fitRot,0);setLock(false);$('#psheet').classList.remove('on');
   P.tk++;saveProg(true);resetMedia();cancelNext();loader(false);
-  if(Orient){try{Orient.lock({orientation:'portrait'}).then(()=>Orient.unlock()).catch(()=>{})}catch(e){}}
-  if(SBar){try{SBar.show()}catch(e){}}
+  if(Orient&&P.oriented&&!isTV){P.oriented=false;try{Orient.lock({orientation:'portrait'}).then(()=>Orient.unlock()).catch(()=>{})}catch(e){}}
+  if(SBar&&!isTV){try{SBar.show()}catch(e){}}
 }
 /* progreso */
 function saveProg(force){
@@ -1593,7 +1619,7 @@ $('#sheet').onclick=e=>{if(e.target.id==='sheet')$('#sheet').classList.remove('o
 function psheet(html){$('#psheet-box').innerHTML=html;$('#psheet').classList.add('on')}
 $('#psheet').onclick=e=>{e.stopPropagation();if(e.target.id==='psheet')$('#psheet').classList.remove('on')};
 $('#p-srv').onclick=e=>{e.stopPropagation();
-  const mk=l=>(P.servers[l]||[]).map((s,i)=>`<button class="opt ${l===P.lang&&i===P.idx?'on':''}" data-l="${l}" data-i="${i}"><span>${esc(s.server||'Servidor '+(i+1))}<br><small>${FLAG[l]} ${LNAME[l]}</small></span><small>${SRC.canResolve(s)?'Directo':'Web'}</small></button>`).join('');
+  const mk=l=>(P.servers[l]||[]).map((s,i)=>isTV&&!SRC.canResolve(s)?'':`<button class="opt ${l===P.lang&&i===P.idx?'on':''}" data-l="${l}" data-i="${i}"><span>${esc(s.server||'Servidor '+(i+1))}<br><small>${FLAG[l]} ${LNAME[l]}</small></span><small>${SRC.canResolve(s)?'Directo':'Web'}</small></button>`).join('');
   psheet(`<h3>Servidores</h3>${(mk('dub')+mk('sub'))||'<div class="empty">Sin servidores</div>'}`);
   $$('#psheet-box .opt').forEach(b=>b.onclick=()=>pickServer(b.dataset.l,+b.dataset.i))
 };
@@ -1618,6 +1644,7 @@ $('#s-lic').onclick=()=>sheet(`<h3>Licencia</h3><pre class="lic">${esc(LICENSE_T
 $('#s-lite').onchange=e=>{cfg.lite=e.target.checked;saveCfg();applyLite();toast(cfg.lite?'Modo rendimiento activado':'Efectos completos activados')};
 ['s-auto','s-rot','s-px','s-ask','s-es'].forEach(id=>$('#'+id).onchange=()=>{cfg.autoNext=$('#s-auto').checked;cfg.rot=$('#s-rot').checked;cfg.proxy=$('#s-px').checked;cfg.askLang=$('#s-ask').checked;cfg.esTitles=$('#s-es').checked;saveCfg()});
 $('#s-cd').onchange=e=>{cfg.countdown=+e.target.value;saveCfg()};
+
 $('#s-lang').onchange=e=>{cfg.lang=e.target.value;saveCfg()};
 $('#s-src').onchange=e=>{cfg.source=e.target.value;saveCfg();paintSrc();exploreInit=false;$('#e-grid').innerHTML='';loadHome()};
 $('#s-save').onclick=()=>{cfg.apiBase=$('#s-base').value.trim();cfg.apiKey=$('#s-key').value.trim()||'nexora-plus-key';saveCfg();toast('Guardado');exploreInit=false;$('#e-grid').innerHTML='';loadHome();go('home')};
@@ -1654,13 +1681,26 @@ setTimeout(()=>$('#intro').classList.add('off'),2800);
 
 /* ================= CONTROL REMOTO (Android TV) ================= */
 let KBD=false;
-const isTV=/Android TV|AFT|BRAVIA|GoogleTV|SMART-TV|SmartTV/i.test(navigator.userAgent)||(matchMedia('(pointer:none)').matches&&innerWidth>innerHeight);
+const isTV=/Android TV|AFT|BRAVIA|GoogleTV|SMART-TV|SmartTV|\bTV\b|Leanback/i.test(navigator.userAgent)||(matchMedia('(pointer:none)').matches&&innerWidth>innerHeight)
+  ||(/Android/i.test(navigator.userAgent)&&(navigator.maxTouchPoints||0)===0&&Math.max(screen.width,screen.height)>=900);
 const lowEnd=(navigator.hardwareConcurrency||8)<=4||(navigator.deviceMemory||8)<=2;
 if(cfg.lite===undefined){cfg.lite=isTV||lowEnd;saveCfg()}
 function applyLite(){document.documentElement.classList.toggle('lite',!!cfg.lite);const el=$('#s-lite');if(el)el.checked=!!cfg.lite}
 applyLite();
 if(isTV){document.documentElement.classList.add('tv');KBD=true;document.documentElement.classList.add('kbd')}
-const FOC='button:not([disabled]),input,select,a[href],[tabindex]:not([tabindex="-1"])';
+/* cada fila de Ajustes se enfoca con el control: OK cambia el interruptor, OK o ← → cambian la opción */
+$$('#v-set .set').forEach(row=>{const ck=row.querySelector('.sw input'),sel=row.querySelector('select');if(!ck&&!sel)return;
+  row.tabIndex=0;row.classList.add('setrow');if(sel)sel.tabIndex=-1;
+  const flip=back=>{if(ck){ck.checked=!ck.checked;ck.dispatchEvent(new Event('change',{bubbles:true}));toast((row.querySelector('b')?.textContent||'')+': '+(ck.checked?'activado':'desactivado'))}
+    else{const n=sel.options.length;sel.selectedIndex=(sel.selectedIndex+(back?-1:1)+n)%n;sel.dispatchEvent(new Event('change',{bubbles:true}));toast((row.querySelector('b')?.textContent||'')+': '+sel.options[sel.selectedIndex].text)}};
+  row.addEventListener('keydown',e=>{if(e.target!==row)return;
+    if(e.key==='Enter'||e.key===' '||e.key==='NumpadEnter'||(sel&&(e.key==='ArrowLeft'||e.key==='ArrowRight'))){e.preventDefault();e.stopPropagation();flip(e.key==='ArrowLeft')}});
+  if(sel&&isTV)row.addEventListener('click',e=>{if(e.target===row||!e.target.closest('select')){e.preventDefault();flip(false)}});
+});
+if(isTV){const r=$('#s-rot');if(r)r.closest('.set').classList.add('hide')}
+const FOC='button:not([disabled]):not([tabindex="-1"]),input:not([tabindex="-1"]),select:not([tabindex="-1"]),a[href],[tabindex]:not([tabindex="-1"])';
+/* elementos fijos en pantalla (menú inferior, cabeceras): solo se eligen si no hay nada más en esa dirección */
+const PIN='#nav,.eph,.bar,.fab,.pillbtn,.spx';
 function shown(el){const r=el.getBoundingClientRect();if(r.width<2||r.height<2)return false;const c=getComputedStyle(el);return c.visibility!=='hidden'&&c.display!=='none'&&!el.closest('.hide,.pend')}
 function layer(){
   for(const id of['spov','langdlg','psheet','sheet'])if($('#'+id).classList.contains('on'))return $('#'+id);
@@ -1669,16 +1709,31 @@ function layer(){
 function focusFirst(sc){sc=sc||layer();const el=[...sc.querySelectorAll(FOC)].find(shown);if(el){el.focus({preventScroll:true});el.scrollIntoView({block:'nearest',inline:'nearest'})}}
 function moveFocus(dir){
   const sc=layer(),cur=document.activeElement;
-  const cands=[...sc.querySelectorAll(FOC)].filter(el=>el!==cur&&shown(el));
-  if(!cur||cur===document.body||!sc.contains(cur)){focusFirst(sc);return}
-  const r=cur.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;let best=null,bs=Infinity;
-  for(const el of cands){const q=el.getBoundingClientRect(),x=q.left+q.width/2,y=q.top+q.height/2;let main,cross;
-    if(dir==='r'){if(q.left<r.right-6)continue;main=x-cx;cross=Math.abs(y-cy)}
-    else if(dir==='l'){if(q.right>r.left+6)continue;main=cx-x;cross=Math.abs(y-cy)}
-    else if(dir==='d'){if(q.top<r.bottom-6)continue;main=y-cy;cross=Math.abs(x-cx)}
-    else{if(q.bottom>r.top+6)continue;main=cy-y;cross=Math.abs(x-cx)}
-    const sc2=main+cross*2.2;if(sc2<bs){bs=sc2;best=el}}
-  if(best){best.focus({preventScroll:true});best.scrollIntoView({block:'nearest',inline:'nearest',behavior:cfg.lite?'auto':'smooth'})}
+  if(!cur||cur===document.body||!sc.contains(cur)||!shown(cur)){focusFirst(sc);return}
+  const r=cur.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,T=8;
+  const vert=dir==='u'||dir==='d';
+  let c=[...sc.querySelectorAll(FOC)].filter(el=>el!==cur&&!cur.contains(el)&&!el.contains(cur)&&shown(el)).map(el=>{const q=el.getBoundingClientRect();return{el,q,x:q.left+q.width/2,y:q.top+q.height/2,pin:!!el.closest(PIN)}})
+    .filter(o=>dir==='d'?o.q.top>=r.bottom-T&&o.y>cy:dir==='u'?o.q.bottom<=r.top+T&&o.y<cy:dir==='r'?o.q.left>=r.right-T&&o.x>cx:o.q.right<=r.left+T&&o.x<cx);
+  if(!cur.closest(PIN)){const flow=c.filter(o=>!o.pin);if(flow.length)c=flow}
+  if(!c.length)return;
+  let best=null;
+  if(vert){
+    /* 1) la fila más cercana  2) dentro de esa fila, la columna más parecida */
+    const gap=o=>Math.max(0,dir==='d'?o.q.top-r.bottom:r.top-o.q.bottom);
+    let near=c[0];for(const o of c)if(gap(o)<gap(near)||(gap(o)===gap(near)&&Math.abs(o.x-cx)<Math.abs(near.x-cx)))near=o;
+    const tol=Math.max(10,Math.min(near.q.height,r.height)*.5);
+    const row=c.filter(o=>dir==='d'?Math.abs(o.q.top-near.q.top)<=tol:Math.abs(o.q.bottom-near.q.bottom)<=tol);
+    const hd=o=>o.q.left<=cx&&o.q.right>=cx?0:Math.min(Math.abs(o.q.left-cx),Math.abs(o.q.right-cx));
+    best=row.reduce((a,o)=>hd(o)<hd(a)||(hd(o)===hd(a)&&Math.abs(o.x-cx)<Math.abs(a.x-cx))?o:a,row[0]);
+  }else{
+    /* misma fila primero: el vecino inmediato */
+    const same=c.filter(o=>o.q.top<r.bottom-4&&o.q.bottom>r.top+4);
+    const g=o=>dir==='r'?o.q.left-r.right:r.left-o.q.right;
+    if(same.length)best=same.reduce((a,o)=>g(o)<g(a)-1||(Math.abs(g(o)-g(a))<=1&&Math.abs(o.y-cy)<Math.abs(a.y-cy))?o:a,same[0]);
+    else{const near=c.filter(o=>Math.abs(o.y-cy)<Math.max(60,r.height*1.5));if(near.length)best=near.reduce((a,o)=>(Math.abs(o.x-cx)+Math.abs(o.y-cy)*2.2)<(Math.abs(a.x-cx)+Math.abs(a.y-cy)*2.2)?o:a,near[0])}
+  }
+  if(!best)return;const el=best.el;el.focus({preventScroll:true});
+  if(!best.pin)el.scrollIntoView({block:vert?'center':'nearest',inline:'nearest',behavior:cfg.lite?'auto':'smooth'});
 }
 const DIRS={ArrowUp:'u',ArrowDown:'d',ArrowLeft:'l',ArrowRight:'r'};
 document.addEventListener('pointerdown',()=>{if(!isTV){KBD=false;document.documentElement.classList.remove('kbd')}},true);
@@ -1734,17 +1789,16 @@ async function checkUpdate(manual){
     const r=typeof data==='string'?JSON.parse(data):data;const ver=String(r.tag_name||'').replace(/^v/i,'');
     if(!ver||cmpVer(ver,APP_VER)<=0){if(manual)toast(`Ya tienes la última versión (v${APP_VER})`);return false}
     const apk=(r.assets||[]).find(a=>/\.apk$/i.test(a.name));if(!apk){if(manual)toast('La nueva versión aún se está publicando');return false}
-    const must=/\[obligatoria\]/i.test(r.body||'');const later=store.get('nx_updlater',{});
-    if(!manual&&!must&&later.v===ver&&Date.now()-later.t<12*3600e3)return false;
+    const must=true; /* todas las actualizaciones son obligatorias */
     UPD={ver,notes:r.body||'',url:apk.browser_download_url,size:apk.size,must};showUpdate();return true
   }catch(e){if(manual)toast('No se pudo buscar actualizaciones');return false}}
 function showUpdate(){const u=UPD;
   $('#u-ver').textContent='v'+u.ver;$('#u-cur').textContent=`Tienes la v${APP_VER}`+(u.size?` · ${(u.size/1048576).toFixed(1)} MB`:'');
   $('#u-badge').innerHTML=`<svg class="i"><use href="#i-spark"/></svg>${u.must?'ACTUALIZACIÓN OBLIGATORIA':'NUEVA VERSIÓN'}`;$('#u-badge').classList.toggle('must',u.must);
-  $('#u-notes').innerHTML=notesHTML(u.notes);$('#u-later').classList.toggle('hide',u.must);
+  $('#u-notes').innerHTML=notesHTML(u.notes);
   $('#u-prog').classList.add('hide');$('#u-go').disabled=false;$('#u-go span').textContent='Actualizar ahora';
   pushOv('upd')}
-$('#u-later').onclick=()=>{store.set('nx_updlater',{v:UPD.ver,t:Date.now()});closeTop();afterUpdate()};
+$('#u-later').remove();try{localStorage.removeItem('nx_updlater')}catch(e){}
 $('#u-go').onclick=async()=>{const u=UPD;const FS=plug('Filesystem'),FO=plug('FileOpener');
   $('#u-go').disabled=true;$('#u-go span').textContent='Descargando…';$('#u-prog').classList.remove('hide');$('#u-bar').style.width='0%';$('#u-ptxt').textContent='Preparando descarga…';
   if(native&&FS&&FO){

@@ -30,8 +30,10 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke
 .pad{padding:0 16px}
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:0 16px 12px}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.14em;font-size:15px}
+.brand .wm{display:flex;flex-direction:column;line-height:1}.brand .wm b{font-size:16px;letter-spacing:.2em;font-weight:800}
+.brand .wm i{font-style:normal;font-size:8.5px;letter-spacing:.34em;font-weight:800;margin-top:4px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
 .brand small{font-weight:700;letter-spacing:.08em;font-size:10px;padding:3px 7px;border-radius:99px;background:var(--grad);color:#fff}
-.logo{width:34px;height:34px}
+.logo{width:38px;height:38px;filter:drop-shadow(0 4px 12px rgba(79,140,255,.45))}
 .ibtn{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;background:var(--s2);border:1px solid var(--line)}
 h2.sec{font-size:17px;font-weight:700;margin:22px 16px 12px;display:flex;justify-content:space-between;align-items:center}
 h2.sec span{font-size:12px;color:var(--mu);font-weight:600}
@@ -352,6 +354,16 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 .nxt{display:flex;align-items:center;gap:8px;height:46px;padding:0 16px;border-radius:16px;background:var(--grad);font-weight:800;font-size:13px;box-shadow:0 8px 24px rgba(79,140,255,.4)}
 .nxt.dim{opacity:.35;box-shadow:none}
 .nxt svg{width:18px;height:18px}
+#intro{position:fixed;inset:0;z-index:200;background:radial-gradient(circle at 50% 42%,#1a1540,var(--bg) 60%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;transition:opacity .45s,visibility .45s}
+#intro.off{opacity:0;visibility:hidden}
+#intro .il{width:112px;height:112px;margin-bottom:14px;filter:drop-shadow(0 16px 40px rgba(79,140,255,.55));animation:pop .7s cubic-bezier(.2,1.4,.4,1) both}
+#intro b{font-size:26px;letter-spacing:.32em;font-weight:800;animation:fade .6s .2s both}
+#intro i{font-style:normal;font-size:11px;letter-spacing:.5em;font-weight:800;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;animation:fade .6s .35s both}
+@keyframes pop{from{transform:scale(.6);opacity:0}}
+.about{display:flex;flex-direction:column;align-items:center;text-align:center;padding:22px 16px 8px}
+.about svg{width:76px;height:76px;filter:drop-shadow(0 10px 26px rgba(79,140,255,.45))}
+.about b{margin-top:12px;font-size:17px;letter-spacing:.18em}.about small{color:var(--mu);font-size:12px;margin-top:4px}
+.lic{white-space:pre-wrap;font-size:12px;line-height:1.55;color:#cfcbee;font-family:inherit}
 </style>
 </head>
 <body>
@@ -391,14 +403,19 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
   <symbol id="i-cc" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 10.5a2 2 0 1 0 0 3M16 10.5a2 2 0 1 0 0 3"/></symbol>
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/></symbol>
-  <symbol id="i-logo" viewBox="0 0 40 40"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset=".6" stop-color="#4f8cff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect width="40" height="40" rx="12" fill="url(#lg)"/><path d="M12 28V12l16 16V12" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-logo" viewBox="0 0 108 108"><defs><linearGradient id="nxg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset=".55" stop-color="#4F8CFF"/><stop offset="1" stop-color="#22D3EE"/></linearGradient><radialGradient id="nxl" cx=".3" cy=".25" r=".8"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset=".6" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
+    <rect width="108" height="108" rx="30" fill="url(#nxg)"/><rect width="108" height="108" rx="30" fill="url(#nxl)"/>
+    <ellipse cx="54" cy="54" rx="34" ry="13" transform="rotate(-24 54 54)" fill="none" stroke="#fff" stroke-opacity=".38" stroke-width="3"/>
+    <path d="M38 71V37l32 34V37" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M77 27l6 3.4-6 3.4z" fill="#fff"/><circle cx="26" cy="78" r="3" fill="#fff" fill-opacity=".85"/></symbol>
 </svg>
 
+<div id="intro"><svg class="il"><use href="#i-logo"/></svg><b>NEXORA</b><i>ANIMES PLUS</i></div>
 <div id="app">
   <!-- INICIO -->
   <section class="view on" id="v-home">
     <div class="topbar">
-      <div class="brand"><svg class="logo"><use href="#i-logo"/></svg>NEXORA<small>PLUS</small></div>
+      <div class="brand"><svg class="logo"><use href="#i-logo"/></svg><span class="wm"><b>NEXORA</b><i>ANIMES PLUS</i></span></div>
       <button class="ibtn" data-go="search" aria-label="Buscar"><svg class="i"><use href="#i-search"/></svg></button>
     </div>
     <div id="setup" class="banner hide"></div>
@@ -460,7 +477,9 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
       <div class="set"><div class="l"><b>Proxy de imágenes</b><small>Solo con Mi servidor: portadas vía tu servidor</small></div><label class="sw"><input type="checkbox" id="s-px"><span></span></label></div>
       <div class="set"><button id="s-clear" style="color:var(--bad);font-weight:700;font-size:14px">Borrar favoritos e historial</button></div>
     </div>
-    <div class="foot"><b>Animes Nexora Plus</b> · v1.0.4<br>Licencia Nexora Eduard Gamer<br>Catálogo y streaming en línea.</div>
+    <div class="about"><svg><use href="#i-logo"/></svg><b>NEXORA</b><small>Animes Nexora Plus · v1.0.5</small><small>© 2026 Nexora Eduard Gamer</small></div>
+    <div class="sbtn"><button class="btn" id="s-lic">Ver licencia</button></div>
+    <div class="foot">Proyecto educativo sin fines de lucro.<br>Los títulos, imágenes y videos pertenecen a sus respectivos dueños.</div>
   </section>
 
   <nav id="nav">
@@ -1404,6 +1423,7 @@ function paintSettings(){
   $('#s-base').value=cfg.apiBase;$('#s-key').value=cfg.apiKey;$('#s-auto').checked=cfg.autoNext;$('#s-cd').value=cfg.countdown;
   $('#s-lang').value=cfg.lang;$('#s-rot').checked=cfg.rot;$('#s-px').checked=cfg.proxy;$('#s-ask').checked=cfg.askLang;$('#s-es').checked=cfg.esTitles;
 }
+$('#s-lic').onclick=()=>sheet(`<h3>Licencia</h3><pre class="lic">${esc(LICENSE_TXT)}</pre>`);
 ['s-auto','s-rot','s-px','s-ask','s-es'].forEach(id=>$('#'+id).onchange=()=>{cfg.autoNext=$('#s-auto').checked;cfg.rot=$('#s-rot').checked;cfg.proxy=$('#s-px').checked;cfg.askLang=$('#s-ask').checked;cfg.esTitles=$('#s-es').checked;saveCfg()});
 $('#s-cd').onchange=e=>{cfg.countdown=+e.target.value;saveCfg()};
 $('#s-lang').onchange=e=>{cfg.lang=e.target.value;saveCfg()};
@@ -1436,7 +1456,9 @@ $('#s-test').onclick=async()=>{
 $('#s-clear').onclick=()=>{if(!confirm('¿Borrar favoritos e historial?'))return;favs=[];hist={};store.set('nx_fav',favs);store.set('nx_hist',hist);toast('Datos borrados');renderLib();renderContinue()};
 
 /* ================= Arranque ================= */
+const LICENSE_TXT='Licencia Nexora Eduard Gamer\nCopyright (c) 2026 Nexora Eduard Gamer.\n\n1. PERMISO\nPuedes usar, copiar y modificar esta app de forma gratuita y sin fines comerciales, conservando este aviso.\n\n2. NOMBRE Y LOGOTIPO\n"Nexora", "Animes Nexora Plus" y el logotipo de la N con órbita pertenecen a Nexora Eduard Gamer. Las versiones modificadas que se publiquen deben usar otro nombre y otro logotipo.\n\n3. PROHIBIDO VENDERLA\nNo se permite vender esta app ni presentarla como creación propia.\n\n4. CONTENIDO DE TERCEROS\nNexora no aloja videos ni imágenes. Los títulos, sinopsis, portadas y videos se cargan desde sitios y servicios externos y pertenecen a sus respectivos titulares; esta licencia no los cubre. El usuario es responsable del uso que haga de ese contenido.\n\n5. SIN GARANTÍA\nLa app se entrega "tal cual", sin garantía de ningún tipo. El autor no es responsable de daños derivados de su uso.';
 paintSettings();loadHome();paintPP();
+setTimeout(()=>$('#intro').classList.add('off'),1300);
 </script>
 </body>
 </html>

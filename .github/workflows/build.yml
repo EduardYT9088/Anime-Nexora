@@ -7,17 +7,31 @@ on:
     branches: [main, master]
     paths: ['index.html', '.github/workflows/build.yml']
   workflow_dispatch:
+  schedule:
+    - cron: '*/14 * * * *'   # despierta tu servidor cada 14 min (no compila el APK)
 
 permissions:
   contents: write
 
 env:
   APP_NAME: "Animes Nexora Plus"
-  APP_VERSION: "1.0.1"   # <- cambia aquí la versión del APK
+  APP_VERSION: "1.0.2"   # <- cambia aquí la versión del APK
   APP_ID: "com.nexora.animesplus"
+  # Pega aquí la dirección de tu servidor en Render (déjalo vacío si no usas servidor)
+  SERVER_URL: ""
 
 jobs:
+  despertar:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mantener el servidor despierto
+        run: |
+          if [ -z "$SERVER_URL" ]; then echo "Sin SERVER_URL, nada que hacer"; exit 0; fi
+          curl -s -o /dev/null -w "Servidor respondió %{http_code}\n" --max-time 90 "${SERVER_URL%/}/health" || true
+
   apk:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: Descargar repositorio

@@ -109,7 +109,25 @@ h2.sec span{font-size:12px;color:var(--mu);font-weight:600}
 .ov{position:fixed;inset:0;background:var(--bg);z-index:40;overflow-y:auto;transform:translateX(100%);transition:transform .32s cubic-bezier(.2,.8,.2,1);visibility:hidden;scrollbar-width:none}
 .ov.on{transform:none;visibility:visible}
 .ov::-webkit-scrollbar{display:none}
-#epv{z-index:45}#langv{z-index:50}
+#epv{z-index:45}
+.dlg{position:fixed;inset:0;z-index:70;display:none;align-items:flex-end;justify-content:center;background:rgba(4,3,12,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:0 12px calc(var(--bot) + 12px)}
+.dlg.on{display:flex}
+.dcard{width:100%;max-width:440px;border-radius:26px;padding:16px;background:linear-gradient(180deg,#161333,#0e0c20);border:1px solid rgba(139,107,255,.3);box-shadow:0 30px 80px rgba(0,0,0,.6);animation:up .28s ease}
+.dch{display:flex;align-items:center;gap:12px}
+.mini{width:46px;height:64px;border-radius:10px;flex:none;overflow:hidden;position:relative;background:var(--s2)}
+.mini img{width:100%;height:100%;object-fit:cover}
+.dct{flex:1;min-width:0}.dct small{display:block;font-size:11.5px;font-weight:800;letter-spacing:.06em;color:var(--ac2)}
+.dct b{display:block;font-size:15px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.dclose{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;background:rgba(255,255,255,.07);flex:none}
+.dq{font-size:13px;font-weight:700;color:var(--mu);margin:16px 2px 10px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:16px 14px;border-radius:18px;background:var(--s2);border:2px solid transparent;text-align:left;transition:.2s}
+.tile svg{width:28px;height:28px;color:var(--ac2)}
+.tile b{font-size:16px}.tile small{font-size:11.5px;color:var(--mu);font-weight:600;line-height:1.3}
+.tile.on{border-color:var(--ac2);background:linear-gradient(160deg,rgba(124,92,255,.28),rgba(34,211,238,.12))}
+.tile.on:after{content:"";position:absolute;right:12px;top:12px;width:10px;height:10px;border-radius:50%;background:var(--ac2);box-shadow:0 0 0 4px rgba(34,211,238,.2)}
+.tile.dis{opacity:.35}
+.remember{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding:10px 4px 0;border-top:1px solid var(--line);font-size:13px;font-weight:600}
 
 /* Arte nítido: fondo desenfocado + póster a tamaño real (o backdrop ancho si existe) */
 .art{position:absolute;inset:0;overflow:hidden;background:var(--s2)}
@@ -301,6 +319,8 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
   <symbol id="i-prev" viewBox="0 0 24 24"><path d="M18 5l-9 7 9 7z" fill="currentColor"/><path d="M5 5v14"/></symbol>
   <symbol id="i-speed" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 1-9 9" stroke-dasharray="2 2.6"/><path d="M10 8.5v7l5.5-3.5z" fill="currentColor"/></symbol>
   <symbol id="i-skip" viewBox="0 0 24 24"><path d="M3 15a8 8 0 0 1 15-4"/><path d="M19 5v6h-6"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+  <symbol id="i-cc" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 10.5a2 2 0 1 0 0 3M16 10.5a2 2 0 1 0 0 3"/></symbol>
   <symbol id="i-logo" viewBox="0 0 40 40"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset=".6" stop-color="#4f8cff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect width="40" height="40" rx="12" fill="url(#lg)"/><path d="M12 28V12l16 16V12" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 </svg>
 
@@ -359,8 +379,8 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
         <select id="s-cd"><option>3</option><option>5</option><option>8</option><option>10</option><option>15</option></select></div>
       <div class="set"><div class="l"><b>Idioma preferido</b><small>Se usa si el episodio lo tiene</small></div>
         <select id="s-lang"><option value="dub">Latino</option><option value="sub">Subtitulado</option></select></div>
-      <div class="set"><div class="l"><b>Preguntar idioma</b><small>Mostrar "Selecciona el idioma" al elegir episodio</small></div><label class="sw"><input type="checkbox" id="s-ask"><span></span></label></div>
-      <div class="set"><div class="l"><b>Títulos en español</b><small>Usa el nombre en español o inglés cuando exista</small></div><label class="sw"><input type="checkbox" id="s-es"><span></span></label></div>
+      <div class="set"><div class="l"><b>Preguntar idioma</b><small>Preguntar Latino o Subtitulado la primera vez que ves un anime</small></div><label class="sw"><input type="checkbox" id="s-ask"><span></span></label></div>
+      <div class="set"><div class="l"><b>Títulos traducidos</b><small>Nombre en español o inglés cuando exista</small></div><label class="sw"><input type="checkbox" id="s-es"><span></span></label></div>
       <div class="set"><div class="l"><b>Girar a horizontal</b><small>Al abrir un episodio</small></div><label class="sw"><input type="checkbox" id="s-rot"><span></span></label></div>
     </div>
     <div class="group">
@@ -407,18 +427,16 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
   <button class="fab" id="e-sort" aria-label="Ordenar"><svg class="i"><use href="#i-sort"/></svg></button>
 </div>
 
-<!-- IDIOMA -->
-<div class="ov" id="langv">
-  <div class="bar"><button class="ibtn" id="l-back"><svg class="i"><use href="#i-back"/></svg></button><div class="bt"><b id="l-title"></b><span id="l-ep"></span></div></div>
-  <div class="lwrap">
-    <svg class="i" style="width:44px;height:44px;color:var(--ac2)"><use href="#i-globe"/></svg>
-    <h2>Selecciona el idioma</h2>
-    <p class="s">Los siguientes episodios se reproducirán automáticamente en este idioma</p>
-    <div id="l-opts"></div>
-    <div class="dbox auto"><b><svg class="i" style="width:18px;height:18px;color:var(--ac2)"><use href="#i-star"/></svg>Funciones automáticas</b>
-      <ul><li>Siguiente episodio automático</li><li>Se marca como visto al 90%</li><li>Si no hay Latino, usa Subtitulado</li><li>Continúa donde te quedaste</li></ul></div>
+<!-- ¿CÓMO QUIERES VERLO? -->
+<div class="dlg" id="langdlg">
+  <div class="dcard">
+    <div class="dch"><div class="mini" id="l-mini"></div><div class="dct"><small id="l-ep"></small><b id="l-title"></b></div>
+      <button class="dclose" id="l-close" aria-label="Cerrar"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <p class="dq">¿Cómo quieres verlo?</p>
+    <div class="tiles" id="l-opts"></div>
+    <label class="remember"><span>Recordar para este anime</span><span class="sw"><input type="checkbox" id="l-rem" checked><span></span></span></label>
+    <button class="btn pri" id="l-go" style="width:100%;margin-top:14px"><svg class="i"><use href="#i-play"/></svg><span>Reproducir</span></button>
   </div>
-  <button class="pillbtn" id="l-goanime"><svg class="i" style="width:18px;height:18px"><use href="#i-film"/></svg>Ir al anime</button>
 </div>
 
 <!-- REPRODUCTOR -->
@@ -683,11 +701,22 @@ async function resolveDirect(urls){
 }
 
 /* Nombres alternativos: "solo leveling" → "Ore dake Level Up na Ken" */
+async function postJSON(url,body){
+  if(NH){let r;try{r=await NH.request({url,method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','User-Agent':UA},data:body,connectTimeout:12000,readTimeout:15000})}catch(e){throw new Error('sin conexión')}
+    if(r.status>=400)throw new Error('HTTP '+r.status);return typeof r.data==='string'?JSON.parse(r.data):r.data}
+  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
+const AL='https://graphql.anilist.co';
+const clean=t=>normQ(t).replace(/[^a-z0-9]+/g,'');
+function sameTitle(a,b){const x=clean(a),y=clean(b);if(!x||!y)return false;if(x===y)return true;
+  const [s1,l1]=x.length<y.length?[x,y]:[y,x];return l1.startsWith(s1)&&s1.length/l1.length>=.7}
 async function aliases(q){
-  try{const{data}=await get('https://api.jikan.moe/v4/anime?limit=5&sfw=true&q='+encodeURIComponent(q),{'Accept':'application/json'});
-    const j=typeof data==='string'?JSON.parse(data):data;const out=[];
-    (j.data||[]).forEach(a=>{[a.title,a.title_english,...(a.titles||[]).map(t=>t.title)].forEach(t=>{if(t)out.push(baseTitle(t))})});
-    return[...new Set(out)].filter(t=>normQ(t)!==normQ(q)).slice(0,4)}catch(e){return[]}
+  const out=[];
+  const al=postJSON(AL,{query:'query($s:String){Page(perPage:6){media(search:$s,type:ANIME){title{romaji english}synonyms}}}',variables:{s:q}})
+    .then(j=>(j.data?.Page?.media||[]).forEach(m=>{if(m.title?.romaji)out.push(m.title.romaji)})).catch(()=>{});
+  const jk=get('https://api.jikan.moe/v4/anime?limit=5&q='+encodeURIComponent(q),{'Accept':'application/json'})
+    .then(({data})=>{const j=typeof data==='string'?JSON.parse(data):data;(j.data||[]).forEach(a=>{if(a.title)out.push(a.title)})}).catch(()=>{});
+  await Promise.race([Promise.allSettled([al,jk]),sleep(9000)]);
+  return[...new Set(out.map(baseTitle))].filter(t=>normQ(t)!==normQ(q)).slice(0,3)
 }
 function baseTitle(t){let b=String(t).split(/:| - | – /)[0];
   b=b.replace(/\b(\d+(st|nd|rd|th)\s+)?(season|temporada|part|parte|cour|arc)\b.*$/i,'').replace(/\s+(II|III|IV|V|VI|\d+)$/,'').replace(/[\s.,!¡?¿]+$/,'').trim();
@@ -698,12 +727,13 @@ const DIRECT_PROVS=['animeav1'];
 const SRC={
   async catalog(p,page=1,genre='',order=''){if(useApi()){const j=await api('catalog',{provider:p,page,genre});return{results:j.data?.results||[],hasMore:!!j.data?.hasMore}}
     return AVP.catalog(page,genre,order)},
-  async search(q){
+  async search(q,noAlias){
     const one=t=>useApi()?api('search',{q:t}).then(j=>j.data?.results||[]):AVP.search(t);
-    const out=[],seen=new Set(),add=l=>l.forEach(a=>{if(seen.has(a.url))return;seen.add(a.url);out.push(a)});
-    let err=null;try{add(await one(q))}catch(e){err=e}
-    if(out.length<4){const al=await aliases(q);for(const t of al){try{add(await one(t))}catch(e){err=err||e}if(out.length>=12)break}}
-    if(!out.length&&err)throw err;return out},
+    const [r0,al]=await Promise.all([one(q).then(r=>({r}),e=>({e})),noAlias?[]:aliases(q)]);
+    const top=[],rest=[],seen=new Set();let err=r0.e||null;
+    for(const t of al){try{(await one(t)).forEach(a=>{if(seen.has(a.url))return;seen.add(a.url);(sameTitle(baseTitle(a.title),t)?top:rest).push(a)})}catch(e){err=err||e}}
+    (r0.r||[]).forEach(a=>{if(seen.has(a.url))return;seen.add(a.url);const n=normQ(q);(normQ(a.title).includes(n)||(a.alt||[]).some(x=>normQ(x).includes(n))?top:rest).push(a)});
+    const out=[...top,...rest];if(!out.length&&err)throw err;return out},
   async info(url){if(useApi()){const j=await api('info',{url});return j.data||{}}return provFor(url).info(url)},
   async episode(url){if(useApi()){const j=await api('episode',{url});const s=j.data?.servers||{};return{sub:s.sub||[],dub:s.dub||[]}}return provFor(url).episode(url)},
   async resolve(urls){if(useApi())return api('resolve',{urls:JSON.stringify(urls)});return resolveDirect(urls)},
@@ -721,22 +751,33 @@ function upgradeArt(el,a){if(!el||!a)return;const c=[a.backdrop,a.id?`https://cd
   (async()=>{for(const u of c){let ok=wideOk.get(u);if(ok===undefined){ok=await new Promise(r=>{const im=new Image();im.onload=()=>r(im.naturalWidth>=700&&im.naturalWidth>im.naturalHeight);im.onerror=()=>r(false);im.src=imgSrc(u)});wideOk.set(u,ok)}
     if(ok){const b=el.querySelector('.bgb');if(b){b.src=imgSrc(u);b.classList.add('ok')}el.classList.add('wide');return}}})()}
 /* Títulos en español (o inglés si no hay), con caché */
-let TT=store.get('nx_tt',{});const ttQ=[];let ttBusy=false,ttSaveT;
+let TT=store.get('nx_tt2',{});const ttQ=[];let ttBusy=false,ttSaveT;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function esTitle(a){if(!a||!cfg.esTitles)return a?.title||'';return a.esTitle||TT[a.title]||a.title}
 function ttSpan(a){wantTT(a.title);return`<span data-tt="${esc(a.title)}">${esc(esTitle(a))}</span>`}
-function wantTT(t){if(!cfg.esTitles||!t||TT[t]!==undefined||ttQ.includes(t))return;ttQ.push(t);pumpTT()}
-async function pumpTT(){if(ttBusy)return;ttBusy=true;
-  while(ttQ.length){const t=ttQ.shift();if(TT[t]!==undefined)continue;
-    try{const{data}=await get('https://api.jikan.moe/v4/anime?limit=4&q='+encodeURIComponent(t),{'Accept':'application/json'});
-      const j=typeof data==='string'?JSON.parse(data):data;const nt=normQ(t),L=j.data||[];
-      const hit=L.find(a=>normQ(a.title)===nt||(a.titles||[]).some(x=>normQ(x.title)===nt))||L.find(a=>(a.title_synonyms||[]).some(x=>normQ(x)===nt));
-      let es='';if(hit){const sp=(hit.titles||[]).find(x=>x.type==='Spanish');es=(sp&&sp.title)||hit.title_english||'';if(normQ(es)===nt)es=''}
-      TT[t]=es;if(es)$$('[data-tt]').forEach(el=>{if(el.dataset.tt===t)el.textContent=es});
-      clearTimeout(ttSaveT);ttSaveT=setTimeout(()=>store.set('nx_tt',TT),1500);
-    }catch(e){if(/429/.test(e.message)){ttQ.unshift(t);await sleep(4000);continue}}
-    await sleep(1100)}
+function wantTT(t){if(!cfg.esTitles||!t||TT[t]!==undefined||ttQ.includes(t))return;ttQ.push(t);setTimeout(pumpTT,300)}
+function setTT(t,v){TT[t]=v;if(v)$$('[data-tt]').forEach(el=>{if(el.dataset.tt===t)el.textContent=v});clearTimeout(ttSaveT);ttSaveT=setTimeout(()=>store.set('nx_tt2',TT),1500)}
+/* añade "Special", "2nd Season", etc. que tenga el título original y no el traducido */
+function withSuffix(tr,orig,match){const o=String(orig),m=String(match);if(o.length>m.length+1&&clean(o).startsWith(clean(m))){const suf=o.slice(m.length).replace(/^[\s:–-]+/,'');if(suf&&!normQ(tr).includes(normQ(suf)))return tr+' '+suf}return tr}
+async function pumpTT(){if(ttBusy)return;ttBusy=true;let fails=0;
+  while(ttQ.length&&fails<3){
+    const batch=[];while(ttQ.length&&batch.length<8){const t=ttQ.shift();if(TT[t]===undefined)batch.push(t)}
+    if(!batch.length)continue;
+    const vars={},q='query('+batch.map((_,i)=>'$s'+i+':String').join(',')+'){'+batch.map((_,i)=>`a${i}:Media(search:$s${i},type:ANIME){title{romaji english}synonyms}`).join(' ')+'}';
+    batch.forEach((t,i)=>vars['s'+i]=baseTitle(t)===t?t:t);
+    try{const j=await postJSON(AL,{query:q,variables:vars});fails=0;
+      batch.forEach((t,i)=>{const m=j.data&&j.data['a'+i];let v='';
+        if(m&&m.title){const ok=sameTitle(t,m.title.romaji||'')||(m.synonyms||[]).some(x=>sameTitle(t,x));
+          if(ok&&m.title.english&&clean(m.title.english)!==clean(t))v=withSuffix(m.title.english,t,m.title.romaji||t)}
+        setTT(t,v)});
+    }catch(e){fails++;batch.forEach(t=>{if(!ttQ.includes(t))ttQ.push(t)});await sleep(3000*fails)}
+    await sleep(800)}
   ttBusy=false}
+/* Título en español (si existe) para la ficha abierta */
+async function spanishFor(t){
+  try{const{data}=await get('https://api.jikan.moe/v4/anime?limit=4&q='+encodeURIComponent(t),{'Accept':'application/json'});
+    const j=typeof data==='string'?JSON.parse(data):data;const hit=(j.data||[]).find(a=>sameTitle(t,a.title)||(a.titles||[]).some(x=>sameTitle(t,x.title)));
+    const sp=hit&&(hit.titles||[]).find(x=>x.type==='Spanish');return sp?withSuffix(sp.title,t,hit.title):null}catch(e){return null}}
 /* Si una portada bloquea la carga directa, se pide de forma nativa con Referer */
 const imgMem=new Map();
 window.nxImg=async function(img){
@@ -806,7 +847,6 @@ function buildHero(list){
     <div class="in"><div class="chips"><span class="chip ac">#${i+1} EN TENDENCIA</span>${a.type?`<span class="chip">${esc(a.type)}</span>`:''}${a.year?`<span class="chip">${esc(a.year)}</span>`:''}</div>
     <h1>${ttSpan(a)}</h1><div class="btnrow"><button class="btn pri" data-url="${esc(a.url)}"><svg class="i"><use href="#i-play"/></svg>Ver ahora</button></div></div></div></div>`}).join('');
   $('#dots').innerHTML=items.map((_,i)=>`<i class="${i?'':'on'}"></i>`).join('');
-  $$('#slides .art').forEach((el,i)=>upgradeArt(el,items[i]));
   const sl=$('#slides');slideI=0;sl.scrollLeft=0;
   sl.onscroll=()=>{const i=Math.round(sl.scrollLeft/sl.clientWidth);slideI=i;$$('#dots i').forEach((d,k)=>d.classList.toggle('on',k===i))};
   clearInterval(slideT);slideT=setInterval(()=>{if(tab!=='home'||!items.length)return;slideI=(slideI+1)%items.length;sl.scrollTo({left:slideI*sl.clientWidth,behavior:'smooth'})},6000);
@@ -894,6 +934,7 @@ async function openDetail(url){
     if(d.image&&!base0.image)$('#d-hero .art').outerHTML=art(d,'center');
     upgradeArt($('#d-hero .art'),d);
     paintTitle();
+    if(cfg.esTitles&&!d.esTitle){const t0=d.title;spanishFor(t0).then(es=>{if(!es||my!==D.seq)return;setTT(t0,es);paintTitle();paintFacts()})}
     $('#d-meta').innerHTML=`<b>${esc(String(d.type||base0.type||'Anime').toUpperCase())}</b>${esc(d.year||base0.year||'')}`;
     $('#d-genres').innerHTML=(d.genres||[]).slice(0,6).map(g=>`<span>${esc(g.name||g)}</span>`).join('');
     $('#d-syn').textContent=d.description||'Sin sinopsis disponible.';
@@ -929,7 +970,7 @@ function seasonNum(t){t=String(t);let m=t.match(/(?:season|temporada|part|parte)
 async function loadFranchise(d,my){
   const cur={title:d.title,url:D.url,image:d.image,type:d.type,year:d.year,id:d.id};
   let list=[...(d.related||[])];const b=baseTitle(d.title||'');
-  if(b){try{const r=await SRC.search(b);const nb=normQ(b);list=list.concat(r.filter(x=>normQ(x.title).includes(nb)||(x.alt||[]).some(a=>normQ(a).includes(nb))))}catch(e){}}
+  if(b){try{const r=await SRC.search(b,true);const nb=normQ(b);list=list.concat(r.filter(x=>normQ(x.title).includes(nb)||(x.alt||[]).some(a=>normQ(a).includes(nb))))}catch(e){}}
   if(my!==D.seq)return;
   const seen=new Set([D.url]),items=[cur];list.forEach(x=>{if(!seen.has(x.url)){seen.add(x.url);items.push(x)}});
   if(items.length<2)return;
@@ -967,21 +1008,25 @@ $('#ep-grid').onclick=e=>{const b=e.target.closest('.epc');if(!b)return;const ep
 $('#e-sort').onclick=()=>{D.desc=!D.desc;renderEpisodes()};
 $('#e-back').onclick=()=>closeTop();
 
-/* ================= SELECCIONA EL IDIOMA ================= */
-let LP=null;
+/* ================= ¿CÓMO QUIERES VERLO? ================= */
+let LP=null,LSEL='dub';
 function askLang(ep){
-  if(!cfg.askLang){startPlay(ep,D.lang);return}
-  LP=ep;$('#l-title').innerHTML=ttSpan(D.data||{title:''});$('#l-ep').textContent='Episodio '+ep.number;
-  const av=D.avail||{sub:true,dub:true};
-  $('#l-opts').innerHTML=['dub','sub'].map(l=>`<button class="lopt ${l==='dub'?'lat':'sub'} ${av[l]?'':'dis'}" data-l="${l}"><span class="fl">${FLAG[l]}</span><span class="nm">${LNAME[l]}<small>${l==='dub'?'Doblaje en español latino':'Audio japonés con subtítulos'}${av[l]?'':' · no disponible'}</small></span><svg class="i"><use href="#i-play"/></svg></button>`).join('');
-  $('#langv').scrollTop=0;pushOv('langv');
+  const saved=store.get('nx_alang',{})[D.url];
+  if(!cfg.askLang||saved){startPlay(ep,saved||D.lang);return}
+  LP=ep;const d=D.data||{title:''};
+  $('#l-mini').innerHTML=imgTag(d,'ok');$('#l-title').innerHTML=ttSpan(d);$('#l-ep').textContent='EPISODIO '+ep.number;
+  const av=D.avail||{sub:true,dub:true};LSEL=av[D.lang]?D.lang:(av.dub?'dub':'sub');
+  const T={dub:['mic','Latino','Doblado al español'],sub:['cc','Subtitulado','Japonés con subtítulos']};
+  $('#l-opts').innerHTML=['dub','sub'].map(l=>`<button class="tile ${l===LSEL?'on':''} ${av[l]?'':'dis'}" data-l="${l}"><svg class="i"><use href="#i-${T[l][0]}"/></svg><b>${T[l][1]}</b><small>${av[l]?T[l][2]:'No disponible'}</small></button>`).join('');
+  $('#langdlg').classList.add('on');
 }
-$('#l-opts').onclick=e=>{const b=e.target.closest('.lopt');if(!b)return;const l=b.dataset.l;
-  if(b.classList.contains('dis'))return toast(LNAME[l]+' no está disponible para este anime');
-  D.lang=l;const m=store.get('nx_alang',{});m[D.url]=l;store.set('nx_alang',m);
-  closeTop();startPlay(LP,l)};
-$('#l-back').onclick=()=>closeTop();
-$('#l-goanime').onclick=()=>{while(stack.length&&stack[stack.length-1]!=='detail')closeTop()};
+const closeLang=()=>$('#langdlg').classList.remove('on');
+$('#l-opts').onclick=e=>{const b=e.target.closest('.tile');if(!b)return;
+  if(b.classList.contains('dis'))return toast((b.dataset.l==='dub'?'Latino':'Subtitulado')+' no está disponible');
+  LSEL=b.dataset.l;$$('#l-opts .tile').forEach(x=>x.classList.toggle('on',x===b))};
+$('#l-go').onclick=()=>{D.lang=LSEL;if($('#l-rem').checked){const m=store.get('nx_alang',{});m[D.url]=LSEL;store.set('nx_alang',m)}closeLang();startPlay(LP,LSEL)};
+$('#l-close').onclick=closeLang;
+$('#langdlg').onclick=e=>{if(e.target.id==='langdlg')closeLang()};
 
 /* ================= Pila de pantallas (botón atrás) ================= */
 const stack=[];
@@ -996,6 +1041,7 @@ function closeTop(){
   return true
 }
 if(App)App.addListener('backButton',()=>{
+  if($('#langdlg').classList.contains('on')){closeLang();return}
   if($('#psheet').classList.contains('on')){$('#psheet').classList.remove('on');return}
   if($('#sheet').classList.contains('on')){$('#sheet').classList.remove('on');return}
   if(P.locked){flashLock();return}

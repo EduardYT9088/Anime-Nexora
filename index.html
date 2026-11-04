@@ -507,6 +507,8 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 /* reproductor: respeta la cámara perforada en horizontal */
 #player:not(.rot) #ctl{padding-left:max(22px,env(safe-area-inset-left,0px));padding-right:max(22px,env(safe-area-inset-right,0px))}
 #player{background:#000}
+#l-opts .tile.wait{opacity:.55}
+#l-go:disabled{opacity:.5}
 </style>
 </head>
 <body>
@@ -632,7 +634,8 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
       </div>
       <div class="group">
         <h4>AVISOS</h4>
-        <div class="set"><span class="sic"><svg class="i"><use href="#i-bell"/></svg></span><div class="l"><b>Episodios nuevos</b><small>Aviso cuando sale un capítulo de un anime de Mi lista</small></div><label class="sw"><input type="checkbox" id="s-ntf"><span></span></label></div>
+        <div class="set"><span class="sic"><svg class="i"><use href="#i-bell"/></svg></span><div class="l"><b>Episodios de Mi lista</b><small>Aviso cuando sale un capítulo de un anime que guardaste</small></div><label class="sw"><input type="checkbox" id="s-ntf"><span></span></label></div>
+        <div class="set"><span class="sic"><svg class="i"><use href="#i-spark"/></svg></span><div class="l"><b>Todos los estrenos</b><small>Aviso cuando sale cualquier episodio nuevo en la app</small></div><label class="sw"><input type="checkbox" id="s-nall"><span></span></label></div>
         <button class="set act" id="s-ntest"><span class="sic"><svg class="i"><use href="#i-bell"/></svg></span><div class="l"><b>Probar notificación</b><small>Envía un aviso de prueba</small></div><span class="chev"></span></button>
       </div>
       <div class="group">
@@ -1488,22 +1491,34 @@ $('#e-back').onclick=()=>closeTop();
 
 /* ================= ¿CÓMO QUIERES VERLO? ================= */
 let LP=null,LSEL='dub';
-function askLang(ep){
+let LQ=0;
+const LT={dub:['mic','Latino','Doblado al español'],sub:['cc','Subtitulado','Japonés con subtítulos']};
+function paintLangTiles(av){
+  if(!av){$('#l-opts').innerHTML=['dub','sub'].map(l=>`<button class="tile dis wait" data-l="${l}"><svg class="i"><use href="#i-${LT[l][0]}"/></svg><b>${LT[l][1]}</b><small>Comprobando…</small></button>`).join('');$('#l-go').disabled=true;return}
+  if(!av.sub&&!av.dub)av={sub:true,dub:true};
+  LSEL=av[D.lang]?D.lang:(av.dub?'dub':'sub');
+  $('#l-opts').innerHTML=['dub','sub'].map(l=>`<button class="tile ${l===LSEL?'on':''} ${av[l]?'':'dis'}" data-l="${l}"><svg class="i"><use href="#i-${LT[l][0]}"/></svg><b>${LT[l][1]}</b><small>${av[l]?LT[l][2]:'No disponible en este episodio'}</small></button>`).join('');
+  $('#l-go').disabled=false;
+  if(KBD&&$('#langdlg').classList.contains('on')){const t=$('#l-opts .tile.on');if(t)setTimeout(()=>t.focus({preventScroll:true}),30)}}
+async function askLang(ep){
   const saved=store.get('nx_alang',{})[D.url];
   if(!cfg.askLang||saved){startPlay(ep,saved||D.lang);return}
-  LP=ep;const d=D.data||{title:''};
+  LP=ep;const d=D.data||{title:''};const my=++LQ;
   $('#l-mini').innerHTML=imgTag(d,'ok');$('#l-title').innerHTML=ttSpan(d);$('#l-ep').textContent='EPISODIO '+ep.number;
-  const av=D.avail||{sub:true,dub:true};LSEL=av[D.lang]?D.lang:(av.dub?'dub':'sub');
-  const T={dub:['mic','Latino','Doblado al español'],sub:['cc','Subtitulado','Japonés con subtítulos']};
-  $('#l-opts').innerHTML=['dub','sub'].map(l=>`<button class="tile ${l===LSEL?'on':''} ${av[l]?'':'dis'}" data-l="${l}"><svg class="i"><use href="#i-${T[l][0]}"/></svg><b>${T[l][1]}</b><small>${av[l]?T[l][2]:'No disponible'}</small></button>`).join('');
-  $('#langdlg').classList.add('on');
+  const c=langsOf(ep.url);let av=c?{sub:!!c.s,dub:!!c.d}:null;
+  paintLangTiles(av);$('#langdlg').classList.add('on');
+  if(!av){
+    try{const s2=await SRC.episode(ep.url);av={sub:!!(s2.sub||[]).length,dub:!!(s2.dub||[]).length};
+      DUB[ep.url]={s:av.sub?1:0,d:av.dub?1:0,t:Date.now()};store.set('nx_dub',DUB)}
+    catch(e){av={sub:true,dub:true}}
+    if(my!==LQ||LP!==ep)return;paintLangTiles(av)}
 }
 const closeLang=()=>$('#langdlg').classList.remove('on');
 $('#l-opts').onclick=e=>{const b=e.target.closest('.tile');if(!b)return;
-  if(b.classList.contains('dis'))return toast((b.dataset.l==='dub'?'Latino':'Subtitulado')+' no está disponible');
+  if(b.classList.contains('wait'))return;if(b.classList.contains('dis'))return toast((b.dataset.l==='dub'?'Latino':'Subtitulado')+' no está disponible en este episodio');
   LSEL=b.dataset.l;$$('#l-opts .tile').forEach(x=>x.classList.toggle('on',x===b))};
 $('#l-remrow').addEventListener('keydown',e=>{if(e.target.id!=='l-remrow')return;if(e.key==='Enter'||e.key===' '||e.key==='NumpadEnter'){e.preventDefault();e.stopPropagation();const c=$('#l-rem');c.checked=!c.checked;toast(c.checked?'Se recordará el idioma para este anime':'No se recordará el idioma')}});
-$('#l-go').onclick=()=>{D.lang=LSEL;if($('#l-rem').checked){const m=store.get('nx_alang',{});m[D.url]=LSEL;store.set('nx_alang',m)}closeLang();startPlay(LP,LSEL)};
+$('#l-go').onclick=()=>{if($('#l-go').disabled)return;D.lang=LSEL;if($('#l-rem').checked){const m=store.get('nx_alang',{});m[D.url]=LSEL;store.set('nx_alang',m)}closeLang();startPlay(LP,LSEL)};
 $('#l-close').onclick=closeLang;
 $('#langdlg').onclick=e=>{if(e.target.id==='langdlg')closeLang()};
 
@@ -1935,8 +1950,8 @@ let afterUpdate=()=>{};
 setTimeout(async()=>{afterUpdate=()=>setTimeout(showPermIfNeeded,400);const shown=await checkUpdate(false);if(!shown||!UPD||!UPD.must){if(!shown)showPermIfNeeded()}},3000);
 
 /* ================= AVISOS DE EPISODIOS NUEVOS ================= */
-async function askNotify(){if(!LN||!cfg.notify)return;try{const p=await LN.checkPermissions();if(p.display!=='granted')await LN.requestPermissions()}catch(e){}}
-function syncNotify(){if(!BGR)return;try{BGR.dispatchEvent({label:'com.nexora.animesplus.check',event:'syncFavs',details:{on:cfg.notify,favs:favs.map(f=>({url:f.url,title:esTitle(f),last:f.last||0}))}}).catch(()=>{})}catch(e){}}
+async function askNotify(){if(!LN||(!cfg.notify&&cfg.notifyAll===false))return;try{const p=await LN.checkPermissions();if(p.display!=='granted')await LN.requestPermissions()}catch(e){}}
+function syncNotify(){if(!BGR)return;try{BGR.dispatchEvent({label:'com.nexora.animesplus.check',event:'syncFavs',details:{on:cfg.notify,all:cfg.notifyAll!==false,seen:store.get('nx_lseen',[]).slice(0,150),favs:favs.map(f=>({url:f.url,title:esTitle(f),last:f.last||0}))}}).catch(()=>{})}catch(e){}}
 async function notify(title,body,extra){
   if(LN){try{await LN.schedule({notifications:[{id:Math.floor(Math.random()*2e9),title,body,extra,smallIcon:'ic_stat_nexora'}]});return}catch(e){}}
   toast(body)}
@@ -1953,7 +1968,25 @@ async function checkFavs(force){
 }
 if(LN){LN.addListener('localNotificationActionPerformed',a=>{const x=a?.notification?.extra;if(x&&x.url){const n=INBOX.find(y=>y.url===x.url&&+y.ep===+x.ep);if(n){n.read=true;saveInbox()}openDetail(x.url,x.ep?{openEps:true}:null)}}).catch?.(()=>{});
   LN.addListener('localNotificationReceived',a=>{const x=a?.extra;if(x&&x.url)addInbox({url:x.url,title:(a.body||'').split(' · ')[0],ep:+x.ep||0})}).catch?.(()=>{})}
-if(App)App.addListener('appStateChange',st=>{if(st.isActive)checkFavs()});
+/* estrenos de toda la app: compara los episodios recientes con los ya vistos */
+let lastLat=0;
+async function checkLatest(force){
+  if(cfg.notifyAll===false||(!force&&Date.now()-lastLat<8*60e3))return;lastLat=Date.now();
+  let list;try{list=await AVP.latest()}catch(e){return}if(!list||!list.length)return;
+  const seen=store.get('nx_lseen',null);const keys=list.map(a=>a.url+'#'+a.epNum);
+  if(!seen){store.set('nx_lseen',keys);syncNotify();return}   /* primera vez: solo se guarda */
+  const old=new Set(seen),favU=new Set(favs.map(f=>f.url));
+  const news=list.filter(a=>!old.has(a.url+'#'+a.epNum)&&!favU.has(a.url));
+  store.set('nx_lseen',[...new Set([...keys,...seen])].slice(0,150));syncNotify();
+  if(!news.length)return;
+  news.slice().reverse().forEach(a=>addInbox({url:a.url,title:esTitle(a),image:a.image,ep:a.epNum}));
+  if(document.hidden){
+    if(news.length<=3)news.forEach(a=>notify('Nuevo episodio en Nexora',`${esTitle(a)} · Episodio ${a.epNum} ya disponible`,{url:a.url,ep:String(a.epNum)}));
+    else notify(`${news.length} episodios nuevos en Nexora`,news.slice(0,4).map(a=>`${esTitle(a)} · Ep. ${a.epNum}`).join('\n'),{})}
+  else toast(news.length===1?`Nuevo: ${esTitle(news[0])} · Ep. ${news[0].epNum}`:`${news.length} episodios nuevos · mira la campana 🔔`);
+}
+setInterval(()=>{checkFavs();checkLatest()},10*60e3);
+if(App)App.addListener('appStateChange',st=>{if(st.isActive){checkFavs();checkLatest()}});
 $('#s-ntf').onchange=e=>{cfg.notify=e.target.checked;saveCfg();syncNotify();if(cfg.notify)askNotify()};
 $('#s-ntest').onclick=async()=>{await askNotify();notify('Nuevo episodio en Nexora','Así te avisaremos cuando salga un capítulo nuevo de Mi lista',{});
   addInbox({url:'',title:'Notificación de prueba',ep:0,test:true})};
@@ -1974,8 +2007,9 @@ $('#ib-read').onclick=()=>{INBOX.forEach(x=>x.read=true);saveInbox();renderInbox
 $('#ib-clear').onclick=()=>{INBOX=[];saveInbox();renderInbox()};
 $('#ib-list').onclick=e=>{const b=e.target.closest('[data-k]');if(!b)return;const n=INBOX[+b.dataset.k];n.read=true;saveInbox();renderInbox();if(n.url)openDetail(n.url,{openEps:true})};
 paintBell();
-$('#s-ntf').checked=cfg.notify;
-setTimeout(()=>{syncNotify();checkFavs(true)},8000);
+$('#s-ntf').checked=cfg.notify;$('#s-nall').checked=cfg.notifyAll!==false;
+$('#s-nall').onchange=e=>{cfg.notifyAll=e.target.checked;saveCfg();syncNotify();if(cfg.notifyAll){askNotify();checkLatest(true)}};
+setTimeout(()=>{syncNotify();checkFavs(true);setTimeout(()=>checkLatest(true),4000)},8000);
 </script>
 </body>
 </html>

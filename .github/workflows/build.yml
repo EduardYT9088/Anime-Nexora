@@ -78,7 +78,17 @@ jobs:
           function kvGet(k){ try{ const v = CapacitorKV.get(k); return typeof v === 'string' ? v : (v && v.value) || null; }catch(e){ return null; } }
           function kvSet(k,v){ try{ CapacitorKV.set(k, v); }catch(e){} }
           addEventListener('syncFavs', (resolve, reject, args) => {
-            try{ kvSet('favs', JSON.stringify((args && args.favs) || [])); if (args && args.on !== undefined) kvSet('on', args.on ? '1' : '0'); resolve(); }catch(e){ reject(e); }
+            try{
+              kvSet('favs', JSON.stringify((args && args.favs) || []));
+              if (args && args.on !== undefined) kvSet('on', args.on ? '1' : '0');
+              if (args && args.all !== undefined) kvSet('all', args.all ? '1' : '0');
+              if (args && Array.isArray(args.seen) && args.seen.length) {
+                const mine = args.seen.map(k => String(k).replace(/^.*\/media\//, ''));
+                const prev = JSON.parse(kvGet('seenSlugs') || '[]');
+                kvSet('seenSlugs', JSON.stringify([...new Set([...mine, ...prev])].slice(0, 200)));
+              }
+              resolve();
+            }catch(e){ reject(e); }
           });
           addEventListener('checkNew', async (resolve, reject) => {
             try{
@@ -98,6 +108,29 @@ jobs:
                 }catch(e){}
               }
               if (changed) kvSet('favs', JSON.stringify(favs));
+              // Estrenos de toda la app (no solo Mi lista)
+              if (kvGet('all') !== '0') {
+                try{
+                  const res = await fetch('https://animeav1.com/', { headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36' } });
+                  const html = await res.text(); const re = /\/media\/([a-z0-9-]+)\/(\d+)/g; const found = [], keys = new Set(); let r;
+                  while ((r = re.exec(html))) { const k = r[1] + '#' + r[2]; if (!keys.has(k)) { keys.add(k); found.push([r[1], +r[2]]); } }
+                  if (found.length) {
+                    const raw = kvGet('seenSlugs');
+                    if (raw) {
+                      const seen = new Set(JSON.parse(raw));
+                      const favSlugs = new Set(favs.map(f => ((f.url || '').match(/\/media\/([^/?#]+)/) || [])[1]));
+                      const news = found.filter(([sl, n]) => !seen.has(sl + '#' + n) && !favSlugs.has(sl)).slice(0, 24);
+                      const nice = sl => { const t = sl.replace(/-/g, ' '); return t.charAt(0).toUpperCase() + t.slice(1); };
+                      if (news.length && news.length <= 3) {
+                        CapacitorNotifications.schedule(news.map(([sl, n]) => ({ id: id++, title: 'Nuevo episodio en Nexora', body: nice(sl) + ' · Episodio ' + n + ' ya disponible', scheduleAt: new Date(Date.now() + 1000), smallIcon: 'ic_stat_nexora' })));
+                      } else if (news.length > 3) {
+                        CapacitorNotifications.schedule([{ id: id++, title: news.length + ' episodios nuevos en Nexora', body: news.slice(0, 4).map(([sl, n]) => nice(sl) + ' · Ep. ' + n).join('\n'), scheduleAt: new Date(Date.now() + 1000), smallIcon: 'ic_stat_nexora' }]);
+                      }
+                      kvSet('seenSlugs', JSON.stringify([...new Set([...keys, ...seen])].slice(0, 200)));
+                    } else kvSet('seenSlugs', JSON.stringify([...keys].slice(0, 200)));
+                  }
+                }catch(e){}
+              }
               resolve();
             }catch(e){ reject(e); }
           });

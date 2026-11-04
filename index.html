@@ -497,6 +497,16 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 #ploader.err{z-index:30;background:rgba(5,4,14,.94)}
 .pdiag{display:block;margin-top:10px;color:#8f8bb4;font-size:11.5px;font-weight:500;max-width:640px}
 .kbd #ploader .btn:focus-visible,.kbd #ploader .btn:focus{transform:scale(1.07);color:#fff}
+/* hojas (licencia) centradas en TV */
+.tv .sheet{align-items:center;padding:40px}
+.tv .sheet .box{max-width:820px;max-height:84vh;border-radius:26px;padding:28px 34px 26px}
+.tv .lic{font-size:15px;line-height:1.65}
+.lic-ok{width:100%;margin-top:18px}
+.kbd #sheet-box:focus,.kbd #sheet-box:focus-visible{outline:3px solid var(--ac2);outline-offset:-3px}
+.kbd .remember:focus,.kbd .remember:focus-visible{outline:3px solid var(--ac2);outline-offset:4px;border-radius:12px}
+/* reproductor: respeta la cámara perforada en horizontal */
+#player:not(.rot) #ctl{padding-left:max(22px,env(safe-area-inset-left,0px));padding-right:max(22px,env(safe-area-inset-right,0px))}
+#player{background:#000}
 </style>
 </head>
 <body>
@@ -592,7 +602,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
       </div>
       <div class="donate">
         <div class="dn-h"><span class="dn-ic"><svg class="i"><use href="#i-heart"/></svg></span><div><b>Apoya Animes Nexora Plus</b><small>Donación voluntaria · PayPal</small></div></div>
-        <p>Muchos de ustedes me han preguntado cómo pueden ayudar 💜. Animes Nexora Plus es gratis y sin fines de lucro: es mi proyecto universitario y le dedico mucho tiempo para que funcione en celulares y televisores.</p>
+        <p>Muchos de ustedes me han preguntado cómo pueden ayudar 💜. Animes Nexora Plus es gratis y sin fines de lucro: es mi proyecto y le dedico mucho tiempo para que funcione en celulares y televisores.</p>
         <p>Si te gusta la app y quieres que siga mejorando, puedes apoyarme con una donación por PayPal. Cualquier aporte, por pequeño que sea, ayuda muchísimo. ¡Gracias por usar Nexora!</p>
         <div class="dn-row">
           <div class="dn-qr" id="s-qr"><!--NX_QR--></div>
@@ -744,7 +754,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
       <button class="dclose" id="l-close" aria-label="Cerrar"><svg class="i"><use href="#i-x"/></svg></button></div>
     <p class="dq">¿Cómo quieres verlo?</p>
     <div class="tiles" id="l-opts"></div>
-    <label class="remember"><span>Recordar para este anime</span><span class="sw"><input type="checkbox" id="l-rem" checked><span></span></span></label>
+    <label class="remember" id="l-remrow" tabindex="0"><span>Recordar para este anime</span><span class="sw"><input type="checkbox" id="l-rem" checked><span></span></span></label>
     <button class="btn pri" id="l-go" style="width:100%;margin-top:14px"><svg class="i"><use href="#i-play"/></svg><span>Reproducir</span></button>
   </div>
 </div>
@@ -798,6 +808,7 @@ const fmt=s=>{if(!isFinite(s))return'0:00';s=Math.floor(s);const h=Math.floor(s/
 let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2600)}
 const cap=window.Capacitor, native=!!(cap&&cap.isNativePlatform&&cap.isNativePlatform());
 const plug=n=>{try{return native?((cap.Plugins&&cap.Plugins[n])||cap.registerPlugin(n)):null}catch(e){return null}};
+const NXS=plug('NexoraScreen');
 const App=plug('App'), Orient=plug('ScreenOrientation'), SBar=plug('StatusBar'), LN=plug('LocalNotifications'), BGR=plug('BackgroundRunner');
 
 let cfg=Object.assign({source:'direct',apiBase:'',apiKey:'nexora-plus-key',autoNext:true,notify:true,countdown:8,lang:'dub',rot:true,proxy:true,askLang:true,esTitles:true},store.get('nx_cfg',{}));
@@ -918,9 +929,12 @@ function avStreamLinks(root,html){
     if(kind==='download'&&!/(embed|play\/?|m3u8|hls|player\.|uns\.bio|upnshare)/i.test(u))return;
     const l={server:(isO(e)&&(e.server||e.name||e.provider||e.host))||hostOf(u),url:u};if(!out[lang].some(x=>x.url===u)&&!isMega(l))out[lang].push(l)};
   walk(root,(n,key)=>{if(!isO(n))return;const kind=/download/i.test(key)?'download':'stream';
-    [['sub',n.SUB??n.sub],['dub',n.DUB??n.dub]].forEach(([lang,v])=>{if(!v)return;
+    [['sub',n.SUB??n.sub??n.Sub],['dub',n.DUB??n.dub??n.Dub??n.LAT??n.lat??n.LATINO??n.latino??n.Latino]].forEach(([lang,v])=>{if(!v)return;
       if(Array.isArray(v))v.forEach(e=>push(lang,e,kind));
-      else if(isO(v))Object.entries(v).forEach(([ck,cv])=>{const k2=/download/i.test(ck)?'download':kind;(Array.isArray(cv)?cv:[cv]).forEach(e=>push(lang,e,k2))})})});
+      else if(isO(v))Object.entries(v).forEach(([ck,cv])=>{const k2=/download/i.test(ck)?'download':kind;(Array.isArray(cv)?cv:[cv]).forEach(e=>push(lang,e,k2))})});
+    /* enlaces sueltos que dicen su idioma: {lang:'DUB'|'LAT'|'latino', url} */
+    const tag=n.lang??n.language??n.audio??n.idioma??n.type;
+    if(typeof tag==='string'&&(n.url||n.embed||n.link)){if(/^(dub|lat|latino|latin|es-?419|esp_lat)/i.test(tag))push('dub',n,kind);else if(/^(sub|jp|ja|vose|japon)/i.test(tag))push('sub',n,kind)}});
   if(!out.sub.length&&!out.dub.length){(html.match(/https?:\/\/(?:www\.)?(?:pixeldrain\.com|player\.[^\s"'<>]+|[^\s"'<>]*zilla[^\s"'<>]*)[^\s"'<>]*/gi)||[]).forEach(u=>push('sub',u.replace(/\\\//g,'/'),'stream'))}
   return out}
 const AVP={
@@ -1163,7 +1177,7 @@ async function mostViewed(sigs){
 }
 /* ===== ¿Tiene Latino? Revisa los servidores del episodio y lo recuerda 7 días ===== */
 let DUB=store.get('nx_dub',{});const dubQ=[];let dubBusy=0,dubSaveT;
-function langsOf(u){const v=DUB[u];return v&&Date.now()-v.t<7*864e5?v:null}
+function langsOf(u){const v=DUB[u];if(!v)return null;const age=Date.now()-v.t;return age<(v.d?7:1)*864e5?v:null}
 function checkEp(u,front){return new Promise(res=>{const c=langsOf(u);if(c)return res(c);const job={u,res};front?dubQ.unshift(job):dubQ.push(job);pumpDub()})}
 function pumpDub(){while(dubBusy<(cfg.lite?2:3)&&dubQ.length){const j=dubQ.shift();const c=langsOf(j.u);if(c){j.res(c);continue}dubBusy++;
   (async()=>{let v=null;try{const s=await SRC.episode(j.u);v={s:(s.sub||[]).length?1:0,d:(s.dub||[]).length?1:0,t:Date.now()};DUB[j.u]=v;
@@ -1488,6 +1502,7 @@ const closeLang=()=>$('#langdlg').classList.remove('on');
 $('#l-opts').onclick=e=>{const b=e.target.closest('.tile');if(!b)return;
   if(b.classList.contains('dis'))return toast((b.dataset.l==='dub'?'Latino':'Subtitulado')+' no está disponible');
   LSEL=b.dataset.l;$$('#l-opts .tile').forEach(x=>x.classList.toggle('on',x===b))};
+$('#l-remrow').addEventListener('keydown',e=>{if(e.target.id!=='l-remrow')return;if(e.key==='Enter'||e.key===' '||e.key==='NumpadEnter'){e.preventDefault();e.stopPropagation();const c=$('#l-rem');c.checked=!c.checked;toast(c.checked?'Se recordará el idioma para este anime':'No se recordará el idioma')}});
 $('#l-go').onclick=()=>{D.lang=LSEL;if($('#l-rem').checked){const m=store.get('nx_alang',{});m[D.url]=LSEL;store.set('nx_alang',m)}closeLang();startPlay(LP,LSEL)};
 $('#l-close').onclick=closeLang;
 $('#langdlg').onclick=e=>{if(e.target.id==='langdlg')closeLang()};
@@ -1533,6 +1548,7 @@ async function startPlay(ep,lang){
   P.rotOn=cfg.rot&&!isTV;
   if(P.rotOn&&Orient){try{await Orient.lock({orientation:'landscape'});P.oriented=true}catch(e){}}
   if(SBar&&!isTV){try{SBar.hide()}catch(e){}}
+  if(NXS&&!isTV){try{NXS.immersive({on:true}).catch(()=>{})}catch(e){}}
   if(!isTV){fitRot();setTimeout(fitRot,400);setTimeout(fitRot,1200)}
   $('#p-title').innerHTML=ttSpan(D.data||{title:''});paintEpLabel();
   V.playbackRate=P.speed;cancelNext();showCtl(true);await loadEpisode();
@@ -1625,6 +1641,7 @@ function stopPlayer(){
   P.rotOn=false;setTimeout(fitRot,0);setLock(false);$('#psheet').classList.remove('on');
   P.tk++;saveProg(true);resetMedia();cancelNext();loader(false);
   if(Orient&&P.oriented&&!isTV){P.oriented=false;try{Orient.lock({orientation:'portrait'}).then(()=>Orient.unlock()).catch(()=>{})}catch(e){}}
+  if(NXS&&!isTV){try{NXS.immersive({on:false}).catch(()=>{})}catch(e){}}
   if(SBar&&!isTV){try{SBar.show()}catch(e){}}
 }
 /* progreso */
@@ -1696,7 +1713,7 @@ function goEp(d){const n=epAt(d);if(!n)return toast(d>0?'Es el último episodio'
 $('#p-nx').onclick=stop(()=>goEp(1));$('#p-prev').onclick=stop(()=>goEp(-1));
 $('#n-go').onclick=()=>{cancelNext();goEp(1)};$('#n-cancel').onclick=cancelNext;
 /* hojas */
-function sheet(html){$('#sheet-box').innerHTML=html;$('#sheet').classList.add('on')}
+function sheet(html){const b=$('#sheet-box');b.innerHTML=html;b.scrollTop=0;b.tabIndex=0;$('#sheet').classList.add('on')}
 $('#sheet').onclick=e=>{if(e.target.id==='sheet')$('#sheet').classList.remove('on')};
 function psheet(html){$('#psheet-box').innerHTML=html;$('#psheet').classList.add('on')}
 $('#psheet').onclick=e=>{e.stopPropagation();if(e.target.id==='psheet')$('#psheet').classList.remove('on')};
@@ -1722,7 +1739,7 @@ function paintSettings(){
   $('#s-base').value=cfg.apiBase;$('#s-key').value=cfg.apiKey;$('#s-auto').checked=cfg.autoNext;$('#s-cd').value=cfg.countdown;
   $('#s-lang').value=cfg.lang;$('#s-rot').checked=cfg.rot;$('#s-px').checked=cfg.proxy;$('#s-ask').checked=cfg.askLang;$('#s-es').checked=cfg.esTitles;
 }
-$('#s-lic').onclick=()=>sheet(`<h3>Licencia</h3><pre class="lic">${esc(LICENSE_TXT)}</pre>`);
+$('#s-lic').onclick=()=>{sheet(`<h3>Licencia</h3><pre class="lic">${esc(LICENSE_TXT)}</pre><button class="btn pri lic-ok" id="lic-ok">Entendido</button>`);$('#lic-ok').onclick=()=>$('#sheet').classList.remove('on')};
 $('#s-lite').onchange=e=>{cfg.lite=e.target.checked;saveCfg();applyLite();toast(cfg.lite?'Modo rendimiento activado':'Efectos completos activados')};
 ['s-auto','s-rot','s-px','s-ask','s-es'].forEach(id=>$('#'+id).onchange=()=>{cfg.autoNext=$('#s-auto').checked;cfg.rot=$('#s-rot').checked;cfg.proxy=$('#s-px').checked;cfg.askLang=$('#s-ask').checked;cfg.esTitles=$('#s-es').checked;saveCfg()});
 $('#s-cd').onchange=e=>{cfg.countdown=+e.target.value;saveCfg()};
@@ -1757,19 +1774,22 @@ $('#s-test').onclick=async()=>{
 $('#s-clear').onclick=()=>{if(!confirm('¿Borrar favoritos e historial?'))return;favs=[];hist={};store.set('nx_fav',favs);store.set('nx_hist',hist);toast('Datos borrados');renderLib();renderContinue()};
 
 /* ================= Arranque ================= */
-const LICENSE_TXT='Licencia Nexora Eduard Gamer\nCopyright (c) 2026 Nexora Eduard Gamer.\n\n1. PERMISO\nPuedes usar, copiar y modificar esta app de forma gratuita y sin fines comerciales, conservando este aviso.\n\n2. NOMBRE Y LOGOTIPO\n"Nexora", "Animes Nexora Plus" y el logotipo de la N con orejas de gato, corona y órbita pertenecen a Nexora Eduard Gamer. Los personajes que aparecen en el logotipo (Naruto y Sasuke) pertenecen a sus respectivos titulares. Las versiones modificadas que se publiquen deben usar otro nombre y otro logotipo.\n\n3. PROHIBIDO VENDERLA\nNo se permite vender esta app ni presentarla como creación propia.\n\n4. CONTENIDO DE TERCEROS\nNexora no aloja videos ni imágenes. Los títulos, sinopsis, portadas y videos se cargan desde sitios y servicios externos y pertenecen a sus respectivos titulares; esta licencia no los cubre. El usuario es responsable del uso que haga de ese contenido.\n\n5. SIN GARANTÍA\nLa app se entrega "tal cual", sin garantía de ningún tipo. El autor no es responsable de daños derivados de su uso.';
+const LICENSE_TXT='Licencia Nexora Eduard Gamer\nCopyright (c) 2026 Nexora Eduard Gamer. Todos los derechos reservados.\n\n1. NOMBRE Y LOGOTIPO\n"Nexora", "Animes Nexora Plus" y el logotipo de la N con orejas de gato, corona y órbita pertenecen a Nexora Eduard Gamer. Los personajes que aparecen en el logotipo (Naruto y Sasuke) pertenecen a sus respectivos titulares. Las versiones modificadas que se publiquen deben usar otro nombre y otro logotipo.\n\n2. PROHIBIDO VENDERLA\nNo se permite vender esta app ni presentarla como creación propia.\n\n3. CONTENIDO DE TERCEROS\nNexora no aloja videos ni imágenes. Los títulos, sinopsis, portadas y videos se cargan desde sitios y servicios externos y pertenecen a sus respectivos titulares; esta licencia no los cubre. El usuario es responsable del uso que haga de ese contenido.\n\n4. SIN GARANTÍA\nLa app se entrega "tal cual", sin garantía de ningún tipo. El autor no es responsable de daños derivados de su uso.';
 paintSettings();loadHome();paintPP();
 setTimeout(()=>$('#intro').classList.add('off'),2800);
 
 /* ================= CONTROL REMOTO (Android TV) ================= */
 let KBD=false;
-const isTV=/Android TV|AFT|BRAVIA|GoogleTV|SMART-TV|SmartTV|\bTV\b|Leanback/i.test(navigator.userAgent)||(matchMedia('(pointer:none)').matches&&innerWidth>innerHeight)
+let isTV=/Android TV|AFT|BRAVIA|GoogleTV|SMART-TV|SmartTV|\bTV\b|Leanback/i.test(navigator.userAgent)||(matchMedia('(pointer:none)').matches&&innerWidth>innerHeight)
   ||(/Android/i.test(navigator.userAgent)&&(navigator.maxTouchPoints||0)===0&&Math.max(screen.width,screen.height)>=900);
 const lowEnd=(navigator.hardwareConcurrency||8)<=4||(navigator.deviceMemory||8)<=2;
 if(cfg.lite===undefined){cfg.lite=isTV||lowEnd;saveCfg()}
 function applyLite(){document.documentElement.classList.toggle('lite',!!cfg.lite);const el=$('#s-lite');if(el)el.checked=!!cfg.lite}
 applyLite();
 if(isTV){document.documentElement.classList.add('tv');KBD=true;document.documentElement.classList.add('kbd')}
+if(!isTV&&NXS){try{NXS.isTV().then(r=>{if(r&&r.tv&&!isTV){isTV=true;document.documentElement.classList.add('tv','kbd');KBD=true;
+  if(cfg.lite===undefined||!store.get('nx_litetv')){cfg.lite=true;store.set('nx_litetv',1);saveCfg();applyLite()}
+  const rr=$('#s-rot');if(rr)rr.closest('.set').classList.add('hide');setTimeout(()=>focusFirst(),300)}}).catch(()=>{})}catch(e){}}
 /* cada fila de Ajustes se enfoca con el control: OK cambia el interruptor, OK o ← → cambian la opción */
 $$('#v-set .set').forEach(row=>{const ck=row.querySelector('.sw input'),sel=row.querySelector('select');if(!ck&&!sel)return;
   row.tabIndex=0;row.classList.add('setrow');if(sel)sel.tabIndex=-1;
@@ -1846,6 +1866,11 @@ document.addEventListener('keydown',e=>{
     if($('#sheet').classList.contains('on')){$('#sheet').classList.remove('on');return}
     if(!closeTop()&&tab!=='home')go('home');return}
   if(dir){const a=document.activeElement;
+    if(a&&a.id==='sheet-box'&&(dir==='u'||dir==='d')){e.preventDefault();
+      const end=a.scrollTop+a.clientHeight>=a.scrollHeight-4;
+      if(dir==='d'&&end){const b=a.querySelector('button');if(b){b.focus({preventScroll:true});b.scrollIntoView({block:'nearest'})}return}
+      a.scrollBy({top:(dir==='d'?1:-1)*Math.round(a.clientHeight*.6),behavior:cfg.lite?'auto':'smooth'});return}
+    if(a&&a.closest&&a.closest('#sheet-box')&&a.id!=='sheet-box'&&dir==='u'){e.preventDefault();$('#sheet-box').focus({preventScroll:true});$('#sheet-box').scrollBy({top:-200});return}
     if(a&&a.tagName==='INPUT'&&(dir==='l'||dir==='r'))return;
     if(a&&a.type==='range'&&(dir==='l'||dir==='r')){e.preventDefault();seekBy(dir==='l'?-10:10);return}
     e.preventDefault();moveFocus(dir)}

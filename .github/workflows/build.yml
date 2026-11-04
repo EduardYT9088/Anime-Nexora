@@ -15,7 +15,7 @@ permissions:
 
 env:
   APP_NAME: "Animes Nexora Plus"
-  APP_VERSION: "1.2.6"   # <- cambia aquí la versión del APK
+  APP_VERSION: "1.2.7"   # <- cambia aquí la versión del APK
   APP_ID: "com.nexora.animesplus"
   # Pega aquí la dirección de tu servidor en Render (déjalo vacío si no usas servidor)
   SERVER_URL: ""
@@ -124,6 +124,83 @@ jobs:
         run: |
           cd _build/android/app/src/main
           RES=res
+          # Pantalla completa: usa la zona de la cámara perforada y oculta las barras al ver un episodio
+          JDIR=java/$(echo "$APP_ID" | tr . /)
+          mkdir -p $JDIR
+          cat > $JDIR/MainActivity.java <<EOF
+          package ${APP_ID};
+
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.view.WindowManager;
+          import com.getcapacitor.BridgeActivity;
+
+          public class MainActivity extends BridgeActivity {
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  registerPlugin(NexoraScreen.class);
+                  super.onCreate(savedInstanceState);
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                      WindowManager.LayoutParams lp = getWindow().getAttributes();
+                      lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+                      getWindow().setAttributes(lp);
+                  }
+              }
+          }
+          EOF
+          cat > $JDIR/NexoraScreen.java <<EOF
+          package ${APP_ID};
+
+          import android.app.UiModeManager;
+          import android.content.Context;
+          import android.content.res.Configuration;
+          import android.view.Window;
+          import androidx.core.view.WindowCompat;
+          import androidx.core.view.WindowInsetsCompat;
+          import androidx.core.view.WindowInsetsControllerCompat;
+          import com.getcapacitor.JSObject;
+          import com.getcapacitor.Plugin;
+          import com.getcapacitor.PluginCall;
+          import com.getcapacitor.PluginMethod;
+          import com.getcapacitor.annotation.CapacitorPlugin;
+
+          @CapacitorPlugin(name = "NexoraScreen")
+          public class NexoraScreen extends Plugin {
+              @PluginMethod
+              public void immersive(PluginCall call) {
+                  final boolean on = Boolean.TRUE.equals(call.getBoolean("on", true));
+                  getActivity().runOnUiThread(() -> {
+                      try {
+                          Window w = getActivity().getWindow();
+                          WindowInsetsControllerCompat c = WindowCompat.getInsetsController(w, w.getDecorView());
+                          if (on) {
+                              WindowCompat.setDecorFitsSystemWindows(w, false);
+                              c.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                              c.hide(WindowInsetsCompat.Type.systemBars());
+                          } else {
+                              c.show(WindowInsetsCompat.Type.systemBars());
+                              WindowCompat.setDecorFitsSystemWindows(w, true);
+                          }
+                      } catch (Exception e) { }
+                      call.resolve();
+                  });
+              }
+
+              @PluginMethod
+              public void isTV(PluginCall call) {
+                  boolean tv = false;
+                  try {
+                      UiModeManager u = (UiModeManager) getContext().getSystemService(Context.UI_MODE_SERVICE);
+                      tv = (u != null && u.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION)
+                          || getContext().getPackageManager().hasSystemFeature("android.software.leanback");
+                  } catch (Exception e) { }
+                  JSObject r = new JSObject();
+                  r.put("tv", tv);
+                  call.resolve(r);
+              }
+          }
+          EOF
+          ls $JDIR
           # Permitir APIs http:// y pantalla completa de video
           sed -i 's/<application/<application android:usesCleartextTraffic="true" android:banner="@drawable\/nx_banner"/' AndroidManifest.xml
           # Android TV: aparece en el menú del televisor y no exige pantalla táctil

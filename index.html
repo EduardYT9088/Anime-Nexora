@@ -509,6 +509,53 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 #player{background:#000}
 #l-opts .tile.wait{opacity:.55}
 #l-go:disabled{opacity:.5}
+/* ===== Comentarios ===== */
+.cmsec{margin-top:6px;padding-bottom:10px}
+.dsec h3 .cm-h{color:var(--tx);-webkit-text-fill-color:var(--tx);font-size:17px;font-weight:800}
+.cm-sort{display:flex;align-items:center;gap:4px;color:#b9b4ff;font-weight:700;font-size:13.5px;padding:6px 4px}
+.cm-sort .i{width:16px;height:16px}
+.cm-new{display:flex;gap:12px;margin-top:14px;align-items:flex-start}
+.cm-av{width:42px;height:42px;flex:none;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:17px;color:#fff;text-transform:uppercase;box-shadow:inset 0 0 0 2px rgba(255,255,255,.12)}
+.cm-av.sm{width:34px;height:34px;font-size:14px}
+.cm-av.me:empty{background:var(--s3)}
+.cm-box{flex:1;min-width:0;background:var(--s1);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.cm-box:focus-within{border-color:rgba(139,107,255,.55)}
+.cm-box textarea{display:block;width:100%;min-height:64px;max-height:200px;resize:none;background:transparent;border:0;outline:0;color:var(--tx);font:inherit;font-size:14.5px;line-height:1.5;padding:13px 14px 6px}
+.cm-box textarea::placeholder{color:var(--mu)}
+.cm-bar{display:flex;align-items:center;gap:2px;padding:4px 8px;border-top:1px solid var(--line)}
+.cm-bar button{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:#c9c5ec;font-size:15px}
+.cm-bar button:active{background:var(--s2)}
+.cm-bar .i{width:18px;height:18px}
+.cm-cnt{margin-left:auto;font-size:11px;color:var(--mu);padding-right:4px}
+.cm-send{margin:0 10px 10px;height:38px;font-size:13.5px;padding:0 18px}
+.cm-rep{display:flex;align-items:center;justify-content:space-between;padding:8px 10px 0 14px;font-size:12px;color:var(--ac2)}
+.cm-rep button{width:26px;height:26px;display:grid;place-items:center;color:var(--mu)}.cm-rep .i{width:14px;height:14px}
+#cm-list{margin-top:8px}
+.cm{display:flex;gap:12px;padding:14px 0 4px;position:relative}
+.cm .cb{flex:1;min-width:0}
+.cm .ch{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.cm .ch b{font-size:14.5px;font-weight:800}
+.cm .ch small{color:var(--mu);font-size:12px}
+.cm .ch .dots{margin-left:auto;width:30px;height:24px;display:grid;place-items:center;color:var(--mu);font-size:18px;letter-spacing:1px;line-height:1}
+.cm .cmt{font-size:14.5px;line-height:1.55;margin-top:4px;color:#e9e6ff;word-wrap:break-word;overflow-wrap:anywhere}
+.cm .cmt blockquote{border-left:3px solid var(--ac);padding:2px 0 2px 10px;margin:4px 0;color:#bdb8e3}
+.cm .spl{background:#3a3560;color:transparent;border-radius:5px;padding:0 3px;cursor:pointer;transition:.2s}
+.cm .spl.open{background:rgba(139,107,255,.18);color:inherit}
+.cm .ca{display:flex;align-items:center;gap:18px;margin-top:8px}
+.cm .ca button{display:flex;align-items:center;gap:6px;color:#b9b4ff;font-weight:700;font-size:13px;padding:4px 0}
+.cm .ca button.on{color:var(--ac2)}
+.cm .ca svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.cm-kids{margin-left:20px;padding-left:18px;border-left:2px solid var(--line)}
+.cm-kids .cm{padding-top:10px}
+.cm-empty{text-align:center;color:var(--mu);font-size:13px;padding:22px 10px}
+.cm-more{width:100%;margin-top:12px;background:var(--s2);border:1px solid var(--line);height:44px}
+.cm-sk{height:62px;border-radius:14px;background:var(--s1);margin-top:12px;animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.45}}
+.nick-in{width:100%;height:48px;border-radius:14px;background:var(--s2);border:1px solid var(--line);padding:0 14px;color:var(--tx);font:inherit;font-size:15px;outline:0;margin-top:12px}
+.nick-col{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.nick-col button{width:40px;height:40px;border-radius:50%}
+.nick-col button.on{box-shadow:0 0 0 3px var(--bg),0 0 0 5px var(--ac2)}
+.kbd .cm .ca button:focus-visible,.kbd .cm-bar button:focus-visible{outline:3px solid var(--ac2);outline-offset:2px;border-radius:10px}
 </style>
 </head>
 <body>
@@ -688,6 +735,23 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
     <div class="dsec"><h3 class="acc">Datos sobre el anime</h3></div>
     <div class="dbox facts" id="d-facts" style="margin-top:12px"></div>
     <div id="d-rec" class="hide"><div class="dsec"><h3>También puedes ver</h3></div><div class="row reccards" id="d-recrow"></div></div>
+    <div id="d-cm" class="cmsec hide">
+      <div class="dsec"><h3><span class="cm-h">Comentarios</span> <span id="cm-n"></span></h3><button class="cm-sort" id="cm-sort"><span>Populares</span><svg class="i"><use href="#i-down"/></svg></button></div>
+      <div class="cm-new">
+        <button class="cm-av me" id="cm-me" aria-label="Tu nombre"></button>
+        <div class="cm-box">
+          <div class="cm-rep hide" id="cm-rep"><span>Respondiendo a <b id="cm-repn"></b></span><button id="cm-repx" aria-label="Cancelar respuesta"><svg class="i"><use href="#i-x"/></svg></button></div>
+          <textarea id="cm-txt" maxlength="800" rows="2" placeholder="Escribe algo…"></textarea>
+          <div class="cm-bar">
+            <button data-f="b" aria-label="Negrita"><b>B</b></button><button data-f="i" aria-label="Cursiva"><i>I</i></button><button data-f="s" aria-label="Tachado"><s>S</s></button><button data-f="q" aria-label="Cita">❝</button><button data-f="sp" aria-label="Spoiler"><svg class="i"><use href="#i-eye"/></svg></button>
+            <span class="cm-cnt" id="cm-cnt"></span>
+          </div>
+          <button class="btn pri cm-send" id="cm-send">Comentar</button>
+        </div>
+      </div>
+      <div id="cm-list"></div>
+      <button class="btn cm-more hide" id="cm-more">Ver más comentarios</button>
+    </div>
   </div>
 </div>
 
@@ -1330,7 +1394,7 @@ async function openDetail(url,opts){
   ['d-genres','d-langs','d-stats','d-facts','d-frow','d-recrow','d-cont'].forEach(id=>$('#'+id).innerHTML='');
   $('#d-fr').classList.add('hide');$('#d-rec').classList.add('hide');
   $('#d-syn').textContent='Cargando sinopsis…';$('#d-syn').classList.remove('open');$('#d-more').classList.add('hide');$('#d-more').classList.remove('up');
-  paintFav();$('#detail').scrollTop=0;pushOv('detail');
+  paintFav();$('#detail').scrollTop=0;pushOv('detail');cmReset();
   try{
     const d=await SRC.info(url);if(my!==D.seq)return;D.data=d;
     d.url=url;d.image=d.image||base0.image;d.title=d.title||base0.title;d.id=d.id||base0.id;d.backdrop=d.backdrop||base0.backdrop;
@@ -2010,6 +2074,111 @@ paintBell();
 $('#s-ntf').checked=cfg.notify;$('#s-nall').checked=cfg.notifyAll!==false;
 $('#s-nall').onchange=e=>{cfg.notifyAll=e.target.checked;saveCfg();syncNotify();if(cfg.notifyAll){askNotify();checkLatest(true)}};
 setTimeout(()=>{syncNotify();checkFavs(true);setTimeout(()=>checkLatest(true),4000)},8000);
+
+/* ================= COMENTARIOS ================= */
+const SB_URL='__SB_URL__'.startsWith('__')?'':'__SB_URL__'.replace(/\/+$/,''),SB_KEY='__SB_KEY__'.startsWith('__')?'':'__SB_KEY__';
+const CM_ON=!!(SB_URL&&SB_KEY);
+const CM={key:'',sort:'top',off:0,total:0,items:[],kids:{},rep:null,busy:false,loaded:false};
+const CM_COLORS=['linear-gradient(135deg,#7c5cff,#4f8cff)','linear-gradient(135deg,#ff5c7a,#ff9a5c)','linear-gradient(135deg,#22d3ee,#4f8cff)','linear-gradient(135deg,#34d399,#22d3ee)','linear-gradient(135deg,#f59e0b,#ef4444)','linear-gradient(135deg,#a855f7,#ec4899)','linear-gradient(135deg,#64748b,#334155)','linear-gradient(135deg,#eab308,#84cc16)'];
+const CM_SEL='id,anime,ep,parent_id,author,avatar,body,spoiler,likes,created_at';
+const BAD=/\b(hijueputa|hijo ?de ?puta|malparid[oa]|gonorrea|put[oa]s?|mierda|verga|marica|pendej[oa]s?|idiota|est[uú]pid[oa]|imb[eé]cil|zorra|perra|culer[oa])\b/gi;
+function devId(){let d=store.get('nx_dev','');if(!d){d=Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,'0')).join('');store.set('nx_dev',d)}return d}
+const nick=()=>store.get('nx_nick',null);
+const avHTML=(name,av,cls='')=>`<span class="cm-av ${cls}" style="background:${CM_COLORS[(+av||0)%CM_COLORS.length]}">${esc((name||'?').trim().charAt(0))}</span>`;
+function paintMe(){const n=nick();const m=$('#cm-me');m.innerHTML=n?esc(n.name.charAt(0)):'<svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#cfcbee"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg>';m.style.background=n?CM_COLORS[n.av%CM_COLORS.length]:''}
+async function sb(path,o={}){
+  const url=SB_URL+'/rest/v1/'+path;
+  const h={apikey:SB_KEY,'Content-Type':'application/json',Accept:'application/json'};if(/^eyJ/.test(SB_KEY))h.Authorization='Bearer '+SB_KEY;if(o.prefer)h.Prefer=o.prefer;
+  const bad=d=>{let m='';try{const j=typeof d==='string'?JSON.parse(d):d;m=j&&(j.message||j.hint||j.error)}catch(e){}return new Error(m&&/Espera|comentar/i.test(m)?m:'No se pudo conectar con los comentarios')};
+  if(NH){let r;try{r=await NH.request({url,method:o.method||'GET',headers:h,data:o.body,connectTimeout:12000,readTimeout:15000})}catch(e){throw new Error('Sin conexión con los comentarios')}
+    if(r.status>=400)throw bad(r.data);const hd={};Object.entries(r.headers||{}).forEach(([k,v])=>hd[k.toLowerCase()]=v);
+    let d=r.data;if(typeof d==='string'){try{d=d?JSON.parse(d):null}catch(e){}}return{data:d,headers:hd}}
+  const r=await fetch(url,{method:o.method||'GET',headers:h,body:o.body?JSON.stringify(o.body):undefined});const t=await r.text();if(!r.ok)throw bad(t);
+  const hd={};r.headers.forEach((v,k)=>hd[k]=v);return{data:t?JSON.parse(t):null,headers:hd}}
+function fmtCm(t){
+  let x=esc(String(t||'').replace(BAD,m=>m.charAt(0)+'*'.repeat(m.length-1)).replace(/https?:\/\/\S+|www\.\S+/gi,'[enlace]'));
+  x=x.split('\n').map(l=>/^&gt;\s?/.test(l)?`<blockquote>${l.replace(/^&gt;\s?/,'')}</blockquote>`:l).join('\n');
+  x=x.replace(/\|\|([\s\S]+?)\|\|/g,'<span class="spl" title="Spoiler: toca para ver">$1</span>')
+     .replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<i>$2</i>').replace(/~~([^~\n]+)~~/g,'<s>$1</s>');
+  return x.replace(/\n/g,'<br>').replace(/<\/blockquote><br>/g,'</blockquote>')}
+const IC_LIKE='<svg viewBox="0 0 24 24"><path d="M7 10v11H3V10h4zm0 0l4-8a3 3 0 013 3v4h5.5a2 2 0 012 2.3l-1.3 8A2 2 0 0118.2 21H7"/></svg>';
+const IC_REP='<svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4V5z"/></svg>';
+function cmItem(c,kid){const liked=(store.get('nx_liked',[])||[]).includes(c.id);
+  return `<div class="cm" data-id="${c.id}">${avHTML(c.author,c.avatar,kid?'sm':'')}<div class="cb">
+    <div class="ch"><b>${esc(c.author)}</b><small>${ago(Date.parse(c.created_at))}</small><button class="dots" data-act="more" aria-label="Opciones">···</button></div>
+    <div class="cmt">${fmtCm(c.body)}</div>
+    <div class="ca"><button data-act="like" class="${liked?'on':''}">${IC_LIKE}<span>${c.likes?c.likes:'Me gusta'}</span></button><button data-act="reply">${IC_REP}<span>Responder</span></button></div>
+  </div></div>`}
+function cmRender(){
+  $('#cm-n').textContent=CM.total?`· ${CM.total}`:'';
+  if(!CM.items.length){$('#cm-list').innerHTML=`<div class="cm-empty">Aún no hay comentarios. ¡Sé el primero en opinar sobre este anime!</div>`;$('#cm-more').classList.add('hide');return}
+  $('#cm-list').innerHTML=CM.items.map(c=>cmItem(c)+((CM.kids[c.id]||[]).length?`<div class="cm-kids">${CM.kids[c.id].map(k=>cmItem(k,true)).join('')}</div>`:'')).join('');
+  $('#cm-more').classList.toggle('hide',CM.off>=CM.total)}
+function cmReset(){
+  const box=$('#d-cm');if(!CM_ON){box.classList.add('hide');return}
+  box.classList.remove('hide');CM.key=String(D.url||'').replace(/^https?:\/\/[^/]+\//,'');CM.off=0;CM.items=[];CM.kids={};CM.total=0;CM.loaded=false;cmSetReply(null);
+  $('#cm-n').textContent='';$('#cm-list').innerHTML='<div class="cm-sk"></div><div class="cm-sk"></div>';$('#cm-more').classList.add('hide');paintMe();cmCount();
+  if(cmObs){cmObs.disconnect();cmObs.observe(box)}}
+async function cmLoad(more){
+  if(!CM_ON||CM.busy||!CM.key)return;CM.busy=true;const key=CM.key;
+  try{
+    const ord=CM.sort==='top'?'likes.desc,created_at.desc':'created_at.desc';
+    const r=await sb(`comments?select=${CM_SEL}&anime=eq.${encodeURIComponent(key)}&parent_id=is.null&order=${ord}&limit=15&offset=${CM.off}`,{prefer:'count=exact'});
+    if(key!==CM.key)return;const rows=Array.isArray(r.data)?r.data:[];
+    const cr=r.headers['content-range']||'';const tot=+(cr.split('/')[1]||0);
+    if(!more){CM.items=[];CM.kids={}}CM.items.push(...rows);CM.off+=rows.length;CM.total=tot||CM.items.length;
+    if(rows.length){const k=await sb(`comments?select=${CM_SEL}&parent_id=in.(${rows.map(x=>x.id).join(',')})&order=created_at.asc&limit=300`);
+      if(key!==CM.key)return;(Array.isArray(k.data)?k.data:[]).forEach(x=>(CM.kids[x.parent_id]=CM.kids[x.parent_id]||[]).push(x))}
+    CM.loaded=true;cmRender();
+  }catch(e){if(key===CM.key)$('#cm-list').innerHTML=`<div class="cm-empty">${esc(e.message)}<br><button class="btn" id="cm-retry" style="margin-top:10px">Reintentar</button></div>`;const b=$('#cm-retry');if(b)b.onclick=()=>cmLoad()}
+  finally{CM.busy=false}}
+/* carga cuando la sección aparece en pantalla */
+const cmObs=CM_ON&&'IntersectionObserver' in window?new IntersectionObserver(en=>en.forEach(x=>{if(x.isIntersecting&&!CM.loaded)cmLoad()}),{root:$('#detail'),rootMargin:'400px'}):null;
+function cmSetReply(c){CM.rep=c;$('#cm-rep').classList.toggle('hide',!c);if(c){$('#cm-repn').textContent=c.author;$('#cm-send').textContent='Responder'}else $('#cm-send').textContent='Comentar'}
+function cmCount(){const n=$('#cm-txt').value.length;$('#cm-cnt').textContent=n?`${n}/800`:''}
+$('#cm-txt').addEventListener('input',()=>{const t=$('#cm-txt');t.style.height='auto';t.style.height=Math.min(200,t.scrollHeight)+'px';cmCount()});
+$('#cm-repx').onclick=()=>cmSetReply(null);
+$('#cm-sort').onclick=()=>{CM.sort=CM.sort==='top'?'new':'top';$('#cm-sort span').textContent=CM.sort==='top'?'Populares':'Recientes';CM.off=0;CM.loaded=false;cmLoad()};
+$('#cm-more').onclick=()=>cmLoad(true);
+$$('.cm-bar [data-f]').forEach(b=>b.onclick=()=>{const t=$('#cm-txt'),a=t.selectionStart,z=t.selectionEnd,v=t.value,sel=v.slice(a,z);
+  const W={b:['**','**'],i:['*','*'],s:['~~','~~'],sp:['||','||'],q:['> ','']}[b.dataset.f];
+  const ins=b.dataset.f==='q'?(a&&v[a-1]!=='\n'?'\n':'')+'> '+(sel||''):W[0]+(sel||'texto')+W[1];
+  t.value=v.slice(0,a)+ins+v.slice(z);t.focus();const p=a+ins.length-(sel?0:(W[1].length));t.selectionStart=sel?a+ins.length:a+W[0].length;t.selectionEnd=sel?a+ins.length:p;cmCount()});
+function askNick(then){const n=nick()||{name:'',av:Math.floor(Math.random()*CM_COLORS.length)};let av=n.av;
+  sheet(`<h3>Tu nombre en los comentarios</h3><p style="color:var(--mu);font-size:13px;margin-top:6px">Así te verán los demás. Puedes cambiarlo cuando quieras.</p>
+    <input class="nick-in" id="nk-in" maxlength="20" placeholder="Ej: Eduard" value="${esc(n.name)}" autocomplete="off">
+    <div class="nick-col" id="nk-col">${CM_COLORS.map((c,i)=>`<button data-i="${i}" class="${i===av?'on':''}" style="background:${c}" aria-label="Color ${i+1}"></button>`).join('')}</div>
+    <button class="btn pri" id="nk-ok" style="width:100%;margin-top:18px">Guardar</button>`);
+  $('#nk-col').onclick=e=>{const b=e.target.closest('[data-i]');if(!b)return;av=+b.dataset.i;$$('#nk-col button').forEach(x=>x.classList.toggle('on',x===b))};
+  $('#nk-ok').onclick=()=>{const v=$('#nk-in').value.replace(/\s+/g,' ').trim();if(v.length<2)return toast('Escribe un nombre de al menos 2 letras');
+    if(BAD.test(v)){BAD.lastIndex=0;return toast('Elige otro nombre')}BAD.lastIndex=0;
+    store.set('nx_nick',{name:v,av});$('#sheet').classList.remove('on');paintMe();then&&then()};
+  setTimeout(()=>{try{$('#nk-in').focus()}catch(e){}},200)}
+$('#cm-me').onclick=()=>askNick();
+$('#cm-send').onclick=async()=>{
+  const body=$('#cm-txt').value.trim();if(!body)return toast('Escribe tu comentario');if(body.length<2)return toast('El comentario es muy corto');
+  const n=nick();if(!n)return askNick(()=>$('#cm-send').click());
+  const last=store.get('nx_cmlast',0);if(Date.now()-last<20000)return toast('Espera unos segundos antes de comentar de nuevo');
+  const b=$('#cm-send');b.disabled=true;b.textContent='Enviando…';
+  try{await sb('comments',{method:'POST',prefer:'return=minimal',body:{anime:CM.key,ep:null,parent_id:CM.rep?CM.rep.id:null,author:n.name,avatar:n.av,device:devId(),body,spoiler:/\|\|/.test(body)}});
+    store.set('nx_cmlast',Date.now());$('#cm-txt').value='';$('#cm-txt').style.height='';cmCount();
+    const wasReply=!!CM.rep;cmSetReply(null);if(!wasReply){CM.sort='new';$('#cm-sort span').textContent='Recientes'}
+    CM.off=0;CM.loaded=false;await cmLoad();toast(wasReply?'Respuesta publicada':'Comentario publicado')}
+  catch(e){toast(e.message)}finally{b.disabled=false;if(b.textContent==='Enviando…')b.textContent=CM.rep?'Responder':'Comentar'}};
+const cmFind=id=>CM.items.find(x=>x.id===id)||Object.values(CM.kids).flat().find(x=>x.id===id);
+$('#cm-list').onclick=async e=>{
+  const sp=e.target.closest('.spl');if(sp){sp.classList.toggle('open');return}
+  const b=e.target.closest('[data-act]');if(!b)return;const id=+b.closest('.cm').dataset.id;const c=cmFind(id);if(!c)return;
+  if(b.dataset.act==='reply'){cmSetReply({id:c.parent_id||c.id,author:c.author});$('#cm-txt').focus();$('#d-cm .cm-new').scrollIntoView({block:'center',behavior:'smooth'});return}
+  if(b.dataset.act==='like'){const L=store.get('nx_liked',[])||[];if(L.includes(id))return toast('Ya te gusta este comentario');
+    L.push(id);store.set('nx_liked',L.slice(-500));c.likes=(c.likes||0)+1;b.classList.add('on');b.querySelector('span').textContent=c.likes;
+    try{const r=await sb('rpc/like_comment',{method:'POST',body:{cid:id,dev:devId()}});if(typeof r.data==='number'){c.likes=r.data;b.querySelector('span').textContent=r.data}}catch(err){}return}
+  if(b.dataset.act==='more'){sheet(`<h3>Comentario de ${esc(c.author)}</h3><div class="cm-sheet" style="margin-top:14px;display:grid;gap:10px">
+      <button class="btn" id="cmx-copy" style="width:100%;background:var(--s2)">Copiar texto</button>
+      <button class="btn" id="cmx-rep" style="width:100%;background:rgba(255,92,122,.14);color:var(--bad)">Reportar comentario</button></div>
+      <p style="color:var(--mu);font-size:12px;margin-top:12px">Los comentarios con varios reportes se ocultan automáticamente.</p>`);
+    $('#cmx-copy').onclick=()=>{try{navigator.clipboard.writeText(c.body);toast('Texto copiado')}catch(err){}$('#sheet').classList.remove('on')};
+    $('#cmx-rep').onclick=async()=>{$('#sheet').classList.remove('on');try{await sb('rpc/report_comment',{method:'POST',body:{cid:id,dev:devId()}});toast('Gracias, revisaremos ese comentario')}catch(err){toast(err.message)}}}};
 </script>
 </body>
 </html>

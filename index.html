@@ -1152,7 +1152,7 @@ function go(t){
 }
 document.addEventListener('click',e=>{
   const g=e.target.closest('[data-go]');if(g){go(g.dataset.go);return}
-  const c=e.target.closest('[data-url]');if(c){openDetail(c.dataset.url,c.dataset.ep?{ep:c.dataset.ep}:null)}
+  const c=e.target.closest('[data-url]');if(c){openDetail(c.dataset.url)}
 });
 
 /* ================= INICIO ================= */
@@ -1497,7 +1497,7 @@ function paintLangTiles(av){
   if(!av){$('#l-opts').innerHTML=['dub','sub'].map(l=>`<button class="tile dis wait" data-l="${l}"><svg class="i"><use href="#i-${LT[l][0]}"/></svg><b>${LT[l][1]}</b><small>Comprobando…</small></button>`).join('');$('#l-go').disabled=true;return}
   if(!av.sub&&!av.dub)av={sub:true,dub:true};
   LSEL=av[D.lang]?D.lang:(av.dub?'dub':'sub');
-  $('#l-opts').innerHTML=['dub','sub'].map(l=>`<button class="tile ${l===LSEL?'on':''} ${av[l]?'':'dis'}" data-l="${l}"><svg class="i"><use href="#i-${LT[l][0]}"/></svg><b>${LT[l][1]}</b><small>${av[l]?LT[l][2]:'No disponible en este episodio'}</small></button>`).join('');
+  $('#l-opts').innerHTML=['dub','sub'].map(l=>`<button class="tile ${l===LSEL?'on':''} ${av[l]?'':'dis'}" data-l="${l}"><svg class="i"><use href="#i-${LT[l][0]}"/></svg><b>${LT[l][1]}</b><small>${av[l]?LT[l][2]:(l==='dub'&&D.avail&&D.avail.dub?'Este episodio aún no sale en Latino':'No disponible en este episodio')}</small></button>`).join('');
   $('#l-go').disabled=false;
   if(KBD&&$('#langdlg').classList.contains('on')){const t=$('#l-opts .tile.on');if(t)setTimeout(()=>t.focus({preventScroll:true}),30)}}
 async function askLang(ep){
@@ -1515,7 +1515,7 @@ async function askLang(ep){
 }
 const closeLang=()=>$('#langdlg').classList.remove('on');
 $('#l-opts').onclick=e=>{const b=e.target.closest('.tile');if(!b)return;
-  if(b.classList.contains('wait'))return;if(b.classList.contains('dis'))return toast((b.dataset.l==='dub'?'Latino':'Subtitulado')+' no está disponible en este episodio');
+  if(b.classList.contains('wait'))return;if(b.classList.contains('dis'))return toast(b.dataset.l==='dub'&&D.avail&&D.avail.dub?'El doblaje Latino todavía no llega a este episodio; mira los episodios con la etiqueta LAT':(b.dataset.l==='dub'?'Latino':'Subtitulado')+' no está disponible en este episodio');
   LSEL=b.dataset.l;$$('#l-opts .tile').forEach(x=>x.classList.toggle('on',x===b))};
 $('#l-remrow').addEventListener('keydown',e=>{if(e.target.id!=='l-remrow')return;if(e.key==='Enter'||e.key===' '||e.key==='NumpadEnter'){e.preventDefault();e.stopPropagation();const c=$('#l-rem');c.checked=!c.checked;toast(c.checked?'Se recordará el idioma para este anime':'No se recordará el idioma')}});
 $('#l-go').onclick=()=>{if($('#l-go').disabled)return;D.lang=LSEL;if($('#l-rem').checked){const m=store.get('nx_alang',{});m[D.url]=LSEL;store.set('nx_alang',m)}closeLang();startPlay(LP,LSEL)};

@@ -556,6 +556,29 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 .nick-col button{width:40px;height:40px;border-radius:50%}
 .nick-col button.on{box-shadow:0 0 0 3px var(--bg),0 0 0 5px var(--ac2)}
 .kbd .cm .ca button:focus-visible,.kbd .cm-bar button:focus-visible{outline:3px solid var(--ac2);outline-offset:2px;border-radius:10px}
+/* ===== Cuenta y fotos ===== */
+.cm-av{overflow:hidden}.cm-av img{width:100%;height:100%;object-fit:cover;display:block}
+.cm-av.lg{width:56px;height:56px;font-size:22px}.cm-av.xl{width:88px;height:88px;font-size:34px}
+.vbadge{width:17px;height:17px;flex:none;vertical-align:-3px;margin-left:4px}
+.cm .ch .vbadge{margin-left:-4px}
+.acct{margin:0 16px 14px;padding:16px;border-radius:22px;background:var(--s1);border:1px solid var(--line)}
+.tv .setwrap .acct{margin-left:0;margin-right:0}
+.ac-row{display:flex;align-items:center;gap:14px}.ac-t{flex:1;min-width:0}.ac-t b{display:flex;align-items:center;font-size:16px;font-weight:800}
+.ac-t small{display:block;color:var(--mu);font-size:12.5px;margin-top:3px;line-height:1.45;word-break:break-word}
+.ac-btns{display:flex;gap:10px;margin-top:14px}.ac-btns .btn{flex:1;height:44px}.ac-btns .btn:not(.pri){background:var(--s2);border:1px solid var(--line)}
+.lg-why{color:#cfcbee;font-size:13.5px;line-height:1.5;margin-top:8px}
+.lg-l{display:block;font-size:12.5px;font-weight:700;color:var(--mu);margin-top:16px}
+.lg-l+.nick-in,.lg-l+.lg-pw{margin-top:6px}
+.lg-pw{position:relative}.lg-pw .nick-in{margin-top:0;padding-right:52px}.lg-pw button{position:absolute;right:6px;top:4px;width:40px;height:40px;display:grid;place-items:center;color:var(--mu)}
+.lg-sw{text-align:center;color:var(--mu);font-size:13.5px;margin-top:16px}.lg-sw button,.lg-link{color:var(--ac2);font-weight:700;font-size:inherit;display:inline;padding:0}
+.lg-note{color:var(--mu);font-size:11.5px;margin-top:6px}
+.pf-top{display:flex;align-items:center;gap:16px;margin-top:14px}.pf-ph{display:flex;flex-direction:column;gap:8px;flex:1}.pf-ph .btn{height:40px;background:var(--s2);border:1px solid var(--line);font-size:13px;cursor:pointer}
+.cm-prev{position:relative;margin:4px 14px 8px;width:96px;height:96px;border-radius:12px;overflow:hidden}.cm-prev img{width:100%;height:100%;object-fit:cover}
+.cm-prev button{position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.7);display:grid;place-items:center;color:#fff}.cm-prev .i{width:14px;height:14px}
+.cm-img{display:block;margin-top:8px;max-width:min(100%,360px);border-radius:14px;overflow:hidden;background:var(--s1);padding:0}
+.cm-img img{display:block;width:100%;max-height:340px;object-fit:cover}
+.imgv{position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.94);display:none;align-items:center;justify-content:center;padding:20px}
+.imgv.on{display:flex}.imgv img{max-width:100%;max-height:100%;border-radius:10px}
 </style>
 </head>
 <body>
@@ -649,6 +672,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
         <div class="sh-t"><b>Animes Nexora Plus</b><small><span class="appver"></span> · <span id="s-eng">Android</span></small><small>© 2026 Nexora Eduard Gamer</small></div>
         <button class="btn pri" id="s-upd"><svg class="i"><use href="#i-dl"/></svg>Buscar actualizaciones</button>
       </div>
+      <div class="acct hide" id="s-acct"></div>
       <div class="donate">
         <div class="dn-h"><span class="dn-ic"><svg class="i"><use href="#i-heart"/></svg></span><div><b>Apoya Animes Nexora Plus</b><small>Donación voluntaria · PayPal</small></div></div>
         <p>Muchos de ustedes me han preguntado cómo pueden ayudar 💜. Animes Nexora Plus es gratis y sin fines de lucro: es mi proyecto y le dedico mucho tiempo para que funcione en celulares y televisores.</p>
@@ -742,8 +766,9 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
         <div class="cm-box">
           <div class="cm-rep hide" id="cm-rep"><span>Respondiendo a <b id="cm-repn"></b></span><button id="cm-repx" aria-label="Cancelar respuesta"><svg class="i"><use href="#i-x"/></svg></button></div>
           <textarea id="cm-txt" maxlength="800" rows="2" placeholder="Escribe algo…"></textarea>
+          <div class="cm-prev hide" id="cm-prev"></div>
           <div class="cm-bar">
-            <button data-f="b" aria-label="Negrita"><b>B</b></button><button data-f="i" aria-label="Cursiva"><i>I</i></button><button data-f="s" aria-label="Tachado"><s>S</s></button><button data-f="q" aria-label="Cita">❝</button><button data-f="sp" aria-label="Spoiler"><svg class="i"><use href="#i-eye"/></svg></button>
+            <button data-f="b" aria-label="Negrita"><b>B</b></button><button data-f="i" aria-label="Cursiva"><i>I</i></button><button data-f="s" aria-label="Tachado"><s>S</s></button><button data-f="q" aria-label="Cita">❝</button><button data-f="sp" aria-label="Spoiler"><svg class="i"><use href="#i-eye"/></svg></button><button id="cm-pic" aria-label="Subir foto"><svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg></button><input type="file" id="cm-file" accept="image/*" class="hide">
             <span class="cm-cnt" id="cm-cnt"></span>
           </div>
           <button class="btn pri cm-send" id="cm-send">Comentar</button>
@@ -825,6 +850,8 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
     <button class="btn pri" id="l-go" style="width:100%;margin-top:14px"><svg class="i"><use href="#i-play"/></svg><span>Reproducir</span></button>
   </div>
 </div>
+
+<div class="imgv" id="imgv"><img alt="Imagen"></div>
 
 <!-- REPRODUCTOR -->
 <div class="ov" id="player">
@@ -1601,7 +1628,8 @@ function closeTop(){
 }
 if(App)App.addListener('backButton',()=>{
   if(stack[stack.length-1]==='upd'&&UPD&&UPD.must)return;
-  if($('#spov').classList.contains('on')){$('#spov').classList.remove('on');return}
+  if($('#imgv').classList.contains('on')){$('#imgv').classList.remove('on');return}
+    if($('#spov').classList.contains('on')){$('#spov').classList.remove('on');return}
   if($('#langdlg').classList.contains('on')){closeLang();return}
   if($('#psheet').classList.contains('on')){$('#psheet').classList.remove('on');return}
   if($('#sheet').classList.contains('on')){$('#sheet').classList.remove('on');return}
@@ -1939,6 +1967,7 @@ document.addEventListener('keydown',e=>{
   if(P.locked&&inPlayer){if(k==='Enter'||dir){e.preventDefault();flashLock()}return}
   if(k==='Escape'||k==='GoBack'||k==='BrowserBack'||(k==='Backspace'&&!/INPUT|TEXTAREA/.test(document.activeElement?.tagName))){
     e.preventDefault();
+    if($('#imgv').classList.contains('on')){$('#imgv').classList.remove('on');return}
     if($('#spov').classList.contains('on')){$('#spov').classList.remove('on');return}
     if($('#langdlg').classList.contains('on')){closeLang();return}
     if($('#psheet').classList.contains('on')){$('#psheet').classList.remove('on');return}
@@ -2075,38 +2104,158 @@ $('#s-ntf').checked=cfg.notify;$('#s-nall').checked=cfg.notifyAll!==false;
 $('#s-nall').onchange=e=>{cfg.notifyAll=e.target.checked;saveCfg();syncNotify();if(cfg.notifyAll){askNotify();checkLatest(true)}};
 setTimeout(()=>{syncNotify();checkFavs(true);setTimeout(()=>checkLatest(true),4000)},8000);
 
-/* ================= COMENTARIOS ================= */
+/* ================= COMENTARIOS Y CUENTA ================= */
 const SB_URL='__SB_URL__'.startsWith('__')?'':'__SB_URL__'.replace(/\/+$/,''),SB_KEY='__SB_KEY__'.startsWith('__')?'':'__SB_KEY__';
 const CM_ON=!!(SB_URL&&SB_KEY);
-const CM={key:'',sort:'top',off:0,total:0,items:[],kids:{},rep:null,busy:false,loaded:false};
+const PUB=SB_URL+'/storage/v1/object/public/nexora/';
+const CM={key:'',sort:'top',off:0,total:0,items:[],kids:{},rep:null,busy:false,loaded:false,img:null};
 const CM_COLORS=['linear-gradient(135deg,#7c5cff,#4f8cff)','linear-gradient(135deg,#ff5c7a,#ff9a5c)','linear-gradient(135deg,#22d3ee,#4f8cff)','linear-gradient(135deg,#34d399,#22d3ee)','linear-gradient(135deg,#f59e0b,#ef4444)','linear-gradient(135deg,#a855f7,#ec4899)','linear-gradient(135deg,#64748b,#334155)','linear-gradient(135deg,#eab308,#84cc16)'];
-const CM_SEL='id,anime,ep,parent_id,author,avatar,body,spoiler,likes,created_at';
-const BAD=/\b(hijueputa|hijo ?de ?puta|malparid[oa]|gonorrea|put[oa]s?|mierda|verga|marica|pendej[oa]s?|idiota|est[uú]pid[oa]|imb[eé]cil|zorra|perra|culer[oa])\b/gi;
+const CM_SEL='id,anime,ep,parent_id,author,avatar,body,spoiler,likes,created_at,user_id,image_url,profile:profiles(name,avatar_url,color,official)';
+const BAD=/\b(hijueputa|hijo ?de ?puta|malparid[oa]|gonorrea|put[oa]s?|mierda|verga|marica|pendej[oa]s?|idiota|est[uú]pid[oa]|imb[eé]cil|zorra|perra|culer[oa])\b/i;
+const BADG=new RegExp(BAD.source,'gi');
+const IC_OK='<svg class="vbadge" viewBox="0 0 24 24" role="img" aria-label="Cuenta oficial"><path d="M12 2l2.4 1.8 3-.2.9 2.9 2.5 1.7-1 2.8 1 2.8-2.5 1.7-.9 2.9-3-.2L12 22l-2.4-1.8-3 .2-.9-2.9-2.5-1.7 1-2.8-1-2.8 2.5-1.7.9-2.9 3 .2z" fill="#22d3ee"/><path d="M8 12.2l2.6 2.6L16 9.4" fill="none" stroke="#0b0a1a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const IC_USER='<svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#cfcbee" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg>';
+let SESS=store.get('nx_sess',null),PROF=store.get('nx_prof',null);
 function devId(){let d=store.get('nx_dev','');if(!d){d=Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,'0')).join('');store.set('nx_dev',d)}return d}
 const nick=()=>store.get('nx_nick',null);
-const avHTML=(name,av,cls='')=>`<span class="cm-av ${cls}" style="background:${CM_COLORS[(+av||0)%CM_COLORS.length]}">${esc((name||'?').trim().charAt(0))}</span>`;
-function paintMe(){const n=nick();const m=$('#cm-me');m.innerHTML=n?esc(n.name.charAt(0)):'<svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#cfcbee"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg>';m.style.background=n?CM_COLORS[n.av%CM_COLORS.length]:''}
-async function sb(path,o={}){
-  const url=SB_URL+'/rest/v1/'+path;
-  const h={apikey:SB_KEY,'Content-Type':'application/json',Accept:'application/json'};if(/^eyJ/.test(SB_KEY))h.Authorization='Bearer '+SB_KEY;if(o.prefer)h.Prefer=o.prefer;
-  const bad=d=>{let m='';try{const j=typeof d==='string'?JSON.parse(d):d;m=j&&(j.message||j.hint||j.error)}catch(e){}return new Error(m&&/Espera|comentar/i.test(m)?m:'No se pudo conectar con los comentarios')};
-  if(NH){let r;try{r=await NH.request({url,method:o.method||'GET',headers:h,data:o.body,connectTimeout:12000,readTimeout:15000})}catch(e){throw new Error('Sin conexión con los comentarios')}
-    if(r.status>=400)throw bad(r.data);const hd={};Object.entries(r.headers||{}).forEach(([k,v])=>hd[k.toLowerCase()]=v);
-    let d=r.data;if(typeof d==='string'){try{d=d?JSON.parse(d):null}catch(e){}}return{data:d,headers:hd}}
-  const r=await fetch(url,{method:o.method||'GET',headers:h,body:o.body?JSON.stringify(o.body):undefined});const t=await r.text();if(!r.ok)throw bad(t);
-  const hd={};r.headers.forEach((v,k)=>hd[k]=v);return{data:t?JSON.parse(t):null,headers:hd}}
+const okImg=u=>typeof u==='string'&&u.startsWith(PUB);
+function avHTML(name,color,img,cls=''){
+  if(okImg(img))return`<span class="cm-av ${cls}"><img src="${esc(img)}" alt="" loading="lazy"></span>`;
+  return`<span class="cm-av ${cls}" style="background:${CM_COLORS[(+color||0)%CM_COLORS.length]}">${esc((name||'?').trim().charAt(0))}</span>`}
+/* ---------- conexión ---------- */
+const ERRS=[[/Invalid login credentials/i,'Correo o contraseña incorrectos'],[/already (been )?registered|already exists/i,'Ese correo ya tiene una cuenta: inicia sesión'],
+  [/at least 6|Password should/i,'La contraseña debe tener al menos 6 caracteres'],[/valid email|invalid format|validate email/i,'Escribe un correo válido'],
+  [/Email not confirmed/i,'Confirma tu correo antes de entrar'],[/rate limit|too many|over_email_send/i,'Demasiados intentos: espera un momento'],
+  [/Signups not allowed|signup.*disabled/i,'El registro está cerrado por ahora']];
+function nxErr(t,def){let m='';try{const j=typeof t==='string'?JSON.parse(t):t;m=(j&&(j.msg||j.message||j.error_description||j.error))||''}catch(e){m=String(t||'')}
+  for(const[r,s]of ERRS)if(r.test(m))return new Error(s);
+  if(/reservad|ya lo usa|pertenece|Espera|muy corto|Inicia sesión|perfil|Foto|no existe|entre 2 y 20/i.test(m))return new Error(m);
+  return new Error(def||'No se pudo conectar con el servidor')}
+const keyH=()=>{const h={apikey:SB_KEY};if(/^eyJ/.test(SB_KEY))h.Authorization='Bearer '+SB_KEY;return h};
+function setSess(d){if(!d||!d.access_token)return null;const u=d.user||{};SESS={at:d.access_token,rt:d.refresh_token,exp:Date.now()+((+d.expires_in||3600)-90)*1000,uid:u.id,email:u.email};store.set('nx_sess',SESS);return SESS}
+async function token(){if(!SESS)return null;if(Date.now()<SESS.exp)return SESS.at;
+  let r;try{r=await fetch(SB_URL+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{...keyH(),'Content-Type':'application/json'},body:JSON.stringify({refresh_token:SESS.rt})})}catch(e){return SESS.at}
+  if(!r.ok){signOut(true);return null}setSess(await r.json());return SESS.at}
+async function sbFetch(path,o={}){
+  const tk=o.anon?null:await token();const h={apikey:SB_KEY,...(o.headers||{})};h.Authorization='Bearer '+(tk||(/^eyJ/.test(SB_KEY)?SB_KEY:''));if(h.Authorization==='Bearer ')delete h.Authorization;
+  let body=o.body;if(body!==undefined&&!(body instanceof Blob)){h['Content-Type']='application/json';body=JSON.stringify(body)}if(o.prefer)h.Prefer=o.prefer;
+  let r;try{r=await fetch(SB_URL+path,{method:o.method||'GET',headers:h,body})}catch(e){throw new Error('Sin conexión con el servidor')}
+  const t=await r.text();if(!r.ok)throw nxErr(t,o.err);
+  const hd={};r.headers.forEach((v,k)=>hd[k.toLowerCase()]=v);let d=null;try{d=t?JSON.parse(t):null}catch(e){d=t}return{data:d,headers:hd}}
+const sb=(p,o)=>sbFetch('/rest/v1/'+p,o);
+async function authPost(path,body){let r;try{r=await fetch(SB_URL+'/auth/v1/'+path,{method:'POST',headers:{...keyH(),'Content-Type':'application/json'},body:JSON.stringify(body)})}catch(e){throw new Error('Sin conexión con el servidor')}
+  const t=await r.text();if(!r.ok)throw nxErr(t);return t?JSON.parse(t):{}}
+async function nameProblem(n){const r=await sb('rpc/nx_name_ok',{method:'POST',body:{n}});return typeof r.data==='string'&&r.data?r.data:null}
+/* ---------- cuenta ---------- */
+async function loadProfile(){if(!SESS)return null;
+  try{const r=await sb(`profiles?select=id,name,avatar_url,color,official&id=eq.${SESS.uid}`);PROF=(Array.isArray(r.data)&&r.data[0])||null;store.set('nx_prof',PROF)}catch(e){}
+  paintAccount();paintMe();return PROF}
+function signOut(silent){const t=SESS&&SESS.at;if(t)fetch(SB_URL+'/auth/v1/logout',{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+t}}).catch(()=>{});
+  SESS=null;PROF=null;store.set('nx_sess',null);store.set('nx_prof',null);paintAccount();paintMe();if(!silent)toast('Sesión cerrada')}
+function paintAccount(){const el=$('#s-acct');if(!el)return;el.classList.toggle('hide',!CM_ON);if(!CM_ON)return;
+  if(!SESS){el.innerHTML=`<div class="ac-row"><span class="cm-av lg me">${IC_USER}</span><div class="ac-t"><b>Tu cuenta</b><small>Inicia sesión para tener foto de perfil y subir fotos en los comentarios.</small></div></div>
+    <div class="ac-btns"><button class="btn pri" id="ac-in">Iniciar sesión</button><button class="btn" id="ac-up">Crear cuenta</button></div>`;
+    $('#ac-in').onclick=()=>askLogin('in');$('#ac-up').onclick=()=>askLogin('up');return}
+  const p=PROF||{name:(SESS.email||'').split('@')[0],color:0};
+  el.innerHTML=`<div class="ac-row">${avHTML(p.name,p.color,p.avatar_url,'lg')}<div class="ac-t"><b>${esc(p.name)}${p.official?IC_OK:''}</b><small>${esc(SESS.email||'')}</small>${PROF?'':'<small style="color:var(--warn)">Falta completar tu perfil</small>'}</div></div>
+    <div class="ac-btns"><button class="btn pri" id="ac-ed">Editar perfil</button><button class="btn" id="ac-out">Cerrar sesión</button></div>`;
+  $('#ac-ed').onclick=()=>askProfile();$('#ac-out').onclick=()=>signOut()}
+function paintMe(){const m=$('#cm-me');if(!m)return;
+  if(SESS&&PROF){m.outerHTML=`<button class="cm-av me" id="cm-me" aria-label="Tu perfil"${okImg(PROF.avatar_url)?'':` style="background:${CM_COLORS[(PROF.color||0)%CM_COLORS.length]}"`}>${okImg(PROF.avatar_url)?`<img src="${esc(PROF.avatar_url)}" alt="">`:esc(PROF.name.charAt(0))}</button>`}
+  else{const n=nick();m.outerHTML=`<button class="cm-av me" id="cm-me" aria-label="Tu nombre"${n?` style="background:${CM_COLORS[n.av%CM_COLORS.length]}"`:''}>${n?esc(n.name.charAt(0)):IC_USER}</button>`}
+  $('#cm-me').onclick=()=>SESS?askProfile():askNick()}
+function askLogin(mode,why){
+  const up=mode==='up';
+  sheet(`<h3>${up?'Crear cuenta':'Iniciar sesión'}</h3>${why?`<p class="lg-why">${esc(why)}</p>`:''}
+    ${up?`<label class="lg-l" for="lg-name">Nombre</label><input class="nick-in" id="lg-name" maxlength="20" autocomplete="nickname" placeholder="Cómo te verán en los comentarios">`:''}
+    <label class="lg-l" for="lg-mail">Correo electrónico</label><input class="nick-in" id="lg-mail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" placeholder="correo@gmail.com">
+    <label class="lg-l" for="lg-pass">Contraseña</label><div class="lg-pw"><input class="nick-in" id="lg-pass" type="password" autocomplete="${up?'new-password':'current-password'}" placeholder="${up?'Mínimo 6 caracteres':'Tu contraseña'}"><button id="lg-eye" aria-label="Mostrar contraseña"><svg class="i"><use href="#i-eye"/></svg></button></div>
+    <button class="btn pri" id="lg-go" style="width:100%;margin-top:18px">${up?'Crear cuenta':'Iniciar sesión'}</button>
+    <p class="lg-sw">${up?'¿Ya tienes cuenta?':'¿Aún no tienes una cuenta?'} <button id="lg-sw">${up?'Inicia sesión':'Regístrate'}</button></p>`);
+  $('#lg-sw').onclick=()=>askLogin(up?'in':'up',why);
+  $('#lg-eye').onclick=()=>{const p=$('#lg-pass');p.type=p.type==='password'?'text':'password'};
+  $('#lg-go').onclick=async()=>{const b=$('#lg-go');const mail=$('#lg-mail').value.trim(),pass=$('#lg-pass').value,name=up?$('#lg-name').value.replace(/\s+/g,' ').trim():'';
+    if(up&&(name.length<2||name.length>20))return toast('El nombre debe tener entre 2 y 20 letras');if(up&&BAD.test(name))return toast('Elige otro nombre');
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail))return toast('Escribe un correo válido');if(pass.length<6)return toast('La contraseña debe tener al menos 6 caracteres');
+    b.disabled=true;b.textContent=up?'Creando cuenta…':'Entrando…';
+    try{
+      if(up){/* el nombre reservado se revisa con la cuenta ya creada (la cuenta oficial sí puede usarlo) */
+        const pr=await nameProblem(name);if(pr&&!/reservad/i.test(pr))throw new Error(pr);
+        const d=await authPost('signup',{email:mail,password:pass,data:{name}});
+        if(!setSess(d))throw new Error('Revisa tu correo para confirmar la cuenta y luego inicia sesión');
+        let perr=null;try{await sb('profiles',{method:'POST',prefer:'return=minimal',body:{id:SESS.uid,name,color:Math.floor(Math.random()*CM_COLORS.length)}})}catch(e){perr=e}
+        await loadProfile();$('#sheet').classList.remove('on');
+        if(perr||!PROF){askProfile((perr?perr.message+'. ':'')+'Tu cuenta ya está creada: elige otro nombre.')}else toast(`¡Bienvenido, ${name}!`)}
+      else{setSess(await authPost('token?grant_type=password',{email:mail,password:pass}));await loadProfile();$('#sheet').classList.remove('on');
+        if(PROF)toast(`Hola de nuevo, ${PROF.name}`);else askProfile('Elige tu nombre para terminar tu perfil')}
+      if(CM.key){CM.off=0;CM.loaded=false;cmLoad()}
+    }catch(e){toast(e.message);b.disabled=false;b.textContent=up?'Crear cuenta':'Iniciar sesión'}};
+  setTimeout(()=>{try{$(up?'#lg-name':'#lg-mail').focus()}catch(e){}},200)}
+async function shrink(file,max,square){
+  const url=URL.createObjectURL(file);
+  try{const im=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('No se pudo abrir la imagen'));i.src=url});
+    let sw=im.naturalWidth,sh=im.naturalHeight,sx=0,sy=0;if(square){const m=Math.min(sw,sh);sx=(sw-m)/2;sy=(sh-m)/2;sw=sh=m}
+    const k=Math.min(1,max/Math.max(sw,sh));const c=document.createElement('canvas');c.width=Math.max(1,Math.round(sw*k));c.height=Math.max(1,Math.round(sh*k));
+    c.getContext('2d').drawImage(im,sx,sy,sw,sh,0,0,c.width,c.height);
+    let b=await new Promise(r=>c.toBlob(r,'image/webp',.82));if(!b||b.type!=='image/webp')b=await new Promise(r=>c.toBlob(r,'image/jpeg',.85));
+    if(!b)throw new Error('No se pudo preparar la imagen');return b}finally{URL.revokeObjectURL(url)}}
+async function upload(blob,folder){
+  const path=`${folder}/${SESS.uid}/${Date.now().toString(36)}${Math.random().toString(36).slice(2,7)}.${blob.type==='image/webp'?'webp':'jpg'}`;
+  await sbFetch('/storage/v1/object/nexora/'+path,{method:'POST',body:blob,headers:{'Content-Type':blob.type,'x-upsert':'false','cache-control':'31536000'},err:'No se pudo subir la imagen'});
+  return PUB+path}
+function askProfile(why){
+  if(!SESS)return askLogin('in');
+  const p=PROF||{name:'',color:Math.floor(Math.random()*CM_COLORS.length),avatar_url:null};let color=p.color||0,photo=p.avatar_url||null,blob=null;
+  const prev=()=>{const el=$('#pf-av');if(!el)return;const src=blob?URL.createObjectURL(blob):photo;
+    el.outerHTML=src?`<span class="cm-av xl" id="pf-av"><img src="${esc(src)}" alt=""></span>`:`<span class="cm-av xl" id="pf-av" style="background:${CM_COLORS[color%CM_COLORS.length]}">${esc(($('#pf-name')?.value||p.name||'?').charAt(0))}</span>`;
+    $('#pf-rm').classList.toggle('hide',!src)};
+  sheet(`<h3>Tu perfil</h3>${why?`<p class="lg-why">${esc(why)}</p>`:''}
+    <div class="pf-top"><span class="cm-av xl" id="pf-av"></span><div class="pf-ph"><label class="btn" for="pf-file">Cambiar foto</label><input type="file" id="pf-file" accept="image/*" class="hide"><button class="btn" id="pf-rm">Quitar foto</button></div></div>
+    <label class="lg-l" for="pf-name">Nombre</label><input class="nick-in" id="pf-name" maxlength="20" value="${esc(p.name)}" placeholder="Tu nombre">
+    <p class="lg-note">Los nombres "Nexora" y "Tokio" están reservados.</p>
+    <label class="lg-l">Color (si no tienes foto)</label><div class="nick-col" id="pf-col">${CM_COLORS.map((c,i)=>`<button data-i="${i}" class="${i===color?'on':''}" style="background:${c}" aria-label="Color ${i+1}"></button>`).join('')}</div>
+    <button class="btn pri" id="pf-ok" style="width:100%;margin-top:18px">Guardar perfil</button>`);
+  prev();$('#pf-name').oninput=prev;
+  $('#pf-col').onclick=e=>{const b=e.target.closest('[data-i]');if(!b)return;color=+b.dataset.i;$$('#pf-col button').forEach(x=>x.classList.toggle('on',x===b));prev()};
+  $('#pf-file').onchange=async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{blob=await shrink(f,320,true);prev()}catch(err){toast(err.message)}};
+  $('#pf-rm').onclick=()=>{blob=null;photo=null;prev()};
+  $('#pf-ok').onclick=async()=>{const b=$('#pf-ok');const name=$('#pf-name').value.replace(/\s+/g,' ').trim();
+    if(name.length<2||name.length>20)return toast('El nombre debe tener entre 2 y 20 letras');if(BAD.test(name))return toast('Elige otro nombre');
+    b.disabled=true;b.textContent='Guardando…';
+    try{if(!PROF||name.toLowerCase()!==PROF.name.toLowerCase()){const pr=await nameProblem(name);if(pr)throw new Error(pr)}
+      let url=photo;if(blob){b.textContent='Subiendo foto…';url=await upload(blob,'avatars')}
+      const body={name,color,avatar_url:url||null};
+      if(PROF)await sb(`profiles?id=eq.${SESS.uid}`,{method:'PATCH',prefer:'return=minimal',body});
+      else await sb('profiles',{method:'POST',prefer:'return=minimal',body:{id:SESS.uid,...body}});
+      await loadProfile();$('#sheet').classList.remove('on');toast('Perfil guardado');if(CM.key&&CM.loaded){CM.off=0;CM.loaded=false;cmLoad()}}
+    catch(e){toast(e.message);b.disabled=false;b.textContent='Guardar perfil'}}}
+function askNick(then){const n=nick()||{name:'',av:Math.floor(Math.random()*CM_COLORS.length)};let av=n.av;
+  sheet(`<h3>Tu nombre en los comentarios</h3><p class="lg-why">Puedes comentar sin cuenta. Para tener foto de perfil y subir fotos, <button class="lg-link" id="nk-login">inicia sesión</button>.</p>
+    <input class="nick-in" id="nk-in" maxlength="20" placeholder="Ej: Eduard" value="${esc(n.name)}" autocomplete="off">
+    <p class="lg-note">Los nombres "Nexora" y "Tokio" están reservados.</p>
+    <div class="nick-col" id="nk-col">${CM_COLORS.map((c,i)=>`<button data-i="${i}" class="${i===av?'on':''}" style="background:${c}" aria-label="Color ${i+1}"></button>`).join('')}</div>
+    <button class="btn pri" id="nk-ok" style="width:100%;margin-top:18px">Guardar</button>`);
+  $('#nk-login').onclick=()=>askLogin('in');
+  $('#nk-col').onclick=e=>{const b=e.target.closest('[data-i]');if(!b)return;av=+b.dataset.i;$$('#nk-col button').forEach(x=>x.classList.toggle('on',x===b))};
+  $('#nk-ok').onclick=async()=>{const b=$('#nk-ok');const v=$('#nk-in').value.replace(/\s+/g,' ').trim();if(v.length<2)return toast('Escribe un nombre de al menos 2 letras');
+    if(BAD.test(v))return toast('Elige otro nombre');b.disabled=true;
+    try{const pr=await nameProblem(v);if(pr)throw new Error(pr);store.set('nx_nick',{name:v,av});$('#sheet').classList.remove('on');paintMe();then&&then()}
+    catch(e){toast(e.message);b.disabled=false}};
+  setTimeout(()=>{try{$('#nk-in').focus()}catch(e){}},200)}
+/* ---------- comentarios ---------- */
 function fmtCm(t){
-  let x=esc(String(t||'').replace(BAD,m=>m.charAt(0)+'*'.repeat(m.length-1)).replace(/https?:\/\/\S+|www\.\S+/gi,'[enlace]'));
+  let x=esc(String(t||'').replace(BADG,m=>m.charAt(0)+'*'.repeat(m.length-1)).replace(/https?:\/\/\S+|www\.\S+/gi,'[enlace]'));
   x=x.split('\n').map(l=>/^&gt;\s?/.test(l)?`<blockquote>${l.replace(/^&gt;\s?/,'')}</blockquote>`:l).join('\n');
   x=x.replace(/\|\|([\s\S]+?)\|\|/g,'<span class="spl" title="Spoiler: toca para ver">$1</span>')
      .replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<i>$2</i>').replace(/~~([^~\n]+)~~/g,'<s>$1</s>');
   return x.replace(/\n/g,'<br>').replace(/<\/blockquote><br>/g,'</blockquote>')}
 const IC_LIKE='<svg viewBox="0 0 24 24"><path d="M7 10v11H3V10h4zm0 0l4-8a3 3 0 013 3v4h5.5a2 2 0 012 2.3l-1.3 8A2 2 0 0118.2 21H7"/></svg>';
 const IC_REP='<svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4V5z"/></svg>';
-function cmItem(c,kid){const liked=(store.get('nx_liked',[])||[]).includes(c.id);
-  return `<div class="cm" data-id="${c.id}">${avHTML(c.author,c.avatar,kid?'sm':'')}<div class="cb">
-    <div class="ch"><b>${esc(c.author)}</b><small>${ago(Date.parse(c.created_at))}</small><button class="dots" data-act="more" aria-label="Opciones">···</button></div>
-    <div class="cmt">${fmtCm(c.body)}</div>
+function cmItem(c,kid){const liked=(store.get('nx_liked',[])||[]).includes(c.id);const p=c.profile;const name=p?p.name:c.author;
+  return `<div class="cm" data-id="${c.id}">${avHTML(name,p?p.color:c.avatar,p&&p.avatar_url,kid?'sm':'')}<div class="cb">
+    <div class="ch"><b>${esc(name)}</b>${p&&p.official?IC_OK:''}<small>${ago(Date.parse(c.created_at))}</small><button class="dots" data-act="more" aria-label="Opciones">···</button></div>
+    ${c.body?`<div class="cmt">${fmtCm(c.body)}</div>`:''}
+    ${okImg(c.image_url)?`<button class="cm-img" data-act="img" aria-label="Ver imagen"><img src="${esc(c.image_url)}" alt="Imagen del comentario" loading="lazy"></button>`:''}
     <div class="ca"><button data-act="like" class="${liked?'on':''}">${IC_LIKE}<span>${c.likes?c.likes:'Me gusta'}</span></button><button data-act="reply">${IC_REP}<span>Responder</span></button></div>
   </div></div>`}
 function cmRender(){
@@ -2116,69 +2265,71 @@ function cmRender(){
   $('#cm-more').classList.toggle('hide',CM.off>=CM.total)}
 function cmReset(){
   const box=$('#d-cm');if(!CM_ON){box.classList.add('hide');return}
-  box.classList.remove('hide');CM.key=String(D.url||'').replace(/^https?:\/\/[^/]+\//,'');CM.off=0;CM.items=[];CM.kids={};CM.total=0;CM.loaded=false;cmSetReply(null);
+  box.classList.remove('hide');CM.key=String(D.url||'').replace(/^https?:\/\/[^/]+\//,'');CM.off=0;CM.items=[];CM.kids={};CM.total=0;CM.loaded=false;cmSetReply(null);cmClearImg();
   $('#cm-n').textContent='';$('#cm-list').innerHTML='<div class="cm-sk"></div><div class="cm-sk"></div>';$('#cm-more').classList.add('hide');paintMe();cmCount();
-  if(cmObs){cmObs.disconnect();cmObs.observe(box)}}
+  if(cmObs){cmObs.disconnect();cmObs.observe(box)}else cmLoad()}
 async function cmLoad(more){
   if(!CM_ON||CM.busy||!CM.key)return;CM.busy=true;const key=CM.key;
   try{
     const ord=CM.sort==='top'?'likes.desc,created_at.desc':'created_at.desc';
-    const r=await sb(`comments?select=${CM_SEL}&anime=eq.${encodeURIComponent(key)}&parent_id=is.null&order=${ord}&limit=15&offset=${CM.off}`,{prefer:'count=exact'});
+    const r=await sb(`comments?select=${CM_SEL}&anime=eq.${encodeURIComponent(key)}&parent_id=is.null&order=${ord}&limit=15&offset=${more?CM.off:0}`,{prefer:'count=exact'});
     if(key!==CM.key)return;const rows=Array.isArray(r.data)?r.data:[];
-    const cr=r.headers['content-range']||'';const tot=+(cr.split('/')[1]||0);
-    if(!more){CM.items=[];CM.kids={}}CM.items.push(...rows);CM.off+=rows.length;CM.total=tot||CM.items.length;
+    const tot=+((r.headers['content-range']||'').split('/')[1]||0);
+    if(!more){CM.items=[];CM.kids={};CM.off=0}CM.items.push(...rows);CM.off+=rows.length;CM.total=tot||CM.items.length;
     if(rows.length){const k=await sb(`comments?select=${CM_SEL}&parent_id=in.(${rows.map(x=>x.id).join(',')})&order=created_at.asc&limit=300`);
       if(key!==CM.key)return;(Array.isArray(k.data)?k.data:[]).forEach(x=>(CM.kids[x.parent_id]=CM.kids[x.parent_id]||[]).push(x))}
     CM.loaded=true;cmRender();
-  }catch(e){if(key===CM.key)$('#cm-list').innerHTML=`<div class="cm-empty">${esc(e.message)}<br><button class="btn" id="cm-retry" style="margin-top:10px">Reintentar</button></div>`;const b=$('#cm-retry');if(b)b.onclick=()=>cmLoad()}
+  }catch(e){if(key===CM.key){$('#cm-list').innerHTML=`<div class="cm-empty">${esc(e.message)}<br><button class="btn" id="cm-retry" style="margin-top:10px">Reintentar</button></div>`;const b=$('#cm-retry');if(b)b.onclick=()=>cmLoad()}}
   finally{CM.busy=false}}
-/* carga cuando la sección aparece en pantalla */
 const cmObs=CM_ON&&'IntersectionObserver' in window?new IntersectionObserver(en=>en.forEach(x=>{if(x.isIntersecting&&!CM.loaded)cmLoad()}),{root:$('#detail'),rootMargin:'400px'}):null;
 function cmSetReply(c){CM.rep=c;$('#cm-rep').classList.toggle('hide',!c);if(c){$('#cm-repn').textContent=c.author;$('#cm-send').textContent='Responder'}else $('#cm-send').textContent='Comentar'}
 function cmCount(){const n=$('#cm-txt').value.length;$('#cm-cnt').textContent=n?`${n}/800`:''}
+function cmClearImg(){if(CM.img&&CM.img.url)URL.revokeObjectURL(CM.img.url);CM.img=null;$('#cm-prev').innerHTML='';$('#cm-prev').classList.add('hide');$('#cm-file').value=''}
 $('#cm-txt').addEventListener('input',()=>{const t=$('#cm-txt');t.style.height='auto';t.style.height=Math.min(200,t.scrollHeight)+'px';cmCount()});
 $('#cm-repx').onclick=()=>cmSetReply(null);
-$('#cm-sort').onclick=()=>{CM.sort=CM.sort==='top'?'new':'top';$('#cm-sort span').textContent=CM.sort==='top'?'Populares':'Recientes';CM.off=0;CM.loaded=false;cmLoad()};
+$('#cm-sort').onclick=()=>{CM.sort=CM.sort==='top'?'new':'top';$('#cm-sort span').textContent=CM.sort==='top'?'Populares':'Recientes';CM.loaded=false;cmLoad()};
 $('#cm-more').onclick=()=>cmLoad(true);
 $$('.cm-bar [data-f]').forEach(b=>b.onclick=()=>{const t=$('#cm-txt'),a=t.selectionStart,z=t.selectionEnd,v=t.value,sel=v.slice(a,z);
   const W={b:['**','**'],i:['*','*'],s:['~~','~~'],sp:['||','||'],q:['> ','']}[b.dataset.f];
   const ins=b.dataset.f==='q'?(a&&v[a-1]!=='\n'?'\n':'')+'> '+(sel||''):W[0]+(sel||'texto')+W[1];
-  t.value=v.slice(0,a)+ins+v.slice(z);t.focus();const p=a+ins.length-(sel?0:(W[1].length));t.selectionStart=sel?a+ins.length:a+W[0].length;t.selectionEnd=sel?a+ins.length:p;cmCount()});
-function askNick(then){const n=nick()||{name:'',av:Math.floor(Math.random()*CM_COLORS.length)};let av=n.av;
-  sheet(`<h3>Tu nombre en los comentarios</h3><p style="color:var(--mu);font-size:13px;margin-top:6px">Así te verán los demás. Puedes cambiarlo cuando quieras.</p>
-    <input class="nick-in" id="nk-in" maxlength="20" placeholder="Ej: Eduard" value="${esc(n.name)}" autocomplete="off">
-    <div class="nick-col" id="nk-col">${CM_COLORS.map((c,i)=>`<button data-i="${i}" class="${i===av?'on':''}" style="background:${c}" aria-label="Color ${i+1}"></button>`).join('')}</div>
-    <button class="btn pri" id="nk-ok" style="width:100%;margin-top:18px">Guardar</button>`);
-  $('#nk-col').onclick=e=>{const b=e.target.closest('[data-i]');if(!b)return;av=+b.dataset.i;$$('#nk-col button').forEach(x=>x.classList.toggle('on',x===b))};
-  $('#nk-ok').onclick=()=>{const v=$('#nk-in').value.replace(/\s+/g,' ').trim();if(v.length<2)return toast('Escribe un nombre de al menos 2 letras');
-    if(BAD.test(v)){BAD.lastIndex=0;return toast('Elige otro nombre')}BAD.lastIndex=0;
-    store.set('nx_nick',{name:v,av});$('#sheet').classList.remove('on');paintMe();then&&then()};
-  setTimeout(()=>{try{$('#nk-in').focus()}catch(e){}},200)}
-$('#cm-me').onclick=()=>askNick();
+  t.value=v.slice(0,a)+ins+v.slice(z);t.focus();if(sel){t.selectionStart=t.selectionEnd=a+ins.length}else{t.selectionStart=a+ins.length-W[1].length-(b.dataset.f==='q'?0:5);t.selectionEnd=a+ins.length-W[1].length}cmCount()});
+$('#cm-pic').onclick=()=>{if(!SESS)return askLogin('in','Inicia sesión para subir fotos en los comentarios');if(!PROF)return askProfile('Completa tu perfil para subir fotos');$('#cm-file').click()};
+$('#cm-file').onchange=async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;
+  if(!/^image\//.test(f.type))return toast('Elige una imagen');
+  try{const b=await shrink(f,1280,false);cmClearImg();CM.img={blob:b,url:URL.createObjectURL(b)};
+    $('#cm-prev').innerHTML=`<img src="${CM.img.url}" alt="Vista previa"><button id="cm-prevx" aria-label="Quitar imagen"><svg class="i"><use href="#i-x"/></svg></button>`;$('#cm-prev').classList.remove('hide');$('#cm-prevx').onclick=cmClearImg}
+  catch(err){toast(err.message)}};
 $('#cm-send').onclick=async()=>{
-  const body=$('#cm-txt').value.trim();if(!body)return toast('Escribe tu comentario');if(body.length<2)return toast('El comentario es muy corto');
-  const n=nick();if(!n)return askNick(()=>$('#cm-send').click());
-  const last=store.get('nx_cmlast',0);if(Date.now()-last<20000)return toast('Espera unos segundos antes de comentar de nuevo');
+  const body=$('#cm-txt').value.trim();const hasImg=!!(CM.img&&SESS);
+  if(!body&&!hasImg)return toast('Escribe tu comentario');if(body&&body.length<2&&!hasImg)return toast('El comentario es muy corto');
+  if(SESS&&!PROF)return askProfile('Completa tu perfil para comentar');
+  const n=SESS?{name:PROF.name,av:PROF.color||0}:nick();if(!n)return askNick(()=>$('#cm-send').click());
+  const last=store.get('nx_cmlast',0);if(Date.now()-last<15000)return toast('Espera unos segundos antes de comentar de nuevo');
   const b=$('#cm-send');b.disabled=true;b.textContent='Enviando…';
-  try{await sb('comments',{method:'POST',prefer:'return=minimal',body:{anime:CM.key,ep:null,parent_id:CM.rep?CM.rep.id:null,author:n.name,avatar:n.av,device:devId(),body,spoiler:/\|\|/.test(body)}});
-    store.set('nx_cmlast',Date.now());$('#cm-txt').value='';$('#cm-txt').style.height='';cmCount();
+  try{let image_url=null;if(hasImg){b.textContent='Subiendo foto…';image_url=await upload(CM.img.blob,'comments')}
+    await sb('comments',{method:'POST',prefer:'return=minimal',body:{anime:CM.key,ep:null,parent_id:CM.rep?CM.rep.id:null,author:n.name,avatar:n.av,device:devId(),body,spoiler:/\|\|/.test(body),image_url}});
+    store.set('nx_cmlast',Date.now());$('#cm-txt').value='';$('#cm-txt').style.height='';cmCount();cmClearImg();
     const wasReply=!!CM.rep;cmSetReply(null);if(!wasReply){CM.sort='new';$('#cm-sort span').textContent='Recientes'}
-    CM.off=0;CM.loaded=false;await cmLoad();toast(wasReply?'Respuesta publicada':'Comentario publicado')}
-  catch(e){toast(e.message)}finally{b.disabled=false;if(b.textContent==='Enviando…')b.textContent=CM.rep?'Responder':'Comentar'}};
+    CM.loaded=false;await cmLoad();toast(wasReply?'Respuesta publicada':'Comentario publicado')}
+  catch(e){toast(e.message)}finally{b.disabled=false;if(/Enviando|Subiendo/.test(b.textContent))b.textContent=CM.rep?'Responder':'Comentar'}};
 const cmFind=id=>CM.items.find(x=>x.id===id)||Object.values(CM.kids).flat().find(x=>x.id===id);
+function viewImg(src){$('#imgv img').src=src;$('#imgv').classList.add('on')}
+$('#imgv').onclick=()=>$('#imgv').classList.remove('on');
 $('#cm-list').onclick=async e=>{
   const sp=e.target.closest('.spl');if(sp){sp.classList.toggle('open');return}
   const b=e.target.closest('[data-act]');if(!b)return;const id=+b.closest('.cm').dataset.id;const c=cmFind(id);if(!c)return;
-  if(b.dataset.act==='reply'){cmSetReply({id:c.parent_id||c.id,author:c.author});$('#cm-txt').focus();$('#d-cm .cm-new').scrollIntoView({block:'center',behavior:'smooth'});return}
+  if(b.dataset.act==='img'){viewImg(c.image_url);return}
+  if(b.dataset.act==='reply'){cmSetReply({id:c.parent_id||c.id,author:c.profile?c.profile.name:c.author});$('#cm-txt').focus();$('#d-cm .cm-new').scrollIntoView({block:'center',behavior:'smooth'});return}
   if(b.dataset.act==='like'){const L=store.get('nx_liked',[])||[];if(L.includes(id))return toast('Ya te gusta este comentario');
     L.push(id);store.set('nx_liked',L.slice(-500));c.likes=(c.likes||0)+1;b.classList.add('on');b.querySelector('span').textContent=c.likes;
     try{const r=await sb('rpc/like_comment',{method:'POST',body:{cid:id,dev:devId()}});if(typeof r.data==='number'){c.likes=r.data;b.querySelector('span').textContent=r.data}}catch(err){}return}
-  if(b.dataset.act==='more'){sheet(`<h3>Comentario de ${esc(c.author)}</h3><div class="cm-sheet" style="margin-top:14px;display:grid;gap:10px">
+  if(b.dataset.act==='more'){const nm=c.profile?c.profile.name:c.author;sheet(`<h3>Comentario de ${esc(nm)}</h3><div style="margin-top:14px;display:grid;gap:10px">
       <button class="btn" id="cmx-copy" style="width:100%;background:var(--s2)">Copiar texto</button>
       <button class="btn" id="cmx-rep" style="width:100%;background:rgba(255,92,122,.14);color:var(--bad)">Reportar comentario</button></div>
       <p style="color:var(--mu);font-size:12px;margin-top:12px">Los comentarios con varios reportes se ocultan automáticamente.</p>`);
-    $('#cmx-copy').onclick=()=>{try{navigator.clipboard.writeText(c.body);toast('Texto copiado')}catch(err){}$('#sheet').classList.remove('on')};
+    $('#cmx-copy').onclick=()=>{try{navigator.clipboard.writeText(c.body||'');toast('Texto copiado')}catch(err){}$('#sheet').classList.remove('on')};
     $('#cmx-rep').onclick=async()=>{$('#sheet').classList.remove('on');try{await sb('rpc/report_comment',{method:'POST',body:{cid:id,dev:devId()}});toast('Gracias, revisaremos ese comentario')}catch(err){toast(err.message)}}}};
+paintAccount();if(SESS)setTimeout(loadProfile,2500);
 </script>
 </body>
 </html>

@@ -1259,8 +1259,8 @@ const ROWS=[
   {t:'Animes en Latino',k:'lat'},
   {t:'Recién agregados',k:'cat',pg:2,order:'latest_added'},
   {t:'Más para descubrir',k:'cat',pg:4},
-  {t:'Acción',k:'cat',pg:1,genre:'accion'},{t:'Romance',k:'cat',pg:1,genre:'romance'},
-  {t:'Comedia',k:'cat',pg:1,genre:'comedia'},{t:'Fantasía',k:'cat',pg:1,genre:'fantasia'}];
+  {t:'Acción',k:'cat',pg:1,genre:'accion',order:'latest_released'},{t:'Romance',k:'cat',pg:1,genre:'romance',order:'latest_released'},
+  {t:'Comedia',k:'cat',pg:1,genre:'comedia',order:'latest_released'},{t:'Fantasía',k:'cat',pg:1,genre:'fantasia',order:'latest_released'}];
 const FEATURED=[];
 async function featured(){const out=[];for(const f of FEATURED){try{const r=await SRC.search(f,true);const hit=r.find(a=>clean(a.title)===clean(f))||r.find(a=>sameTitle(a.title,f));if(hit)out.push(hit)}catch(e){}}return out}
 async function mostViewed(sigs){
@@ -1316,7 +1316,10 @@ async function loadHome(){
         ad.forEach(a=>{if(!u.has(a.url)){u.add(a.url);list.push(a)}});
         if(list.length<10)(await SRC.catalog('animeav1',1).catch(()=>({results:[]}))).results.forEach(a=>{if(!u.has(a.url)){u.add(a.url);list.push(a)}});
         list=list.slice(0,30)}
-      else list=(await SRC.catalog('animeav1',r.pg,r.genre||'',r.order||'')).results;
+      else{list=(await SRC.catalog('animeav1',r.pg,r.genre||'',r.order||'')).results;
+        /* géneros: lo más reciente primero (si la fuente no ordena, se ordena aquí por año) */
+        if(r.genre){if(!list.length&&r.order)list=(await SRC.catalog('animeav1',r.pg,r.genre,'')).results;
+          list=list.map((a,i)=>({a,i,y:+(a.year||0)})).sort((x,y)=>(y.y-x.y)||(x.i-y.i)).map(x=>x.a)}}
       seenAll.push(...list);
       if(r.hero){const f=await feat;list=[...f,...list.filter(a=>!f.some(x=>x.url===a.url))]}
       if(show(i,list)&&r.hero&&!heroDone&&list.some(a=>a.image)){heroDone=true;buildHero(list)}
@@ -1389,7 +1392,7 @@ async function exploreLoad(reset){
   if(E.busy||!E.more)return;E.busy=true;const my=E.seq;
   try{
     if(E.lat){await latBatch(my,reset);return}
-    const r=await SRC.catalog(E.prov,E.page,E.genre,E.order);if(my!==E.seq)return;
+    const r=await SRC.catalog(E.prov,E.page,E.genre,E.order||(E.prov==='animeav1'?'latest_released':''));if(my!==E.seq)return;
     if(reset)$('#e-grid').innerHTML='';
     if(!r.results.length&&reset)$('#e-grid').innerHTML=`<div style="grid-column:1/-1">${empty('Nada por aquí','Este proveedor no devolvió resultados para ese filtro.')}</div>`;
     else{$('#e-grid').insertAdjacentHTML('beforeend',r.results.map(a=>card(a)).join(''));scheduleLat()}
@@ -1411,7 +1414,7 @@ async function latBatch(my,reset){
     while(my===E.seq&&E.more&&added<GOAL&&pages<12){
       $('#e-sent').textContent=`Buscando en la página ${E.page}…`;
       const pgs=[E.page,E.page+1];E.page+=2;pages+=2;
-      const res=await Promise.all(pgs.map(pg=>SRC.catalog(E.prov,pg,E.genre,E.order).catch(()=>({results:[],hasMore:false}))));
+      const res=await Promise.all(pgs.map(pg=>SRC.catalog(E.prov,pg,E.genre,E.order||(E.prov==='animeav1'?'latest_released':'')).catch(()=>({results:[],hasMore:false}))));
       if(my!==E.seq)return;
       const items=res.flatMap(r=>r.results).filter(a=>!E.latShown.has(a.url));
       E.more=res[res.length-1].hasMore&&res[res.length-1].results.length>0;

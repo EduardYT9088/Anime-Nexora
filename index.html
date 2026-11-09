@@ -292,7 +292,7 @@ h2.sec span{font-size:12px;color:var(--mu);font-weight:600}
 .pmid button svg{width:34px;height:34px}
 .pmid button.big svg{width:52px;height:52px}
 input[type=range].seek{-webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent;outline:0;display:block}
-input[type=range].seek::-webkit-slider-runnable-track{height:4px;border-radius:9px;background:linear-gradient(90deg,var(--ac2) var(--p,0%),rgba(255,255,255,.28) var(--p,0%))}
+input[type=range].seek::-webkit-slider-runnable-track{height:4px;border-radius:9px;background:linear-gradient(90deg,var(--ac2) var(--p,0%),rgba(255,255,255,.62) var(--p,0%),rgba(255,255,255,.62) var(--b,0%),rgba(255,255,255,.22) var(--b,0%))}
 input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;margin-top:-5px;border-radius:50%;background:var(--ac2)}
 .tm{display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:#e9e7ff;font-variant-numeric:tabular-nums;margin-top:-2px}
 .pacts{display:flex;justify-content:space-around;align-items:center;margin-top:6px}
@@ -1771,7 +1771,7 @@ async function attach(url,type,tk){
     const w=l.find(x=>!SRC.canResolve(x));if(w){toast('El video directo falló, usando reproductor web');P.idx=l.indexOf(w);useFrame(w,tk)}else playerError('No se pudo reproducir el video.')};
   V.onerror=()=>fail('video '+(V.error?'código '+V.error.code:'con error'));
   if(type==='hls'&&window.Hls&&Hls.isSupported()){
-    const h=new Hls({maxBufferLength:60,maxMaxBufferLength:120,backBufferLength:90,maxBufferHole:1,startFragPrefetch:true,enableWorker:true,fragLoadingMaxRetry:4,manifestLoadingMaxRetry:3});P.hls=h;h.loadSource(url);h.attachMedia(V);
+    const h=new Hls({maxBufferLength:90,maxMaxBufferLength:150,maxBufferSize:120*1000*1000,backBufferLength:90,maxBufferHole:1,startFragPrefetch:true,enableWorker:true,fragLoadingMaxRetry:4,manifestLoadingMaxRetry:3});P.hls=h;h.loadSource(url);h.attachMedia(V);
     h.on(Hls.Events.MANIFEST_PARSED,()=>{V.playbackRate=P.speed;V.play().catch(()=>{})});
     h.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal){if(d.type===Hls.ErrorTypes.NETWORK_ERROR&&!P._retry){P._retry=1;h.startLoad()}else{P._retry=0;fail('HLS '+(d.details||d.type))}}});
   }else{V.src=url;V.play().catch(()=>{})}
@@ -1815,7 +1815,10 @@ function saveProg(force){
   store.set('nx_hist',hist);if(typeof syncMark==='function'){delete histDel[D.url];syncMark('hist',D.url)}
 }
 /* eventos de video */
-function setSeek(c,d){const p=d?c/d*1000:0;const s=$('#p-seek');s.value=p;s.style.setProperty('--p',(p/10)+'%');$('#p-cur').textContent=fmt(c);$('#p-dur').textContent=fmt(d)}
+function setSeek(c,d){const p=d?c/d*1000:0;const s=$('#p-seek');s.value=p;s.style.setProperty('--p',(p/10)+'%');$('#p-cur').textContent=fmt(c);$('#p-dur').textContent=fmt(d);paintBuf()}
+/* cuánto video ya está cargado por delante (se pinta en blanco en la barra) */
+function bufEnd(t){const b=V.buffered;for(let i=0;i<b.length;i++)if(t>=b.start(i)-0.5&&t<=b.end(i)+0.5)return b.end(i);return t}
+function paintBuf(){const d=V.duration;if(!isFinite(d)||!d)return;$('#p-seek').style.setProperty('--b',Math.min(100,bufEnd(V.currentTime)/d*100)+'%')}
 let dragging=false;
 V.addEventListener('timeupdate',()=>{if(!dragging)setSeek(V.currentTime,V.duration);saveProg(false);checkEnding()});
 /* Opening y ending exactos de cada episodio (AniSkip, base de datos comunitaria y gratuita).
@@ -1850,14 +1853,21 @@ V.addEventListener('playing',()=>{loader(false);paintPP()});
 V.addEventListener('waiting',()=>{if(P.mode==='video')loader(true,'Cargando…')});
 V.addEventListener('canplay',()=>{if(P.mode==='video')loader(false)});
 V.addEventListener('play',paintPP);V.addEventListener('pause',paintPP);
+V.addEventListener('progress',paintBuf);
+/* en pausa se carga más por delante; al reproducir vuelve a lo normal */
+const BUF_PLAY=90,BUF_PAUSE=240;
+V.addEventListener('pause',()=>{if(P.hls){P.hls.config.maxBufferLength=BUF_PAUSE;P.hls.config.maxMaxBufferLength=BUF_PAUSE+60;try{P.hls.startLoad(-1)}catch(e){}}});
+V.addEventListener('play',()=>{if(P.hls){P.hls.config.maxBufferLength=BUF_PLAY;P.hls.config.maxMaxBufferLength=BUF_PLAY+60}});
 V.addEventListener('ended',()=>{saveProg(true);onEnded()});
 function paintPP(){$('#p-pp').innerHTML=`<svg class="i"><use href="#i-${V.paused?'play':'pause'}"/></svg>`}
 const stop=f=>e=>{e.stopPropagation();f(e);showCtl()};
 $('#p-pp').onclick=stop(()=>{V.paused?V.play():V.pause()});
 /* varios toques seguidos se juntan en un solo salto (menos esperas al cargar) */
-let seekT=null,seekTo=null;
-const seekBy=s=>{const d=V.duration||0;seekTo=Math.max(0,Math.min(d?d-0.5:1e9,(seekTo??V.currentTime)+s));
-  setSeek(seekTo,d);clearTimeout(seekT);seekT=setTimeout(()=>{const t=seekTo;seekTo=null;if(t!=null)V.currentTime=t},280)};
+let seekT=null,seekTo=null,seekWin=0;
+const seekBy=s=>{const d=V.duration||0,now=Date.now();const clamp=x=>Math.max(0,Math.min(d?d-0.5:1e9,x));
+  if(now>seekWin&&seekTo==null){const t=clamp(V.currentTime+s);V.currentTime=t;setSeek(t,d);seekWin=now+450;return}
+  seekWin=now+450;seekTo=clamp((seekTo??V.currentTime)+s);setSeek(seekTo,d);clearTimeout(seekT);
+  seekT=setTimeout(()=>{const t=seekTo;seekTo=null;if(t!=null)V.currentTime=t},220)};
 $('#p-rew').onclick=stop(()=>seekBy(-10));
 $('#p-fwd').onclick=stop(()=>seekBy(10));
 $('#p-op').onclick=stop(()=>{seekBy(85);toast('Intro saltada (+85 s)')});

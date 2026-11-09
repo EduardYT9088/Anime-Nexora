@@ -452,6 +452,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 .setrow{transition:background .15s}
 .kbd .setrow:focus,.kbd .setrow:focus-visible{outline:3px solid var(--ac2);outline-offset:-3px;border-radius:18px;background:rgba(34,211,238,.08)}
 .kbd .setrow select{pointer-events:none}
+.kbd #sheet-box input:focus,.kbd #sheet-box textarea:focus{outline:3px solid var(--ac2);outline-offset:2px}
 /* ===== Ajustes ===== */
 .setwrap{padding-bottom:6px}
 .shero{margin:0 16px 14px;padding:16px;border-radius:22px;display:flex;align-items:center;flex-wrap:wrap;gap:14px;
@@ -707,6 +708,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
         <h4>AVISOS</h4>
         <div class="set"><span class="sic"><svg class="i"><use href="#i-bell"/></svg></span><div class="l"><b>Episodios de Mi lista</b><small>Aviso cuando sale un capítulo de un anime que guardaste</small></div><label class="sw"><input type="checkbox" id="s-ntf"><span></span></label></div>
         <div class="set"><span class="sic"><svg class="i"><use href="#i-spark"/></svg></span><div class="l"><b>Todos los estrenos</b><small>Aviso cuando sale cualquier episodio nuevo en la app</small></div><label class="sw"><input type="checkbox" id="s-nall"><span></span></label></div>
+        <button class="set act" id="s-nbg"><span class="sic"><svg class="i"><use href="#i-bell"/></svg></span><div class="l"><b>Avisos con la app cerrada</b><small>Permite que la app revise estrenos en segundo plano (batería sin restricciones e inicio automático)</small></div><span class="chev"></span></button>
         <button class="set act" id="s-ntest"><span class="sic"><svg class="i"><use href="#i-bell"/></svg></span><div class="l"><b>Probar notificación</b><small>Envía un aviso de prueba</small></div><span class="chev"></span></button>
       </div>
       <div class="group">
@@ -1254,11 +1256,11 @@ const ROWS=[
   {t:'Tendencias',k:'cat',pg:1,hero:true},
   {t:'Animes más vistos',k:'top'},
   {t:'Animes en Latino',k:'lat'},
-  {t:'Recién agregados',k:'cat',pg:1,order:'latest_added'},
+  {t:'Recién agregados',k:'cat',pg:2,order:'latest_added'},
   {t:'Más para descubrir',k:'cat',pg:4},
   {t:'Acción',k:'cat',pg:1,genre:'accion'},{t:'Romance',k:'cat',pg:1,genre:'romance'},
   {t:'Comedia',k:'cat',pg:1,genre:'comedia'},{t:'Fantasía',k:'cat',pg:1,genre:'fantasia'}];
-const FEATURED=['One Piece'];
+const FEATURED=[];
 async function featured(){const out=[];for(const f of FEATURED){try{const r=await SRC.search(f,true);const hit=r.find(a=>clean(a.title)===clean(f))||r.find(a=>sameTitle(a.title,f));if(hit)out.push(hit)}catch(e){}}return out}
 async function mostViewed(sigs){
   for(const o of['popular','views','most_viewed','score']){try{const r=await SRC.catalog('animeav1',1,'',o);const sig=r.results.slice(0,4).map(a=>a.url).join('|');if(r.results.length&&!sigs.has(sig))return r.results}catch(e){}}
@@ -1273,7 +1275,7 @@ async function mostViewed(sigs){
 let DUB=store.get('nx_dub',{});const dubQ=[];let dubBusy=0,dubSaveT;
 function langsOf(u){const v=DUB[u];if(!v)return null;const age=Date.now()-v.t;return age<(v.d?7:1)*864e5?v:null}
 function checkEp(u,front){return new Promise(res=>{const c=langsOf(u);if(c)return res(c);const job={u,res};front?dubQ.unshift(job):dubQ.push(job);pumpDub()})}
-function pumpDub(){while(dubBusy<(cfg.lite?2:3)&&dubQ.length){const j=dubQ.shift();const c=langsOf(j.u);if(c){j.res(c);continue}dubBusy++;
+function pumpDub(){while(dubBusy<(latMax||(cfg.lite?2:3))&&dubQ.length){const j=dubQ.shift();const c=langsOf(j.u);if(c){j.res(c);continue}dubBusy++;
   (async()=>{let v=null;try{const s=await SRC.episode(j.u);v={s:(s.sub||[]).length?1:0,d:(s.dub||[]).length?1:0,t:Date.now()};DUB[j.u]=v;
     clearTimeout(dubSaveT);dubSaveT=setTimeout(()=>{const k=Object.keys(DUB);if(k.length>3000)k.slice(0,1000).forEach(x=>delete DUB[x]);store.set('nx_dub',DUB)},1500)}catch(e){}
     j.res(v);dubBusy--;pumpDub()})()}}
@@ -1305,11 +1307,16 @@ async function loadHome(){
       if(r.k==='eps'){show(i,await AVP.latest(),true);return}
       if(r.k==='top'){const l=await mostViewed(sigs);seenAll.push(...l);show(i,l);return}
       if(r.k==='lat')return;
-      let list=(await SRC.catalog('animeav1',r.pg,r.genre||'',r.order||'')).results;
-      if(r.hero){const more=await Promise.all([2,3].map(pg=>SRC.catalog('animeav1',pg).then(x=>x.results).catch(()=>[])));
-        const u=new Set(list.map(a=>a.url));more.flat().forEach(a=>{if(!u.has(a.url)){u.add(a.url);list.push(a)}})}
+      let list;
+      if(r.hero){/* Tendencias = lo que está saliendo ahora: animes con episodios nuevos + lo último agregado */
+        const [lt,ad]=await Promise.all([AVP.latest().catch(()=>[]),SRC.catalog('animeav1',1,'','latest_added').then(x=>x.results).catch(()=>[])]);
+        const u=new Set();list=[];
+        lt.forEach(a=>{if(u.has(a.url))return;u.add(a.url);const{epNum,epImg,...it}=a;list.push(it)});
+        ad.forEach(a=>{if(!u.has(a.url)){u.add(a.url);list.push(a)}});
+        if(list.length<10)(await SRC.catalog('animeav1',1).catch(()=>({results:[]}))).results.forEach(a=>{if(!u.has(a.url)){u.add(a.url);list.push(a)}});
+        list=list.slice(0,30)}
+      else list=(await SRC.catalog('animeav1',r.pg,r.genre||'',r.order||'')).results;
       seenAll.push(...list);
-      if(r.hero)sigs.add(list.slice(0,4).map(a=>a.url).join('|'));
       if(r.hero){const f=await feat;list=[...f,...list.filter(a=>!f.some(x=>x.url===a.url))]}
       if(show(i,list)&&r.hero&&!heroDone&&list.some(a=>a.image)){heroDone=true;buildHero(list)}
     }catch(e){fails.push(e.message);hideRow(i)}
@@ -1375,25 +1382,46 @@ function initExplore(){
   if(exObs)exObs.disconnect();exObs=new IntersectionObserver(en=>{if(en[0].isIntersecting&&tab==='explore')exploreLoad(false)},{root:$('#v-explore'),rootMargin:'400px'});exObs.observe($('#e-sent'));
   exploreLoad(true);
 }
+const sentVisible=()=>{const el=$('#e-sent'),v=$('#v-explore');if(!el||!v||tab!=='explore')return false;const r=el.getBoundingClientRect();return r.top<innerHeight+400&&r.bottom>-50};
 async function exploreLoad(reset){
-  if(reset){E.page=1;E.more=true;E.busy=false;E.seq++;$('#e-grid').innerHTML=skCards(12);$('#e-sent').textContent='';$('#e-note').classList.add('hide')}
+  if(reset){E.page=1;E.more=true;E.busy=false;E.seq++;E.latShown=new Set();$('#e-grid').innerHTML=skCards(12);$('#e-sent').textContent='';$('#e-note').classList.add('hide')}
   if(E.busy||!E.more)return;E.busy=true;const my=E.seq;
   try{
+    if(E.lat){await latBatch(my,reset);return}
     const r=await SRC.catalog(E.prov,E.page,E.genre,E.order);if(my!==E.seq)return;
     if(reset)$('#e-grid').innerHTML='';
     if(!r.results.length&&reset)$('#e-grid').innerHTML=`<div style="grid-column:1/-1">${empty('Nada por aquí','Este proveedor no devolvió resultados para ese filtro.')}</div>`;
-    else if(!E.lat){$('#e-grid').insertAdjacentHTML('beforeend',r.results.map(a=>card(a)).join(''));scheduleLat()}
-    else{$('#e-note').classList.remove('hide');$('#e-note').textContent='Buscando animes con doblaje latino…';
-      $('#e-grid').insertAdjacentHTML('beforeend',r.results.map(a=>card(a).replace('class="card"','class="card pend"')).join(''));
-      const cards=[...$$('#e-grid .card.pend')].slice(-r.results.length);
-      Promise.all(r.results.map((a,k)=>hasLatino(a).then(ok=>{if(my!==E.seq)return;const c=cards[k];if(!c)return;if(ok&&$$('#e-grid .card:not(.pend)').some(x=>x.dataset.url===a.url))ok=false;if(ok){c.classList.remove('pend');c.innerHTML=card(a).replace(/^<button[^>]*>|<\/button>$/g,'')}else c.remove()}))).then(()=>{
-        if(my!==E.seq)return;const vis=$$('#e-grid .card:not(.pend)').length;
-        $('#e-note').textContent=vis?`${vis} ${vis===1?'anime':'animes'} con doblaje latino`:'Aún no hay animes en latino en estas páginas…';
-        if(E.more&&vis<12&&E.page<=10)exploreLoad(false);
-        else if(!vis)$('#e-grid').innerHTML=`<div style="grid-column:1/-1">${empty('Sin animes en latino','No se encontró doblaje latino en este filtro. Prueba otro género.')}</div>`})}
+    else{$('#e-grid').insertAdjacentHTML('beforeend',r.results.map(a=>card(a)).join(''));scheduleLat()}
     E.more=r.hasMore&&r.results.length>0;E.page++;$('#e-sent').textContent=E.more?'Cargando más…':'';
-  }catch(e){if(my===E.seq){if(reset)$('#e-grid').innerHTML=`<div style="grid-column:1/-1">${empty('No se pudo cargar',esc(e.message))}</div>`;E.more=false}}
-  finally{E.busy=false}
+  }catch(e){if(my===E.seq){if(reset)$('#e-grid').innerHTML=`<div style="grid-column:1/-1">${empty('No se pudo cargar',esc(e.message))}</div>`;E.more=false;$('#e-sent').textContent=''}}
+  finally{if(my===E.seq){E.busy=false;/* si el final sigue en pantalla, carga la siguiente página sin esperar */if(E.more&&!E.lat&&sentVisible())setTimeout(()=>exploreLoad(false),120)}}
+}
+/* Solo Latino: revisa varias páginas a la vez y muestra cada anime apenas se confirma */
+let latMax=0;
+async function latBatch(my,reset){
+  const GOAL=18;let added=0,pages=0;
+  $('#e-note').classList.remove('hide');$('#e-note').textContent='Buscando animes con doblaje latino…';
+  if(reset)$('#e-grid').innerHTML='';
+  const addCard=a=>{if(my!==E.seq||E.latShown.has(a.url))return;E.latShown.add(a.url);added++;
+    const sk=$('#e-grid .sk-lat');if(sk)sk.remove();$('#e-grid').insertAdjacentHTML('beforeend',card(a));
+    $('#e-note').textContent=`${E.latShown.size} ${E.latShown.size===1?'anime':'animes'} con doblaje latino`};
+  latMax=8;pumpDub();
+  try{
+    while(my===E.seq&&E.more&&added<GOAL&&pages<12){
+      $('#e-sent').textContent=`Buscando en la página ${E.page}…`;
+      const pgs=[E.page,E.page+1];E.page+=2;pages+=2;
+      const res=await Promise.all(pgs.map(pg=>SRC.catalog(E.prov,pg,E.genre,E.order).catch(()=>({results:[],hasMore:false}))));
+      if(my!==E.seq)return;
+      const items=res.flatMap(r=>r.results).filter(a=>!E.latShown.has(a.url));
+      E.more=res[res.length-1].hasMore&&res[res.length-1].results.length>0;
+      await Promise.all(items.map(a=>(a.dub?Promise.resolve(true):hasLatino(a)).then(ok=>{if(ok)addCard(a)})));
+    }
+  }finally{latMax=0}
+  if(my!==E.seq)return;
+  const n=E.latShown.size;
+  if(!n&&!E.more)$('#e-grid').innerHTML=`<div style="grid-column:1/-1">${empty('Sin animes en latino','No se encontró doblaje latino en este filtro. Prueba otro género.')}</div>`;
+  $('#e-sent').innerHTML=E.more?'<button class="btn" id="e-moreb">Buscar más en latino</button>':(n?'No hay más animes en latino aquí':'');
+  const mb=$('#e-moreb');if(mb)mb.onclick=()=>exploreLoad(false);
 }
 
 /* ================= MI LISTA ================= */
@@ -1789,8 +1817,8 @@ sk.addEventListener('input',()=>{dragging=true;const d=V.duration||0;setSeek(sk.
 sk.addEventListener('change',()=>{V.currentTime=sk.value/1000*(V.duration||0);dragging=false});
 $('#p-back').onclick=e=>{e.stopPropagation();closeTop()};
 /* bloqueo de pantalla */
-function setLock(on){P.locked=on;$('#lockui').classList.toggle('on',on);if(on){$('#ctl').classList.add('off');flashLock()}else showCtl()}
-let lockT;function flashLock(){const m=$('#lockmsg'),b=$('#p-unlock');m.style.display='flex';b.style.opacity=1;clearTimeout(lockT);lockT=setTimeout(()=>{m.style.display='none';b.style.opacity=.35},2200)}
+function setLock(on){P.locked=on;P.okN=0;$('#lockui').classList.toggle('on',on);if(on){try{document.activeElement&&document.activeElement.blur()}catch(e){}$('#ctl').classList.add('off');flashLock()}else{showCtl(true);if(KBD)setTimeout(()=>{const b=$('#p-pp');if(b)b.focus()},60)}}
+let lockT;function flashLock(){const m=$('#lockmsg'),b=$('#p-unlock');if(m.lastChild&&m.lastChild.nodeType===3)m.lastChild.textContent=KBD?'Pulsa OK 3 veces para desbloquear':'Mantén presionado para desbloquear';m.style.display='flex';b.style.opacity=1;clearTimeout(lockT);lockT=setTimeout(()=>{m.style.display='none';b.style.opacity=.35},2200)}
 $('#p-lock').onclick=e=>{e.stopPropagation();setLock(true)};
 $('#lockui').addEventListener('click',e=>{e.stopPropagation();flashLock()});
 let holdT;const ub=$('#p-unlock');
@@ -1820,7 +1848,9 @@ function goEp(d){const n=epAt(d);if(!n)return toast(d>0?'Es el último episodio'
 $('#p-nx').onclick=stop(()=>goEp(1));$('#p-prev').onclick=stop(()=>goEp(-1));
 $('#n-go').onclick=()=>{cancelNext();goEp(1)};$('#n-cancel').onclick=cancelNext;
 /* hojas */
-function sheet(html){const b=$('#sheet-box');b.innerHTML=html;b.scrollTop=0;b.tabIndex=0;$('#sheet').classList.add('on')}
+function sheet(html){const b=$('#sheet-box');b.innerHTML=html;b.scrollTop=0;
+  /* con campos para escribir, el control va campo por campo; si es solo texto, ↑ ↓ desplazan */
+  if(b.querySelector('input:not([type=file]),textarea,select'))b.removeAttribute('tabindex');else b.tabIndex=0;$('#sheet').classList.add('on')}
 $('#sheet').onclick=e=>{if(e.target.id==='sheet')$('#sheet').classList.remove('on')};
 function psheet(html){$('#psheet-box').innerHTML=html;$('#psheet').classList.add('on')}
 $('#psheet').onclick=e=>{e.stopPropagation();if(e.target.id==='psheet')$('#psheet').classList.remove('on')};
@@ -1964,7 +1994,11 @@ document.addEventListener('keydown',e=>{
     }
     if(dir||k==='Enter')showCtl();
   }
-  if(P.locked&&inPlayer){if(k==='Enter'||dir){e.preventDefault();flashLock()}return}
+  if(P.locked&&inPlayer){if(k==='Enter'||k===' '||k==='NumpadEnter'||dir){e.preventDefault();
+      if(k!=='ArrowUp'&&k!=='ArrowDown'&&k!=='ArrowLeft'&&k!=='ArrowRight'){
+        const now=Date.now();P.okN=(now-(P.okT||0)<1600)?(P.okN||0)+1:1;P.okT=now;
+        if(e.repeat||P.okN>=3){P.okN=0;setLock(false);toast('Pantalla desbloqueada');return}}
+      flashLock()}return}
   if(k==='Escape'||k==='GoBack'||k==='BrowserBack'||(k==='Backspace'&&!/INPUT|TEXTAREA/.test(document.activeElement?.tagName))){
     e.preventDefault();
     if($('#imgv').classList.contains('on')){$('#imgv').classList.remove('on');return}
@@ -2101,6 +2135,18 @@ $('#ib-clear').onclick=()=>{INBOX=[];saveInbox();renderInbox()};
 $('#ib-list').onclick=e=>{const b=e.target.closest('[data-k]');if(!b)return;const n=INBOX[+b.dataset.k];n.read=true;saveInbox();renderInbox();if(n.url)openDetail(n.url,{openEps:true})};
 paintBell();
 $('#s-ntf').checked=cfg.notify;$('#s-nall').checked=cfg.notifyAll!==false;
+$('#s-nbg').onclick=()=>{
+  sheet(`<h3>Avisos con la app cerrada</h3><p class="lg-why">Android, sobre todo en Xiaomi, Redmi, POCO, Samsung y Huawei, apaga las apps cerradas para ahorrar batería. Así la app no puede revisar los estrenos.</p>
+    <p class="lg-why"><b>1.</b> Batería → <b>Sin restricciones</b><br><b>2.</b> <b>Inicio automático</b> → activado (Xiaomi / Redmi / POCO)<br><b>3.</b> Notificaciones → todas activadas, también en la pantalla de bloqueo</p>
+    <div style="display:grid;gap:10px;margin-top:16px"><button class="btn pri" id="nb-bat" style="width:100%">Abrir ajustes de batería</button><button class="btn" id="nb-auto" style="width:100%;background:var(--s2)">Abrir inicio automático</button><button class="btn" id="nb-app" style="width:100%;background:var(--s2)">Abrir ajustes de la app</button><button class="btn" id="nb-test" style="width:100%;background:var(--s2)">Probar: aviso en 30 segundos</button></div>
+    <p class="lg-note" style="margin-top:12px">Para probar: toca "Probar", cierra la app y espera. Si no llega, falta alguno de los permisos de arriba.</p>`);
+  const call=(m,fb)=>{if(NXS&&NXS[m])NXS[m]().then(r=>{if(r&&r.ok===false)toast(fb)}).catch(()=>toast(fb));else toast(fb)};
+  $('#nb-bat').onclick=()=>call('openBattery','Búscalo en Ajustes del teléfono → Apps → Animes Nexora Plus → Batería');
+  $('#nb-auto').onclick=()=>call('openAutostart','Búscalo en Ajustes → Apps → Permisos → Inicio automático');
+  $('#nb-app').onclick=()=>call('openAppSettings','Búscalo en Ajustes del teléfono → Apps → Animes Nexora Plus');
+  $('#nb-test').onclick=async()=>{if(!LN)return toast('Las notificaciones solo funcionan en la app instalada');await askNotify();
+    try{await LN.schedule({notifications:[{id:Math.floor(Math.random()*1e6)+5000,title:'Prueba de Nexora',body:'¡Los avisos con la app cerrada funcionan! 🎉',schedule:{at:new Date(Date.now()+30000),allowWhileIdle:true},smallIcon:'ic_stat_nexora'}]});toast('Listo: cierra la app y espera 30 segundos')}catch(e){toast('No se pudo programar el aviso')}};
+};
 $('#s-nall').onchange=e=>{cfg.notifyAll=e.target.checked;saveCfg();syncNotify();if(cfg.notifyAll){askNotify();checkLatest(true)}};
 setTimeout(()=>{syncNotify();checkFavs(true);setTimeout(()=>checkLatest(true),4000)},8000);
 
@@ -2210,12 +2256,12 @@ function askProfile(why){
     el.outerHTML=src?`<span class="cm-av xl" id="pf-av"><img src="${esc(src)}" alt=""></span>`:`<span class="cm-av xl" id="pf-av" style="background:${CM_COLORS[color%CM_COLORS.length]}">${esc(($('#pf-name')?.value||p.name||'?').charAt(0))}</span>`;
     $('#pf-rm').classList.toggle('hide',!src)};
   sheet(`<h3>Tu perfil</h3>${why?`<p class="lg-why">${esc(why)}</p>`:''}
-    <div class="pf-top"><span class="cm-av xl" id="pf-av"></span><div class="pf-ph"><label class="btn" for="pf-file">Cambiar foto</label><input type="file" id="pf-file" accept="image/*" class="hide"><button class="btn" id="pf-rm">Quitar foto</button></div></div>
+    <div class="pf-top"><span class="cm-av xl" id="pf-av"></span><div class="pf-ph"><button class="btn" id="pf-pick">Cambiar foto</button><input type="file" id="pf-file" accept="image/*" class="hide"><button class="btn" id="pf-rm">Quitar foto</button></div></div>
     <label class="lg-l" for="pf-name">Nombre</label><input class="nick-in" id="pf-name" maxlength="20" value="${esc(p.name)}" placeholder="Tu nombre">
     <p class="lg-note">Los nombres "Nexora" y "Tokio" están reservados.</p>
     <label class="lg-l">Color (si no tienes foto)</label><div class="nick-col" id="pf-col">${CM_COLORS.map((c,i)=>`<button data-i="${i}" class="${i===color?'on':''}" style="background:${c}" aria-label="Color ${i+1}"></button>`).join('')}</div>
     <button class="btn pri" id="pf-ok" style="width:100%;margin-top:18px">Guardar perfil</button>`);
-  prev();$('#pf-name').oninput=prev;
+  prev();$('#pf-name').oninput=prev;$('#pf-pick').onclick=()=>$('#pf-file').click();
   $('#pf-col').onclick=e=>{const b=e.target.closest('[data-i]');if(!b)return;color=+b.dataset.i;$$('#pf-col button').forEach(x=>x.classList.toggle('on',x===b));prev()};
   $('#pf-file').onchange=async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{blob=await shrink(f,320,true);prev()}catch(err){toast(err.message)}};
   $('#pf-rm').onclick=()=>{blob=null;photo=null;prev()};
@@ -2259,10 +2305,10 @@ function cmItem(c,kid){const liked=(store.get('nx_liked',[])||[]).includes(c.id)
     <div class="ca"><button data-act="like" class="${liked?'on':''}">${IC_LIKE}<span>${c.likes?c.likes:'Me gusta'}</span></button><button data-act="reply">${IC_REP}<span>Responder</span></button></div>
   </div></div>`}
 function cmRender(){
-  $('#cm-n').textContent=CM.total?`· ${CM.total}`:'';
+  $('#cm-n').textContent=CM.total?`· ${CM.total}${CM.hasMore&&!CM.exact?'+':''}`:'';
   if(!CM.items.length){$('#cm-list').innerHTML=`<div class="cm-empty">Aún no hay comentarios. ¡Sé el primero en opinar sobre este anime!</div>`;$('#cm-more').classList.add('hide');return}
   $('#cm-list').innerHTML=CM.items.map(c=>cmItem(c)+((CM.kids[c.id]||[]).length?`<div class="cm-kids">${CM.kids[c.id].map(k=>cmItem(k,true)).join('')}</div>`:'')).join('');
-  $('#cm-more').classList.toggle('hide',CM.off>=CM.total)}
+  $('#cm-more').classList.toggle('hide',!CM.hasMore)}
 function cmReset(){
   const box=$('#d-cm');if(!CM_ON){box.classList.add('hide');return}
   box.classList.remove('hide');CM.key=String(D.url||'').replace(/^https?:\/\/[^/]+\//,'');CM.off=0;CM.items=[];CM.kids={};CM.total=0;CM.loaded=false;cmSetReply(null);cmClearImg();
@@ -2274,8 +2320,8 @@ async function cmLoad(more){
     const ord=CM.sort==='top'?'likes.desc,created_at.desc':'created_at.desc';
     const r=await sb(`comments?select=${CM_SEL}&anime=eq.${encodeURIComponent(key)}&parent_id=is.null&order=${ord}&limit=15&offset=${more?CM.off:0}`,{prefer:'count=exact'});
     if(key!==CM.key)return;const rows=Array.isArray(r.data)?r.data:[];
-    const tot=+((r.headers['content-range']||'').split('/')[1]||0);
-    if(!more){CM.items=[];CM.kids={};CM.off=0}CM.items.push(...rows);CM.off+=rows.length;CM.total=tot||CM.items.length;
+    const tot=+((r.headers['content-range']||'').split('/')[1]||0);CM.exact=!!tot;
+    if(!more){CM.items=[];CM.kids={};CM.off=0}CM.items.push(...rows);CM.off+=rows.length;CM.total=tot||CM.items.length;CM.hasMore=tot?CM.off<tot:rows.length>=15;
     if(rows.length){const k=await sb(`comments?select=${CM_SEL}&parent_id=in.(${rows.map(x=>x.id).join(',')})&order=created_at.asc&limit=300`);
       if(key!==CM.key)return;(Array.isArray(k.data)?k.data:[]).forEach(x=>(CM.kids[x.parent_id]=CM.kids[x.parent_id]||[]).push(x))}
     CM.loaded=true;cmRender();

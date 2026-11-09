@@ -581,6 +581,9 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 .imgv{position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.94);display:none;align-items:center;justify-content:center;padding:20px}
 .imgv.on{display:flex}.imgv img{max-width:100%;max-height:100%;border-radius:10px}
 .ac-t .ac-sync{color:var(--ac2);font-size:11.5px}
+#skipop{position:absolute;right:18px;bottom:96px;z-index:5;display:none;align-items:center;gap:8px;height:44px;padding:0 18px;border-radius:14px;background:rgba(15,13,30,.88);border:1px solid rgba(255,255,255,.22);color:#fff;font-weight:800;font-size:14px}
+#skipop.on{display:flex}#skipop .i{width:18px;height:18px}
+.kbd #skipop:focus,.kbd #skipop:focus-visible{outline:3px solid var(--ac2);outline-offset:2px}
 </style>
 </head>
 <body>
@@ -888,6 +891,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
     </div>
   </div>
   <div id="lockui"><button id="p-unlock" aria-label="Desbloquear"><svg class="i"><use href="#i-lock"/></svg></button><div id="lockmsg"><svg class="i" style="width:16px;height:16px"><use href="#i-lock"/></svg>Mantén presionado para desbloquear</div></div>
+  <button id="skipop" class="skipop" aria-label="Saltar intro"><svg class="i"><use href="#i-next"/></svg>Saltar intro</button>
   <div id="next"><p>Siguiente episodio en <b id="n-sec">8</b> s</p>
     <div class="btnrow"><button class="btn sec" id="n-cancel">Cancelar</button><button class="btn pri" id="n-go">Ir ahora</button></div></div>
   <div class="sheet" id="psheet"><div class="box" id="psheet-box"></div></div>
@@ -1699,7 +1703,7 @@ function paintEpLabel(){$('#p-sub').textContent=`Episodio ${P.ep.number}`;const 
   $('#p-prev').classList.toggle('dim',i<=0);$('#p-nx').classList.toggle('dim',i<0||i>=P.list.length-1)}
 function paintLang(){$('#p-langn').textContent=FLAG[P.lang]+' '+LNAME[P.lang];$('#p-langf').textContent=FLAG[P.lang];$('#p-langb').textContent=LSHORT[P.lang]}
 async function loadEpisode(){
-  const tk=++P.tk;P.diag=[];P.endShown=false;P.endCancel=false;resetMedia();paintLang();loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
+  const tk=++P.tk;P.diag=[];P.endShown=false;P.endCancel=false;loadSkips(tk);resetMedia();paintLang();loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
   try{
     const s=await SRC.episode(P.ep.url);if(tk!==P.tk)return;
     P.servers={sub:s.sub||[],dub:s.dub||[]};DUB[P.ep.url]={s:P.servers.sub.length?1:0,d:P.servers.dub.length?1:0,t:Date.now()};store.set('nx_dub',DUB);
@@ -1798,11 +1802,32 @@ function saveProg(force){
 function setSeek(c,d){const p=d?c/d*1000:0;const s=$('#p-seek');s.value=p;s.style.setProperty('--p',(p/10)+'%');$('#p-cur').textContent=fmt(c);$('#p-dur').textContent=fmt(d)}
 let dragging=false;
 V.addEventListener('timeupdate',()=>{if(!dragging)setSeek(V.currentTime,V.duration);saveProg(false);checkEnding()});
-/* créditos finales: a 90 s del final sale "Siguiente episodio" con su cuenta regresiva */
+/* Opening y ending exactos de cada episodio (AniSkip, base de datos comunitaria y gratuita).
+   Sin datos: "Siguiente episodio" sale a 90 s del final. */
+let malCache=store.get('nx_mal',{});
+async function malIdFor(url,title){
+  if(malCache[url]!==undefined)return malCache[url];
+  try{const j=await postJSON(AL,{query:'query($s:String){Media(search:$s,type:ANIME){idMal}}',variables:{s:title}});
+    const id=(j&&j.data&&j.data.Media&&j.data.Media.idMal)||null;malCache[url]=id;store.set('nx_mal',malCache);return id}catch(e){return null}}
+async function loadSkips(tk){
+  P.skips=null;$('#skipop').classList.remove('on');
+  const title=(D.data&&D.data.title)||'';if(!title||!P.ep)return;
+  const id=await malIdFor(D.url,title);if(!id||tk!==P.tk)return;
+  try{const{data}=await get(`https://api.aniskip.com/v2/skip-times/${id}/${P.ep.number}?types[]=op&types[]=ed&types[]=mixed-op&types[]=mixed-ed&episodeLength=0`,{Accept:'application/json'});
+    const j=JSON.parse(data);if(tk!==P.tk||!j||!j.found||!Array.isArray(j.results))return;const sk={};
+    j.results.forEach(r=>{const k=String(r.skipType||'').replace('mixed-','');if((k==='op'||k==='ed')&&!sk[k]&&r.interval)sk[k]={a:+r.interval.startTime,b:+r.interval.endTime,len:+r.episodeLength||0}});
+    P.skips=sk}catch(e){}}
+/* el ending se mide desde el final (las copias del video pueden durar unos segundos más o menos) */
+function edStart(d){const e=P.skips&&P.skips.ed;if(!e)return null;const fromEnd=e.len?e.len-e.a:null;const st=fromEnd!=null&&fromEnd>0?d-fromEnd:e.a;return st>60&&st<d-5?st:null}
 function checkEnding(){
-  const d=V.duration,t=V.currentTime;if(!isFinite(d)||d<300||P.mode!=='video')return;const left=d-t;
-  if(left>95){if(P.endShown){P.endShown=false;if(!P.endCancel)cancelNext()}P.endCancel=false;return}
-  if(left<=90&&!P.endShown&&!P.endCancel&&!V.paused&&epAt(1)){P.endShown=true;onEnded(true)}}
+  const d=V.duration,t=V.currentTime;if(!isFinite(d)||P.mode!=='video')return;
+  /* Saltar intro */
+  const op=P.skips&&P.skips.op;$('#skipop').classList.toggle('on',!!(op&&t>=op.a&&t<op.b-2&&!P.locked));
+  if(d<300)return;const left=d-t;const es=edStart(d);
+  const inEnd=es!=null?t>=es-0.5:left<=90;
+  if(!inEnd){if(P.endShown){P.endShown=false;if(!P.endCancel)cancelNext()}P.endCancel=false;return}
+  if(!P.endShown&&!P.endCancel&&!V.paused&&left>3&&epAt(1)){P.endShown=true;onEnded(true)}}
+$('#skipop').onclick=e=>{e.stopPropagation();const op=P.skips&&P.skips.op;if(op){V.currentTime=Math.min(op.b,(V.duration||op.b)-1);$('#skipop').classList.remove('on');toast('Intro saltada')}};
 V.addEventListener('loadedmetadata',()=>{V.playbackRate=P.speed;if(P.resume>5&&P.resume<V.duration-15){V.currentTime=P.resume}P.resume=0});
 V.addEventListener('playing',()=>{loader(false);paintPP()});
 V.addEventListener('waiting',()=>{if(P.mode==='video')loader(true,'Cargando…')});

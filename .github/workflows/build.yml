@@ -430,6 +430,8 @@ jobs:
           mkdir -p ../../out
           AS=$(ls -d $ANDROID_HOME/build-tools/*/ | sort -V | tail -1)apksigner; "$AS" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | grep -i "DN\|SHA-256" || true
           cp app/build/outputs/apk/debug/app-debug.apk "../../out/AnimesNexoraPlus-v${APP_VERSION}.apk"
+          # Copia con nombre fijo: el enlace .../releases/latest/download/AnimesNexoraPlus.apk siempre da la última versión oficial
+          cp app/build/outputs/apk/debug/app-debug.apk "../../out/AnimesNexoraPlus.apk"
 
       - name: Subir APK (Artifacts)
         uses: actions/upload-artifact@v4

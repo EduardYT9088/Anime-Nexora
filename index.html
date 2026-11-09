@@ -692,13 +692,13 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
     <div class="scol">
       <div class="group">
         <h4>REPRODUCTOR</h4>
-        <div class="set"><span class="sic"><svg class="i"><use href="#i-next"/></svg></span><div class="l"><b>Siguiente episodio automático</b><small>Al terminar, pasa al siguiente</small></div><label class="sw"><input type="checkbox" id="s-auto"><span></span></label></div>
+        <div class="set hide nx-fixed"><span class="sic"><svg class="i"><use href="#i-next"/></svg></span><div class="l"><b>Siguiente episodio automático</b><small>Al terminar, pasa al siguiente</small></div><label class="sw"><input type="checkbox" id="s-auto"><span></span></label></div>
         <div class="set"><span class="sic"><svg class="i"><use href="#i-skip"/></svg></span><div class="l"><b>Cuenta regresiva</b><small>Segundos antes de saltar</small></div>
           <select id="s-cd"><option>3</option><option>5</option><option>8</option><option>10</option><option>15</option></select></div>
         <div class="set"><span class="sic"><svg class="i"><use href="#i-mic"/></svg></span><div class="l"><b>Idioma preferido</b><small>Se usa si el episodio lo tiene</small></div>
           <select id="s-lang"><option value="dub">Latino</option><option value="sub">Subtitulado</option></select></div>
         <div class="set"><span class="sic"><svg class="i"><use href="#i-cc"/></svg></span><div class="l"><b>Preguntar idioma</b><small>Latino o Subtitulado la primera vez que ves un anime</small></div><label class="sw"><input type="checkbox" id="s-ask"><span></span></label></div>
-        <div class="set"><span class="sic"><svg class="i"><use href="#i-rot"/></svg></span><div class="l"><b>Girar a horizontal</b><small>Al abrir un episodio</small></div><label class="sw"><input type="checkbox" id="s-rot"><span></span></label></div>
+        <div class="set hide nx-fixed"><span class="sic"><svg class="i"><use href="#i-rot"/></svg></span><div class="l"><b>Girar a horizontal</b><small>Al abrir un episodio</small></div><label class="sw"><input type="checkbox" id="s-rot"><span></span></label></div>
       </div>
       <div class="group">
         <h4>APARIENCIA</h4>
@@ -712,7 +712,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
         <button class="set act" id="s-nbg"><span class="sic"><svg class="i"><use href="#i-bell"/></svg></span><div class="l"><b>Avisos con la app cerrada</b><small>Permite que la app revise estrenos en segundo plano (batería sin restricciones e inicio automático)</small></div><span class="chev"></span></button>
         <button class="set act" id="s-ntest"><span class="sic"><svg class="i"><use href="#i-bell"/></svg></span><div class="l"><b>Probar notificación</b><small>Envía un aviso de prueba</small></div><span class="chev"></span></button>
       </div>
-      <div class="group">
+      <div class="group hide nx-fixed">
         <h4>CONEXIÓN</h4>
         <div class="set"><span class="sic"><svg class="i"><use href="#i-globe"/></svg></span><div class="l"><b>Fuente del catálogo</b><small>Directo no necesita servidor</small></div>
           <select id="s-src"><option value="direct">Directo</option><option value="api">Mi servidor</option></select></div>
@@ -913,6 +913,8 @@ if(!cfg.v101){cfg.lang='dub';cfg.askLang=true;cfg.esTitles=true;cfg.v101=true;tr
 let favs=store.get('nx_fav',[]), hist=store.get('nx_hist',{});
 const cache=new Map();
 const saveCfg=()=>store.set('nx_cfg',cfg);
+/* siempre: siguiente episodio automático, horizontal al reproducir y fuente directa */
+cfg.autoNext=true;cfg.rot=true;cfg.source='direct';cfg.proxy=false;
 const useApi=()=>cfg.source==='api'&&!!cfg.apiBase.trim();
 const base=()=>{let b=cfg.apiBase.trim().replace(/\/+$/,'');if(b&&!/^https?:\/\//i.test(b))b='http://'+b;return b};
 
@@ -1697,7 +1699,7 @@ function paintEpLabel(){$('#p-sub').textContent=`Episodio ${P.ep.number}`;const 
   $('#p-prev').classList.toggle('dim',i<=0);$('#p-nx').classList.toggle('dim',i<0||i>=P.list.length-1)}
 function paintLang(){$('#p-langn').textContent=FLAG[P.lang]+' '+LNAME[P.lang];$('#p-langf').textContent=FLAG[P.lang];$('#p-langb').textContent=LSHORT[P.lang]}
 async function loadEpisode(){
-  const tk=++P.tk;P.diag=[];resetMedia();paintLang();loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
+  const tk=++P.tk;P.diag=[];P.endShown=false;P.endCancel=false;resetMedia();paintLang();loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
   try{
     const s=await SRC.episode(P.ep.url);if(tk!==P.tk)return;
     P.servers={sub:s.sub||[],dub:s.dub||[]};DUB[P.ep.url]={s:P.servers.sub.length?1:0,d:P.servers.dub.length?1:0,t:Date.now()};store.set('nx_dub',DUB);
@@ -1795,7 +1797,12 @@ function saveProg(force){
 /* eventos de video */
 function setSeek(c,d){const p=d?c/d*1000:0;const s=$('#p-seek');s.value=p;s.style.setProperty('--p',(p/10)+'%');$('#p-cur').textContent=fmt(c);$('#p-dur').textContent=fmt(d)}
 let dragging=false;
-V.addEventListener('timeupdate',()=>{if(!dragging)setSeek(V.currentTime,V.duration);saveProg(false)});
+V.addEventListener('timeupdate',()=>{if(!dragging)setSeek(V.currentTime,V.duration);saveProg(false);checkEnding()});
+/* créditos finales: a 90 s del final sale "Siguiente episodio" con su cuenta regresiva */
+function checkEnding(){
+  const d=V.duration,t=V.currentTime;if(!isFinite(d)||d<300||P.mode!=='video')return;const left=d-t;
+  if(left>95){if(P.endShown){P.endShown=false;if(!P.endCancel)cancelNext()}P.endCancel=false;return}
+  if(left<=90&&!P.endShown&&!P.endCancel&&!V.paused&&epAt(1)){P.endShown=true;onEnded(true)}}
 V.addEventListener('loadedmetadata',()=>{V.playbackRate=P.speed;if(P.resume>5&&P.resume<V.duration-15){V.currentTime=P.resume}P.resume=0});
 V.addEventListener('playing',()=>{loader(false);paintPP()});
 V.addEventListener('waiting',()=>{if(P.mode==='video')loader(true,'Cargando…')});
@@ -1841,16 +1848,17 @@ $('#player').addEventListener('click',e=>{
 function fx(f){const el=$('#seekfx');el.style.display='grid';el.style.left=f<0?'12%':'';el.style.right=f>0?'12%':'';el.textContent=(f>0?'+':'')+f+'s';setTimeout(()=>el.style.display='none',550)}
 /* episodio anterior / siguiente */
 function epAt(d){const i=P.list.findIndex(x=>String(x.number)===String(P.ep.number));return i>=0?P.list[i+d]:null}
-function onEnded(){
+function onEnded(early){
   const n=epAt(1);if(!n){$('#ctl').classList.remove('off');return}
-  if(!cfg.autoNext){showCtl(true);return}
+  if(!early&&$('#next').classList.contains('on'))return;
   let s=cfg.countdown;$('#n-sec').textContent=s;$('#next').classList.add('on');
-  clearInterval(P.cdT);P.cdT=setInterval(()=>{s--;$('#n-sec').textContent=s;if(s<=0){cancelNext();goEp(1)}},1000)
+  clearInterval(P.cdT);P.cdT=setInterval(()=>{s--;$('#n-sec').textContent=s;if(s<=0){cancelNext();goEp(1)}},1000);
+  if(KBD)setTimeout(()=>{const b=$('#n-go');if(b)b.focus()},60)
 }
-function cancelNext(){clearInterval(P.cdT);$('#next').classList.remove('on')}
-function goEp(d){const n=epAt(d);if(!n)return toast(d>0?'Es el último episodio':'Es el primer episodio');saveProg(true);P.ep=n;P.resume=0;paintEpLabel();cancelNext();loadEpisode()}
+function cancelNext(byUser){clearInterval(P.cdT);$('#next').classList.remove('on');if(byUser===true)P.endCancel=true}
+function goEp(d){const n=epAt(d);if(!n)return toast(d>0?'Es el último episodio':'Es el primer episodio');saveProg(true);P.ep=n;P.resume=0;P.endShown=false;P.endCancel=false;paintEpLabel();cancelNext();loadEpisode()}
 $('#p-nx').onclick=stop(()=>goEp(1));$('#p-prev').onclick=stop(()=>goEp(-1));
-$('#n-go').onclick=()=>{cancelNext();goEp(1)};$('#n-cancel').onclick=cancelNext;
+$('#n-go').onclick=()=>{cancelNext();goEp(1)};$('#n-cancel').onclick=()=>cancelNext(true);
 /* hojas */
 function sheet(html){const b=$('#sheet-box');b.innerHTML=html;b.scrollTop=0;
   /* con campos para escribir, el control va campo por campo; si es solo texto, ↑ ↓ desplazan */

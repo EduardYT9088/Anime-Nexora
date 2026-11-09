@@ -2197,8 +2197,14 @@ async function nameProblem(n){const r=await sb('rpc/nx_name_ok',{method:'POST',b
 async function loadProfile(){if(!SESS)return null;
   try{const r=await sb(`profiles?select=id,name,avatar_url,color,official&id=eq.${SESS.uid}`);PROF=(Array.isArray(r.data)&&r.data[0])||null;store.set('nx_prof',PROF)}catch(e){}
   paintAccount();paintMe();return PROF}
-function signOut(silent){const t=SESS&&SESS.at;if(t)fetch(SB_URL+'/auth/v1/logout',{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+t}}).catch(()=>{});
-  SESS=null;PROF=null;store.set('nx_sess',null);store.set('nx_prof',null);paintAccount();paintMe();if(!silent)toast('Sesión cerrada')}
+async function signOut(silent){
+  /* al cerrar sesión a mano: se sube lo pendiente y el teléfono queda limpio, así otra cuenta empieza con su propia lista */
+  if(!silent){try{clearTimeout(sqT);await syncPush()}catch(e){}}
+  const t=SESS&&SESS.at;if(t)fetch(SB_URL+'/auth/v1/logout',{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+t}}).catch(()=>{});
+  SESS=null;PROF=null;store.set('nx_sess',null);store.set('nx_prof',null);
+  if(!silent){favs=[];hist={};favDel={};histDel={};SQ.clear();['nx_fav','nx_hist','nx_favdel','nx_histdel'].forEach(k=>store.set(k,k==='nx_fav'?[]:{}));
+    try{renderLib();renderContinue();if(D.url&&stack.includes('detail')){paintFav();paintCont()}}catch(e){}try{syncNotify()}catch(e){}}
+  paintAccount();paintMe();if(!silent)toast('Sesión cerrada: tu lista quedó guardada en tu cuenta')}
 function paintAccount(){const el=$('#s-acct');if(!el)return;el.classList.toggle('hide',!CM_ON);if(!CM_ON)return;
   if(!SESS){el.innerHTML=`<div class="ac-row"><span class="cm-av lg me">${IC_USER}</span><div class="ac-t"><b>Tu cuenta</b><small>Inicia sesión para tener foto de perfil, subir fotos y guardar Mi lista y Continuar viendo en tu cuenta.</small></div></div>
     <div class="ac-btns"><button class="btn pri" id="ac-in">Iniciar sesión</button><button class="btn" id="ac-up">Crear cuenta</button></div>`;

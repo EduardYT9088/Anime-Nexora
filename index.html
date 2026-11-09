@@ -580,6 +580,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 .cm-img img{display:block;width:100%;max-height:340px;object-fit:cover}
 .imgv{position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.94);display:none;align-items:center;justify-content:center;padding:20px}
 .imgv.on{display:flex}.imgv img{max-width:100%;max-height:100%;border-radius:10px}
+.ac-t .ac-sync{color:var(--ac2);font-size:11.5px}
 </style>
 </head>
 <body>
@@ -1518,7 +1519,7 @@ async function loadRecs(d,my){
 }
 $('#d-more').onclick=()=>{const o=$('#d-syn').classList.toggle('open');$('#d-more').classList.toggle('up',o)};
 $('#d-back').onclick=()=>closeTop();
-$('#d-fav').onclick=()=>{const c=cache.get(D.url)||{};if(isFav(D.url)){favs=favs.filter(f=>f.url!==D.url);toast('Quitado de Mi lista')}else{favs.unshift({url:D.url,title:D.data?.title||c.title,image:D.data?.image||c.image,type:c.type,id:c.id,last:D.eps.length?Math.max(...D.eps.map(e=>+e.number||0)):0});askNotify();toast('Añadido a Mi lista')}store.set('nx_fav',favs);paintFav();syncNotify()};
+$('#d-fav').onclick=()=>{const c=cache.get(D.url)||{};if(isFav(D.url)){favs=favs.filter(f=>f.url!==D.url);syncMark('fav',D.url,true);toast('Quitado de Mi lista')}else{favs.unshift({url:D.url,title:D.data?.title||c.title,image:D.data?.image||c.image,type:c.type,id:c.id,last:D.eps.length?Math.max(...D.eps.map(e=>+e.number||0)):0,ts:Date.now()});syncMark('fav',D.url);askNotify();toast('Añadido a Mi lista')}store.set('nx_fav',favs);paintFav();syncNotify()};
 
 /* ================= EPISODIOS (pantalla aparte) ================= */
 function openEpisodes(){
@@ -1786,7 +1787,7 @@ function saveProg(force){
   const c=cache.get(D.url)||{};const prev=hist[D.url]||{seen:[]};const seen=new Set(prev.seen||[]);
   if(V.currentTime/V.duration>=.9)seen.add(String(P.ep.number));
   hist[D.url]={url:D.url,title:D.data?.title||c.title,image:D.data?.image||c.image,id:c.id,epNum:P.ep.number,epUrl:P.ep.url,t:V.currentTime,d:V.duration,ts:now,seen:[...seen],lang:P.lang};
-  store.set('nx_hist',hist);
+  store.set('nx_hist',hist);if(typeof syncMark==='function'){delete histDel[D.url];syncMark('hist',D.url)}
 }
 /* eventos de video */
 function setSeek(c,d){const p=d?c/d*1000:0;const s=$('#p-seek');s.value=p;s.style.setProperty('--p',(p/10)+'%');$('#p-cur').textContent=fmt(c);$('#p-dur').textContent=fmt(d)}
@@ -1908,7 +1909,7 @@ $('#s-test').onclick=async()=>{
     if(!cfg.apiBase){toast('Escribe primero la URL de tu servidor');cfg=old;return}}
   try{await selfTest()}finally{cfg=old}
 };
-$('#s-clear').onclick=()=>{if(!confirm('¿Borrar favoritos e historial?'))return;favs=[];hist={};store.set('nx_fav',favs);store.set('nx_hist',hist);toast('Datos borrados');renderLib();renderContinue()};
+$('#s-clear').onclick=()=>{if(!confirm('¿Borrar favoritos e historial?'))return;const fu=favs.map(f=>f.url),hu=Object.keys(hist);favs=[];hist={};fu.forEach(u=>syncMark('fav',u,true));hu.forEach(u=>syncMark('hist',u,true));store.set('nx_fav',favs);store.set('nx_hist',hist);toast('Datos borrados');renderLib();renderContinue()};
 
 /* ================= Arranque ================= */
 const LICENSE_TXT='Licencia Nexora Eduard Gamer\nCopyright (c) 2026 Nexora Eduard Gamer. Todos los derechos reservados.\n\n1. NOMBRE Y LOGOTIPO\n"Nexora", "Animes Nexora Plus" y el logotipo de la N con orejas de gato, corona y órbita pertenecen a Nexora Eduard Gamer. Los personajes que aparecen en el logotipo (Naruto y Sasuke) pertenecen a sus respectivos titulares. Las versiones modificadas que se publiquen deben usar otro nombre y otro logotipo.\n\n2. PROHIBIDO VENDERLA\nNo se permite vender esta app ni presentarla como creación propia.\n\n3. CONTENIDO DE TERCEROS\nNexora no aloja videos ni imágenes. Los títulos, sinopsis, portadas y videos se cargan desde sitios y servicios externos y pertenecen a sus respectivos titulares; esta licencia no los cubre. El usuario es responsable del uso que haga de ese contenido.\n\n4. SIN GARANTÍA\nLa app se entrega "tal cual", sin garantía de ningún tipo. El autor no es responsable de daños derivados de su uso.';
@@ -2199,11 +2200,11 @@ async function loadProfile(){if(!SESS)return null;
 function signOut(silent){const t=SESS&&SESS.at;if(t)fetch(SB_URL+'/auth/v1/logout',{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+t}}).catch(()=>{});
   SESS=null;PROF=null;store.set('nx_sess',null);store.set('nx_prof',null);paintAccount();paintMe();if(!silent)toast('Sesión cerrada')}
 function paintAccount(){const el=$('#s-acct');if(!el)return;el.classList.toggle('hide',!CM_ON);if(!CM_ON)return;
-  if(!SESS){el.innerHTML=`<div class="ac-row"><span class="cm-av lg me">${IC_USER}</span><div class="ac-t"><b>Tu cuenta</b><small>Inicia sesión para tener foto de perfil y subir fotos en los comentarios.</small></div></div>
+  if(!SESS){el.innerHTML=`<div class="ac-row"><span class="cm-av lg me">${IC_USER}</span><div class="ac-t"><b>Tu cuenta</b><small>Inicia sesión para tener foto de perfil, subir fotos y guardar Mi lista y Continuar viendo en tu cuenta.</small></div></div>
     <div class="ac-btns"><button class="btn pri" id="ac-in">Iniciar sesión</button><button class="btn" id="ac-up">Crear cuenta</button></div>`;
     $('#ac-in').onclick=()=>askLogin('in');$('#ac-up').onclick=()=>askLogin('up');return}
   const p=PROF||{name:(SESS.email||'').split('@')[0],color:0};
-  el.innerHTML=`<div class="ac-row">${avHTML(p.name,p.color,p.avatar_url,'lg')}<div class="ac-t"><b>${esc(p.name)}${p.official?IC_OK:''}</b><small>${esc(SESS.email||'')}</small>${PROF?'':'<small style="color:var(--warn)">Falta completar tu perfil</small>'}</div></div>
+  el.innerHTML=`<div class="ac-row">${avHTML(p.name,p.color,p.avatar_url,'lg')}<div class="ac-t"><b>${esc(p.name)}${p.official?IC_OK:''}</b><small>${esc(SESS.email||'')}</small><small class="ac-sync">Mi lista y Continuar viendo se guardan en tu cuenta</small>${PROF?'':'<small style="color:var(--warn)">Falta completar tu perfil</small>'}</div></div>
     <div class="ac-btns"><button class="btn pri" id="ac-ed">Editar perfil</button><button class="btn" id="ac-out">Cerrar sesión</button></div>`;
   $('#ac-ed').onclick=()=>askProfile();$('#ac-out').onclick=()=>signOut()}
 function paintMe(){const m=$('#cm-me');if(!m)return;
@@ -2231,9 +2232,10 @@ function askLogin(mode,why){
         if(!setSess(d))throw new Error('Revisa tu correo para confirmar la cuenta y luego inicia sesión');
         let perr=null;try{await sb('profiles',{method:'POST',prefer:'return=minimal',body:{id:SESS.uid,name,color:Math.floor(Math.random()*CM_COLORS.length)}})}catch(e){perr=e}
         await loadProfile();$('#sheet').classList.remove('on');
-        if(perr||!PROF){askProfile((perr?perr.message+'. ':'')+'Tu cuenta ya está creada: elige otro nombre.')}else toast(`¡Bienvenido, ${name}!`)}
+        if(perr||!PROF){askProfile((perr?perr.message+'. ':'')+'Tu cuenta ya está creada: elige otro nombre.')}else toast(`¡Bienvenido, ${name}!`);syncAll(true)}
       else{setSess(await authPost('token?grant_type=password',{email:mail,password:pass}));await loadProfile();$('#sheet').classList.remove('on');
-        if(PROF)toast(`Hola de nuevo, ${PROF.name}`);else askProfile('Elige tu nombre para terminar tu perfil')}
+        if(PROF)toast(`Hola de nuevo, ${PROF.name}`);else askProfile('Elige tu nombre para terminar tu perfil');
+        syncAll(true).then(n=>{if(n)toast(`Mi lista y Continuar viendo sincronizados (${n})`)})}
       if(CM.key){CM.off=0;CM.loaded=false;cmLoad()}
     }catch(e){toast(e.message);b.disabled=false;b.textContent=up?'Crear cuenta':'Iniciar sesión'}};
   setTimeout(()=>{try{$(up?'#lg-name':'#lg-mail').focus()}catch(e){}},200)}
@@ -2376,6 +2378,48 @@ $('#cm-list').onclick=async e=>{
     $('#cmx-copy').onclick=()=>{try{navigator.clipboard.writeText(c.body||'');toast('Texto copiado')}catch(err){}$('#sheet').classList.remove('on')};
     $('#cmx-rep').onclick=async()=>{$('#sheet').classList.remove('on');try{await sb('rpc/report_comment',{method:'POST',body:{cid:id,dev:devId()}});toast('Gracias, revisaremos ese comentario')}catch(err){toast(err.message)}}}};
 paintAccount();if(SESS)setTimeout(loadProfile,2500);
+
+/* ================= MI LISTA Y CONTINUAR VIENDO EN LA CUENTA ================= */
+let favDel=store.get('nx_favdel',{}),histDel=store.get('nx_histdel',{});
+const SQ=new Map();let sqT=null,syncing=false,lastSync=0;
+function syncMark(kind,url,deleted){
+  if(!url)return;const now=Date.now();
+  if(kind==='fav'){if(deleted)favDel[url]=now;else{delete favDel[url];const f=favs.find(x=>x.url===url);if(f)f.ts=now}store.set('nx_favdel',favDel);store.set('nx_fav',favs)}
+  if(kind==='hist'&&deleted){histDel[url]=now;store.set('nx_histdel',histDel)}
+  if(!CM_ON||!SESS)return;SQ.set(kind+'|'+url,{kind,url});clearTimeout(sqT);sqT=setTimeout(syncPush,kind==='hist'?20000:1500)}
+function localRow(kind,url){
+  if(kind==='fav'){const f=favs.find(x=>x.url===url);return f?{data:f,deleted:false,ts:f.ts||0}:{data:{},deleted:true,ts:favDel[url]||0}}
+  const h=hist[url];return h?{data:h,deleted:false,ts:h.ts||0}:{data:{},deleted:true,ts:histDel[url]||0}}
+async function syncPush(){
+  if(!CM_ON||!SESS||!SQ.size)return;const items=[...SQ.values()];SQ.clear();
+  const rows=items.map(({kind,url})=>{const r=localRow(kind,url);return{user_id:SESS.uid,kind,url,data:r.data,deleted:r.deleted,updated_at:new Date(r.ts||Date.now()).toISOString()}});
+  try{for(let i=0;i<rows.length;i+=100)await sb('user_library?on_conflict=user_id,kind,url',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',body:rows.slice(i,i+100)})}
+  catch(e){items.forEach(it=>SQ.set(it.kind+'|'+it.url,it));clearTimeout(sqT);sqT=setTimeout(syncPush,60000)}}
+async function syncAll(force){
+  if(!CM_ON||!SESS||syncing||(!force&&Date.now()-lastSync<90000))return 0;syncing=true;lastSync=Date.now();let changed=0;
+  try{
+    const r=await sb('user_library?select=kind,url,data,deleted,updated_at&limit=2000');const remote=Array.isArray(r.data)?r.data:[];
+    const inCloud=new Set();
+    for(const x of remote){if(!x||!x.url||(x.kind!=='fav'&&x.kind!=='hist'))continue;const key=x.kind+'|'+x.url;inCloud.add(key);
+      const rt=Date.parse(x.updated_at)||0,lt=localRow(x.kind,x.url).ts;
+      if(rt>lt){changed++;const d=x.data&&typeof x.data==='object'?x.data:{};
+        if(x.kind==='fav'){const old=favs.find(f=>f.url===x.url);favs=favs.filter(f=>f.url!==x.url);
+          if(x.deleted)favDel[x.url]=rt;else{delete favDel[x.url];favs.push({...d,url:x.url,ts:rt,last:Math.max(+d.last||0,+(old&&old.last)||0)})}}
+        else{if(x.deleted){delete hist[x.url];histDel[x.url]=rt}
+          else{const old=hist[x.url];delete histDel[x.url];hist[x.url]={...d,url:x.url,ts:rt,seen:[...new Set([...(old&&old.seen||[]),...(d.seen||[])])]}}}}
+      else if(lt>rt)SQ.set(key,{kind:x.kind,url:x.url})}
+    /* lo que este teléfono tiene y la cuenta aún no */
+    favs.forEach(f=>{if(!inCloud.has('fav|'+f.url)){if(!f.ts)f.ts=Date.now();SQ.set('fav|'+f.url,{kind:'fav',url:f.url})}});
+    Object.keys(hist).sort((a,b)=>(hist[b].ts||0)-(hist[a].ts||0)).slice(0,80).forEach(u=>{if(!inCloud.has('hist|'+u))SQ.set('hist|'+u,{kind:'hist',url:u})});
+    if(changed){favs.sort((a,b)=>(b.ts||0)-(a.ts||0));store.set('nx_fav',favs);store.set('nx_hist',hist);store.set('nx_favdel',favDel);store.set('nx_histdel',histDel);
+      try{renderLib();renderContinue();if(D.url&&stack.includes('detail')){paintFav();paintCont()}}catch(e){}try{syncNotify()}catch(e){}}
+    else store.set('nx_fav',favs);
+    if(SQ.size)await syncPush();
+  }catch(e){}finally{syncing=false}
+  return changed}
+if(App)App.addListener('appStateChange',st=>{if(st.isActive)syncAll();else{clearTimeout(sqT);syncPush()}});
+if(SESS)setTimeout(()=>syncAll(true),3500);
+
 </script>
 </body>
 </html>

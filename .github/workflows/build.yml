@@ -437,17 +437,22 @@ jobs:
           name: AnimesNexoraPlus-APK
           path: out/*.apk
 
+      # Desde main = versión oficial (la app la ofrece como actualización).
+      # Desde otra rama = versión de prueba aparte: la app NO la ofrece a nadie.
       - name: Reemplazar release anterior de la misma versión
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release delete "v${APP_VERSION}" --cleanup-tag -y --repo "${{ github.repository }}" || true
+          TAG: v${{ env.APP_VERSION }}${{ (github.ref_name != 'main' && github.ref_name != 'master') && '-prueba' || '' }}
+        run: gh release delete "$TAG" --cleanup-tag -y --repo "${{ github.repository }}" || true
 
       - name: Publicar en Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.APP_VERSION }}
-          name: Animes Nexora Plus v${{ env.APP_VERSION }}
-          make_latest: true
+          tag_name: v${{ env.APP_VERSION }}${{ (github.ref_name != 'main' && github.ref_name != 'master') && '-prueba' || '' }}
+          name: Animes Nexora Plus v${{ env.APP_VERSION }}${{ (github.ref_name != 'main' && github.ref_name != 'master') && ' (PRUEBA)' || '' }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ github.ref_name != 'main' && github.ref_name != 'master' }}
+          make_latest: ${{ github.ref_name == 'main' || github.ref_name == 'master' }}
           body: |
-            ${{ github.event.head_commit.message || 'Nueva versión de Animes Nexora Plus' }}
+            ${{ (github.ref_name != 'main' && github.ref_name != 'master') && 'Versión de PRUEBA, solo para probar. No es la oficial y la app no la ofrece como actualización.' || (github.event.head_commit.message || 'Nueva versión de Animes Nexora Plus') }}
           files: out/*.apk

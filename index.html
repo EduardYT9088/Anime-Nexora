@@ -1398,11 +1398,13 @@ function initExplore(){
   $('#prov').onclick=e=>{const b=e.target.closest('[data-p]');if(!b)return;E.prov=b.dataset.p;$$('#prov .fc').forEach(x=>x.classList.toggle('on',x===b));exploreLoad(true)};
   $('#genres').onclick=e=>{const b=e.target.closest('[data-g]');if(!b)return;E.genre=b.dataset.g;E.order='';$$('#genres .fc').forEach(x=>x.classList.toggle('on',x===b));exploreLoad(true)};
   $('#langf').onclick=e=>{const b=e.target.closest('[data-lf]');if(!b)return;E.lat=!!b.dataset.lf;$$('#langf .fc').forEach(x=>x.classList.toggle('on',x===b));exploreLoad(true)};
-  if(exObs)exObs.disconnect();exObs=new IntersectionObserver(en=>{if(en[0].isIntersecting&&tab==='explore')exploreLoad(false)},{root:$('#v-explore'),rootMargin:'400px'});exObs.observe($('#e-sent'));
+  if(exObs)exObs.disconnect();exObs=new IntersectionObserver(en=>{if(en[0].isIntersecting&&tab==='explore')exploreLoad(false)},{root:$('#v-explore'),rootMargin:'1400px'});exObs.observe($('#e-sent'));
+  $('#e-grid').addEventListener('focusin',e=>{const c=e.target.closest('.card');if(!c)return;const cs=$$('#e-grid .card');if(cs.indexOf(c)>=cs.length-12)exploreLoad(false)});
   exploreLoad(true);
 }
-const sentVisible=()=>{const el=$('#e-sent'),v=$('#v-explore');if(!el||!v||tab!=='explore')return false;const r=el.getBoundingClientRect();return r.top<innerHeight+400&&r.bottom>-50};
-async function exploreLoad(reset){
+const sentVisible=()=>{const el=$('#e-sent'),v=$('#v-explore');if(!el||!v||tab!=='explore')return false;const r=el.getBoundingClientRect();return r.top<innerHeight*2.5&&r.bottom>-50};
+async function exploreLoad(reset,auto){
+  if(!auto)E.autoN=0;
   if(reset){E.page=1;E.more=true;E.busy=false;E.seq++;E.latShown=new Set();$('#e-grid').innerHTML=skCards(12);$('#e-sent').textContent='';$('#e-note').classList.add('hide')}
   if(E.busy||!E.more)return;E.busy=true;const my=E.seq;
   try{
@@ -1413,24 +1415,24 @@ async function exploreLoad(reset){
     else{$('#e-grid').insertAdjacentHTML('beforeend',r.results.map(a=>card(a)).join(''));scheduleLat()}
     E.more=r.hasMore&&r.results.length>0;E.page++;$('#e-sent').textContent=E.more?'Cargando más…':'';
   }catch(e){if(my===E.seq){if(reset)$('#e-grid').innerHTML=`<div style="grid-column:1/-1">${empty('No se pudo cargar',esc(e.message))}</div>`;E.more=false;$('#e-sent').textContent=''}}
-  finally{if(my===E.seq){E.busy=false;/* si el final sigue en pantalla, carga la siguiente página sin esperar */if(E.more&&!E.lat&&sentVisible())setTimeout(()=>exploreLoad(false),120)}}
+  finally{if(my===E.seq){E.busy=false;/* si el final sigue en pantalla, carga la siguiente página sin esperar */if(E.more&&sentVisible()&&(!E.lat||(E.autoN=(E.autoN||0)+1)<=4))setTimeout(()=>exploreLoad(false,true),E.lat?60:120)}}
 }
 /* Solo Latino: revisa varias páginas a la vez y muestra cada anime apenas se confirma */
 let latMax=0;
 async function latBatch(my,reset){
-  const GOAL=18;let added=0,pages=0;
+  const GOAL=12;let added=0,pages=0;
   $('#e-note').classList.remove('hide');$('#e-note').textContent='Buscando animes con doblaje latino…';
   if(reset)$('#e-grid').innerHTML='';
   const addCard=a=>{if(my!==E.seq||E.latShown.has(a.url))return;E.latShown.add(a.url);added++;
     const sk=$('#e-grid .sk-lat');if(sk)sk.remove();$('#e-grid').insertAdjacentHTML('beforeend',card(a));
     $('#e-note').textContent=`${E.latShown.size} ${E.latShown.size===1?'anime':'animes'} con doblaje latino`};
-  latMax=8;pumpDub();
+  latMax=10;pumpDub();
   let mb=$('#e-moreb');if(!mb){$('#e-sent').innerHTML='<button class="btn" id="e-moreb"></button>';mb=$('#e-moreb');mb.onclick=()=>{if(!E.busy&&!mb.classList.contains('busy'))exploreLoad(false)}}
   mb.classList.add('busy');
   try{
-    while(my===E.seq&&E.more&&added<GOAL&&pages<12){
+    while(my===E.seq&&E.more&&added<GOAL&&pages<15){
       mb.textContent=`Buscando en la página ${E.page}…`;
-      const pgs=[E.page,E.page+1];E.page+=2;pages+=2;
+      const pgs=[E.page,E.page+1,E.page+2];E.page+=3;pages+=3;
       const res=await Promise.all(pgs.map(pg=>SRC.catalog(E.prov,pg,E.genre,E.order||(E.prov==='animeav1'?'latest_released':'')).catch(()=>({results:[],hasMore:false}))));
       if(my!==E.seq)return;
       const items=res.flatMap(r=>r.results).filter(a=>!E.latShown.has(a.url));

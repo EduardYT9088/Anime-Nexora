@@ -10,19 +10,13 @@ jobs:
       - run: |
           set +e; mkdir out; cd out
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
-          g(){ code=$(curl -s -L -m 30 -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o "$1" -w '%{http_code} %{url_effective}' "$2"); echo "$1 -> $code $(wc -c < "$1")"; }
-          g ninja-op.html https://ww4.animeonline.ninja/online/one-piece-070125/
-          g ninja-opn.html https://ww4.animeonline.ninja/online/one-piece-netflix-122823/
-          g ninja-home.html https://ww4.animeonline.ninja/
-          E=$(grep -o 'href="https://ww4.animeonline.ninja/episodio/[^"]*"' ninja-op.html | head -1 | sed 's/href="//;s/"//'); echo "ep=$E"
-          [ -n "$E" ] && g ninja-ep.html "$E"
-          E2=$(grep -o 'href="https://ww4.animeonline.ninja/episodio/[^"]*"' ninja-opn.html | head -1 | sed 's/href="//;s/"//'); echo "ep2=$E2"
-          [ -n "$E2" ] && g ninja-ep2.html "$E2"
-          g ver-home.html https://wwv.veranimes.net/
-          g ver-search.html "https://wwv.veranimes.net/buscar?q=one+piece"
-          g ver-search2.html "https://wwv.veranimes.net/?s=one+piece"
-          grep -o 'href="[^"]*one-piece[^"]*"' ver-home.html ver-search.html ver-search2.html | sort -u | head -20
-          A=$(grep -o 'href="[^"]*one-piece[^"]*"' ver-home.html ver-search.html ver-search2.html | head -1 | sed 's/.*href="//;s/"//'); echo "A=$A"
-          [ -n "$A" ] && g ver-a.html "$A"
+          B=https://ww4.animeonline.ninja
+          for n in 1 1100 1180; do curl -s -L -m 30 -A "$UA" -o ep$n.html -w "ep$n %{http_code} %{size_download}\n" "$B/episodio/one-piece-cap-$n/"; done
+          for n in 1 1100 1180; do echo "== ep$n opciones:"; grep -o "<li id='player-option-[^>]*>.\{0,300\}" ep$n.html | sed 's/<img[^>]*>//g' | head -8; done
+          P=$(grep -o "data-post='[0-9]*'" ep1.html | head -1 | grep -o '[0-9]*'); T=$(grep -o "data-type='[a-z]*'" ep1.html | head -1 | sed "s/.*='//;s/'//"); echo "post=$P type=$T"
+          for nu in 1 2 3 4; do
+            echo "== ajax nume=$nu"; curl -s -m 20 -A "$UA" -X POST -H 'X-Requested-With: XMLHttpRequest' -H "Referer: $B/episodio/one-piece-cap-1/" --data "action=doo_player_ajax&post=$P&nume=$nu&type=$T" -w ' HTTP %{http_code}' "$B/wp-admin/admin-ajax.php" | head -c 400; echo
+            echo "== rest nume=$nu"; curl -s -m 20 -A "$UA" -w ' HTTP %{http_code}' "$B/wp-json/dooplayer/v2/$P/$T/$nu" | head -c 400; echo
+          done
           cd .. && cd out && git init -q && git checkout -q -b diag-datos && git add -A && git -c user.name=diag -c user.email=diag@x commit -q -m datos
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" diag-datos

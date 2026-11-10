@@ -473,6 +473,8 @@ jobs:
           import android.content.Context;
           import android.content.Intent;
           import android.content.SharedPreferences;
+          import android.media.AudioAttributes;
+          import android.net.Uri;
           import android.graphics.Bitmap;
           import android.graphics.BitmapFactory;
           import androidx.annotation.NonNull;
@@ -481,6 +483,7 @@ jobs:
           import androidx.work.Constraints;
           import androidx.work.Data;
           import androidx.work.ExistingPeriodicWorkPolicy;
+          import androidx.work.ExistingWorkPolicy;
           import androidx.work.NetworkType;
           import androidx.work.OneTimeWorkRequest;
           import androidx.work.PeriodicWorkRequest;
@@ -492,6 +495,8 @@ jobs:
           import java.net.HttpURLConnection;
           import java.net.URL;
           import java.util.ArrayList;
+          import java.util.HashMap;
+          import java.util.Map;
           import java.util.HashSet;
           import java.util.LinkedHashSet;
           import java.util.List;
@@ -503,12 +508,14 @@ jobs:
           import org.json.JSONObject;
 
           /**
-           * Revisor nativo de episodios nuevos (Android WorkManager, cada 15 min aunque la app esté cerrada)
+           * Revisor nativo de episodios nuevos (Android WorkManager: estrenos cada ~5 min y Mi lista cada 15 min, aunque la app esté cerrada)
            * y publicador de notificaciones en la barra de estado con su propio canal.
            */
           public class NexoraCheck extends Worker {
               static final String PREFS = "nexora_chk";
-              static final String CH = "nexora_episodios";
+              static final String CH = "nexora_avisos";
+              static final String OLD_CH = "nexora_episodios";
+              static final Object LOCK = new Object();
               static final String SITE = "https://animeav1.com";
               static final String UA = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36";
 
@@ -519,6 +526,18 @@ jobs:
                       Constraints k = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
                       PeriodicWorkRequest r = new PeriodicWorkRequest.Builder(NexoraCheck.class, 15, TimeUnit.MINUTES).setConstraints(k).build();
                       WorkManager.getInstance(c).enqueueUniquePeriodicWork("nexora_check", ExistingPeriodicWorkPolicy.KEEP, r);
+                  } catch (Exception e) { }
+                  fast(c, 1, true);
+              }
+
+              /** Revisión rápida de estrenos: se vuelve a programar sola cada 5 minutos. */
+              public static void fast(Context c, long min, boolean keep) {
+                  try {
+                      Constraints k = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
+                      OneTimeWorkRequest r = new OneTimeWorkRequest.Builder(NexoraCheck.class)
+                          .setInitialDelay(min, TimeUnit.MINUTES).setConstraints(k)
+                          .setInputData(new Data.Builder().putBoolean("fast", true).build()).build();
+                      WorkManager.getInstance(c).enqueueUniqueWork("nexora_fast", keep ? ExistingWorkPolicy.KEEP : ExistingWorkPolicy.APPEND_OR_REPLACE, r);
                   } catch (Exception e) { }
               }
 
@@ -650,15 +669,24 @@ jobs:
                       post(c, t, false);
                       return Result.success();
                   }
-                  SharedPreferences sp = c.getSharedPreferences(PREFS, 0);
+                  boolean fast = getInputData().getBoolean("fast", false);
                   JSONArray news = new JSONArray();
+                  synchronized (LOCK) { scan(c, fast, news); }
+                  if (news.length() > 0) post(c, news, false);
+                  if (fast) fast(c, 5, false); else fast(c, 5, true);
+                  return Result.success();
+              }
+
+              static void scan(Context c, boolean fast, JSONArray news) {
+                  SharedPreferences sp = c.getSharedPreferences(PREFS, 0);
                   try {
                       boolean on = sp.getBoolean("on", true), all = sp.getBoolean("all", true);
                       JSONArray favs = new JSONArray(sp.getString("favs", "[]"));
-                      Set<String> favSlugs = new HashSet<>();
-                      for (int i = 0; i < favs.length(); i++) { String s = slug(favs.getJSONObject(i).optString("url")); if (s != null) favSlugs.add(s); }
-                      if (on) {
-                          boolean changed = false;
+                      Map<String, JSONObject> favBy = new HashMap<>();
+                      for (int i = 0; i < favs.length(); i++) { String s = slug(favs.getJSONObject(i).optString("url")); if (s != null) favBy.put(s, favs.getJSONObject(i)); }
+                      boolean changed = false;
+                      /* páginas de Mi lista: solo en la revisión de 15 min */
+                      if (on && !fast) {
                           for (int i = 0; i < Math.min(25, favs.length()); i++) {
                               JSONObject f = favs.getJSONObject(i); String sl = slug(f.optString("url")); if (sl == null) continue;
                               try {
@@ -668,43 +696,55 @@ jobs:
                                   if (mx > 0 && mx != last) { f.put("last", mx); changed = true; }
                               } catch (Exception e) { }
                           }
-                          if (changed) sp.edit().putString("favs", favs.toString()).apply();
                       }
-                      if (all) {
+                      /* episodios recientes de la página principal: estrenos de toda la app y de Mi lista */
+                      if (on || all) {
                           String h = get(SITE + "/");
                           Matcher m = Pattern.compile("/media/([a-z0-9-]+)/(\\d+)").matcher(h);
                           LinkedHashSet<String> keys = new LinkedHashSet<>();
                           while (m.find()) keys.add(m.group(1) + "#" + m.group(2));
                           if (!keys.isEmpty()) {
                               String raw = sp.getString("seen", null);
-                              LinkedHashSet<String> merged = new LinkedHashSet<>(keys);
-                              if (raw != null) {
-                                  JSONArray sa = new JSONArray(raw); Set<String> seen = new HashSet<>();
-                                  for (int i = 0; i < sa.length(); i++) seen.add(sa.getString(i));
-                                  int cnt = 0;
-                                  for (String k : keys) {
-                                      if (cnt >= 24) break;
-                                      String[] p = k.split("#");
-                                      if (seen.contains(k) || favSlugs.contains(p[0])) continue;
-                                      String[] inf = info(h, p[0]);
-                                      news.put(item(p[0], Integer.parseInt(p[1]), inf[0], SITE + "/media/" + p[0], inf[1])); cnt++;
+                              Set<String> seen = new HashSet<>(); List<String> oldList = new ArrayList<>();
+                              if (raw != null) { JSONArray sa = new JSONArray(raw); for (int i = 0; i < sa.length(); i++) { seen.add(sa.getString(i)); oldList.add(sa.getString(i)); } }
+                              int cnt = 0;
+                              for (String k : keys) {
+                                  String[] p = k.split("#"); int ep = Integer.parseInt(p[1]);
+                                  JSONObject f = favBy.get(p[0]);
+                                  if (f != null) {
+                                      int last = f.optInt("last", 0);
+                                      if (on && last > 0 && ep > last) {
+                                          news.put(item(p[0], ep, f.optString("title", niceSlug(p[0])), f.optString("url"), f.optString("image", "")));
+                                          f.put("last", ep); changed = true;
+                                      }
+                                      continue;
                                   }
-                                  for (int i = 0; i < sa.length() && merged.size() < 300; i++) merged.add(sa.getString(i));
+                                  if (!all || raw == null || seen.contains(k) || cnt >= 24) continue;
+                                  String[] inf = info(h, p[0]);
+                                  news.put(item(p[0], ep, inf[0], SITE + "/media/" + p[0], inf[1])); cnt++;
                               }
+                              LinkedHashSet<String> merged = new LinkedHashSet<>(keys);
+                              for (String o : oldList) { if (merged.size() >= 300) break; merged.add(o); }
                               sp.edit().putString("seen", new JSONArray(new ArrayList<>(merged)).toString()).apply();
                           }
                       }
+                      if (changed) sp.edit().putString("favs", favs.toString()).apply();
                   } catch (Exception e) { }
-                  if (news.length() > 0) post(c, news, false);
-                  return Result.success();
               }
 
               static void ensureChannel(Context c) {
                   NotificationManager nm = c.getSystemService(NotificationManager.class);
-                  if (nm == null || nm.getNotificationChannel(CH) != null) return;
+                  if (nm == null) return;
+                  try { if (nm.getNotificationChannel(OLD_CH) != null) nm.deleteNotificationChannel(OLD_CH); } catch (Exception e) { }
+                  if (nm.getNotificationChannel(CH) != null) return;
                   NotificationChannel ch = new NotificationChannel(CH, "Episodios nuevos", NotificationManager.IMPORTANCE_HIGH);
-                  ch.setDescription("Aviso cuando sale un capítulo nuevo");
+                  ch.setDescription("Aviso con sonido cuando sale un capítulo nuevo");
                   ch.enableLights(true); ch.setLightColor(0xFF8B6BFF); ch.setShowBadge(true);
+                  /* sonido propio de Nexora */
+                  ch.setSound(Uri.parse("android.resource://" + c.getPackageName() + "/" + R.raw.nx_chime),
+                      new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                          .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
+                  ch.enableVibration(true); ch.setVibrationPattern(new long[]{0, 180, 90, 180});
                   nm.createNotificationChannel(ch);
               }
 
@@ -799,6 +839,29 @@ jobs:
           }
           JAVA
           sed -i "s/__PKG__/${APP_ID}/" $JDIR/NexoraCheck.java
+          # sonido propio de las notificaciones (campanita de dos tonos)
+          mkdir -p res/raw
+          python3 - res/raw/nx_chime.wav <<'PY'
+          import math, struct, wave, sys
+          out = sys.argv[1] if len(sys.argv) > 1 else 'nx_chime.wav'
+          sr, dur = 44100, 1.15
+          notes = [(0.00, 1318.51, 0.55), (0.13, 1975.53, 0.75)]   # Mi6 -> Si6, campanita de dos tonos
+          n = int(sr * dur); buf = [0.0] * n
+          for t0, f, amp in notes:
+              s0 = int(t0 * sr)
+              for i in range(n - s0):
+                  t = i / sr
+                  env = min(1.0, t / 0.004) * math.exp(-t / 0.32)
+                  v = math.sin(2*math.pi*f*t) + 0.28*math.sin(2*math.pi*2*f*t)*math.exp(-t/0.12) + 0.08*math.sin(2*math.pi*3.01*f*t)*math.exp(-t/0.06)
+                  buf[s0 + i] += amp * env * v
+          fade = int(0.08 * sr)
+          for i in range(fade): buf[n - fade + i] *= 1 - i / fade
+          peak = max(abs(x) for x in buf) or 1
+          with wave.open(out, 'wb') as w:
+              w.setnchannels(1); w.setsampwidth(2); w.setframerate(sr)
+              w.writeframes(b''.join(struct.pack('<h', int(x / peak * 0.85 * 32767)) for x in buf))
+          print('sonido listo', out)
+          PY
           grep -q "package ${APP_ID};" $JDIR/NexoraCheck.java && echo "Revisor nativo OK" || { echo "No se pudo crear el revisor"; exit 1; }
 
       - name: Firma fija del APK (para poder actualizar sin desinstalar)

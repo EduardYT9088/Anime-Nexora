@@ -2193,12 +2193,15 @@ if(LN){LN.addListener('localNotificationActionPerformed',a=>{const x=a?.notifica
 /* estrenos de toda la app: compara los episodios recientes con los ya vistos */
 let lastLat=0;
 async function checkLatest(force){
-  if(cfg.notifyAll===false||(!force&&Date.now()-lastLat<8*60e3))return;lastLat=Date.now();
+  if((cfg.notifyAll===false&&!cfg.notify)||(!force&&Date.now()-lastLat<50e3))return;lastLat=Date.now();
   let list;try{list=await AVP.latest()}catch(e){return}if(!list||!list.length)return;
   const seen=store.get('nx_lseen',null);const keys=list.map(a=>a.url+'#'+a.epNum);
   if(!seen){store.set('nx_lseen',keys);syncNotify();return}   /* primera vez: solo se guarda */
   const old=new Set(seen),favU=new Set(favs.map(f=>f.url));
-  const news=list.filter(a=>!old.has(a.url+'#'+a.epNum)&&!favU.has(a.url));
+  /* episodio nuevo de un anime de Mi lista que ya salió en recientes */
+  const favNews=[];if(cfg.notify)list.forEach(a=>{const f=favs.find(x=>x.url===a.url);if(f&&f.last&&a.epNum>f.last){f.last=a.epNum;favNews.push({url:f.url,title:esTitle(f),image:f.image,ep:a.epNum})}});
+  if(favNews.length){store.set('nx_fav',favs);favNews.forEach(n=>addInbox(n));postEps(favNews)}
+  const news=cfg.notifyAll===false?[]:list.filter(a=>!old.has(a.url+'#'+a.epNum)&&!favU.has(a.url));
   store.set('nx_lseen',[...new Set([...keys,...seen])].slice(0,150));syncNotify();
   if(!news.length)return;
   news.slice().reverse().forEach(a=>addInbox({url:a.url,title:esTitle(a),image:a.image,ep:a.epNum}));
@@ -2206,6 +2209,8 @@ async function checkLatest(force){
   if(!document.hidden&&!HAS_NN)toast(news.length===1?`Nuevo: ${esTitle(news[0])} · Ep. ${news[0].epNum}`:`${news.length} episodios nuevos · mira la campana 🔔`);
 }
 setInterval(()=>{checkFavs();checkLatest()},10*60e3);
+/* con la app abierta: estrenos cada minuto */
+setInterval(()=>{if(!document.hidden)checkLatest()},60e3);
 async function takeNative(){if(!HAS_NN||!NXS.takeInbox)return;try{const r=await NXS.takeInbox();(r&&r.items||[]).forEach(n=>{if(n&&n.url)addInbox({url:n.url,title:n.title,image:n.image||'',ep:+n.ep||0})})}catch(e){}}
 if(App)App.addListener('appStateChange',st=>{if(st.isActive){takeNative();checkFavs();checkLatest()}});
 if(HAS_NN){setTimeout(takeNative,1500);
@@ -2449,6 +2454,20 @@ async function cmLoad(more){
   }catch(e){if(key===CM.key){$('#cm-list').innerHTML=`<div class="cm-empty">${esc(e.message)}<br><button class="btn" id="cm-retry" style="margin-top:10px">Reintentar</button></div>`;const b=$('#cm-retry');if(b)b.onclick=()=>cmLoad()}}
   finally{CM.busy=false}}
 const cmObs=CM_ON&&'IntersectionObserver' in window?new IntersectionObserver(en=>en.forEach(x=>{if(x.isIntersecting&&!CM.loaded)cmLoad()}),{root:$('#detail'),rootMargin:'400px'}):null;
+/* eliminar: Owner y Admin cualquiera; cada usuario los suyos (el servidor lo vuelve a comprobar) */
+const cmStaff=()=>!!(SESS&&PROF&&(PROF.role==='owner'||PROF.role==='admin'));
+const cmCanDel=c=>!!(SESS&&c&&(cmStaff()||(c.user_id&&c.user_id===SESS.uid)));
+function cmAskDel(c){const nm=c.profile?c.profile.name:c.author,kids=(CM.kids[c.id]||[]).length;
+  sheet(`<h3>¿Eliminar comentario?</h3><p class="lg-why">Se borrará el comentario de <b>${esc(nm)}</b>${kids?` y sus ${kids} respuesta${kids>1?'s':''}`:''} para todos. No se puede deshacer.</p>
+    <div style="display:grid;gap:10px;margin-top:16px"><button class="btn" id="cmd-yes" style="width:100%;background:var(--bad);color:#fff">Sí, eliminar</button><button class="btn" id="cmd-no" style="width:100%;background:var(--s2)">Cancelar</button></div>`);
+  $('#cmd-no').onclick=()=>$('#sheet').classList.remove('on');
+  $('#cmd-yes').onclick=async()=>{const b=$('#cmd-yes');b.disabled=true;b.textContent='Eliminando…';
+    try{const r=await sb('rpc/delete_comment',{method:'POST',body:{cid:c.id}});$('#sheet').classList.remove('on');
+      if(r.data===false)toast('Ese comentario ya no existe');else toast('Comentario eliminado');
+      if(c.parent_id){const k=CM.kids[c.parent_id]||[];CM.kids[c.parent_id]=k.filter(x=>x.id!==c.id)}
+      else{CM.items=CM.items.filter(x=>x.id!==c.id);delete CM.kids[c.id];CM.total=Math.max(0,CM.total-1)}
+      cmRender()}
+    catch(e){b.disabled=false;b.textContent='Sí, eliminar';toast(/delete_comment|function|404|PGRST202/i.test(e.message)?'Falta activar "eliminar comentarios" en el servidor':e.message)}}}
 function cmSetReply(c){CM.rep=c;$('#cm-rep').classList.toggle('hide',!c);if(c){$('#cm-repn').textContent=c.author;$('#cm-send').textContent='Responder'}else $('#cm-send').textContent='Comentar'}
 function cmCount(){const n=$('#cm-txt').value.length;$('#cm-cnt').textContent=n?`${n}/800`:''}
 function cmClearImg(){if(CM.img&&CM.img.url)URL.revokeObjectURL(CM.img.url);CM.img=null;$('#cm-prev').innerHTML='';$('#cm-prev').classList.add('hide');$('#cm-file').value=''}
@@ -2492,10 +2511,12 @@ $('#cm-list').onclick=async e=>{
     try{const r=await sb('rpc/like_comment',{method:'POST',body:{cid:id,dev:devId()}});if(typeof r.data==='number'){c.likes=r.data;b.querySelector('span').textContent=r.data}}catch(err){}return}
   if(b.dataset.act==='more'){const nm=c.profile?c.profile.name:c.author;sheet(`<h3>Comentario de ${esc(nm)}</h3><div style="margin-top:14px;display:grid;gap:10px">
       <button class="btn" id="cmx-copy" style="width:100%;background:var(--s2)">Copiar texto</button>
-      <button class="btn" id="cmx-rep" style="width:100%;background:rgba(255,92,122,.14);color:var(--bad)">Reportar comentario</button></div>
+      ${cmCanDel(c)?`<button class="btn" id="cmx-del" style="width:100%;background:var(--bad);color:#fff">Eliminar comentario</button>`:''}
+      ${SESS&&c.user_id===SESS.uid?'':`<button class="btn" id="cmx-rep" style="width:100%;background:rgba(255,92,122,.14);color:var(--bad)">Reportar comentario</button>`}</div>
       <p style="color:var(--mu);font-size:12px;margin-top:12px">Los comentarios con varios reportes se ocultan automáticamente.</p>`);
     $('#cmx-copy').onclick=()=>{try{navigator.clipboard.writeText(c.body||'');toast('Texto copiado')}catch(err){}$('#sheet').classList.remove('on')};
-    $('#cmx-rep').onclick=async()=>{$('#sheet').classList.remove('on');try{await sb('rpc/report_comment',{method:'POST',body:{cid:id,dev:devId()}});toast('Gracias, revisaremos ese comentario')}catch(err){toast(err.message)}}}};
+    if($('#cmx-del'))$('#cmx-del').onclick=()=>cmAskDel(c);
+    if($('#cmx-rep'))$('#cmx-rep').onclick=async()=>{$('#sheet').classList.remove('on');try{await sb('rpc/report_comment',{method:'POST',body:{cid:id,dev:devId()}});toast('Gracias, revisaremos ese comentario')}catch(err){toast(err.message)}}}};
 paintAccount();if(SESS)setTimeout(async()=>{try{const r=await fetch(SB_URL+'/auth/v1/user',{headers:{apikey:SB_KEY,Authorization:'Bearer '+(await token()||'')}});if(r.status===401||r.status===403)return sessionLost()}catch(e){}loadProfile()},2500);
 
 /* ================= MI LISTA Y CONTINUAR VIENDO EN LA CUENTA ================= */

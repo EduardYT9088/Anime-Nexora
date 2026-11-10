@@ -2260,14 +2260,20 @@ function nxErr(t,def){let m='';try{const j=typeof t==='string'?JSON.parse(t):t;m
   return new Error(def||'No se pudo conectar con el servidor')}
 const keyH=()=>{const h={apikey:SB_KEY};if(/^eyJ/.test(SB_KEY))h.Authorization='Bearer '+SB_KEY;return h};
 function setSess(d){if(!d||!d.access_token)return null;const u=d.user||{};SESS={at:d.access_token,rt:d.refresh_token,exp:Date.now()+((+d.expires_in||3600)-90)*1000,uid:u.id,email:u.email};store.set('nx_sess',SESS);return SESS}
+let refreshing=null;
 async function token(){if(!SESS)return null;if(Date.now()<SESS.exp)return SESS.at;
-  let r;try{r=await fetch(SB_URL+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{...keyH(),'Content-Type':'application/json'},body:JSON.stringify({refresh_token:SESS.rt})})}catch(e){return SESS.at}
-  if(!r.ok){signOut(true);return null}setSess(await r.json());return SESS.at}
+  if(!refreshing)refreshing=(async()=>{let r;
+    try{r=await fetch(SB_URL+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{...keyH(),'Content-Type':'application/json'},body:JSON.stringify({refresh_token:SESS.rt})})}catch(e){return SESS.at}
+    if(!r.ok){sessionLost();return null}setSess(await r.json());return SESS.at})().finally(()=>{setTimeout(()=>refreshing=null,0)});
+  return refreshing}
+/* la sesión se cerró en el servidor (otro dispositivo, contraseña cambiada…): se avisa en vez de seguir como invitado */
+function sessionLost(){if(!SESS)return;const mail=SESS.email;signOut(true);$('#sheet').classList.remove('on');
+  toast('Tu sesión se cerró. Vuelve a iniciar sesión');setTimeout(()=>{askLogin('in','Tu sesión se cerró en este dispositivo. Inicia sesión otra vez para seguir con tu cuenta.');try{if(mail)$('#lg-mail').value=mail}catch(e){}},400)}
 async function sbFetch(path,o={}){
-  const tk=o.anon?null:await token();const h={apikey:SB_KEY,...(o.headers||{})};h.Authorization='Bearer '+(tk||(/^eyJ/.test(SB_KEY)?SB_KEY:''));if(h.Authorization==='Bearer ')delete h.Authorization;
+  const had=!!SESS&&!o.anon;const tk=o.anon?null:await token();if(had&&!tk)throw new Error('Tu sesión se cerró. Vuelve a iniciar sesión');const h={apikey:SB_KEY,...(o.headers||{})};h.Authorization='Bearer '+(tk||(/^eyJ/.test(SB_KEY)?SB_KEY:''));if(h.Authorization==='Bearer ')delete h.Authorization;
   let body=o.body;if(body!==undefined&&!(body instanceof Blob)){h['Content-Type']='application/json';body=JSON.stringify(body)}if(o.prefer)h.Prefer=o.prefer;
   let r;try{r=await fetch(SB_URL+path,{method:o.method||'GET',headers:h,body})}catch(e){throw new Error('Sin conexión con el servidor')}
-  const t=await r.text();if(!r.ok)throw nxErr(t,o.err);
+  const t=await r.text();if(!r.ok){if(r.status===401&&tk&&/JWT|token|session/i.test(t)){sessionLost();throw new Error('Tu sesión se cerró. Vuelve a iniciar sesión')}throw nxErr(t,o.err)}
   const hd={};r.headers.forEach((v,k)=>hd[k.toLowerCase()]=v);let d=null;try{d=t?JSON.parse(t):null}catch(e){d=t}return{data:d,headers:hd}}
 const sb=(p,o)=>sbFetch('/rest/v1/'+p,o);
 async function authPost(path,body){let r;try{r=await fetch(SB_URL+'/auth/v1/'+path,{method:'POST',headers:{...keyH(),'Content-Type':'application/json'},body:JSON.stringify(body)})}catch(e){throw new Error('Sin conexión con el servidor')}
@@ -2280,7 +2286,7 @@ async function loadProfile(){if(!SESS)return null;
 async function signOut(silent){
   /* al cerrar sesión a mano: se sube lo pendiente y el teléfono queda limpio, así otra cuenta empieza con su propia lista */
   if(!silent){try{clearTimeout(sqT);await syncPush()}catch(e){}}
-  const t=SESS&&SESS.at;if(t)fetch(SB_URL+'/auth/v1/logout',{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+t}}).catch(()=>{});
+  const t=SESS&&SESS.at;if(t)fetch(SB_URL+'/auth/v1/logout?scope=local',{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+t}}).catch(()=>{});
   SESS=null;PROF=null;store.set('nx_sess',null);store.set('nx_prof',null);
   if(!silent){favs=[];hist={};favDel={};histDel={};SQ.clear();['nx_fav','nx_hist','nx_favdel','nx_histdel'].forEach(k=>store.set(k,k==='nx_fav'?[]:{}));
     try{renderLib();renderContinue();if(D.url&&stack.includes('detail')){paintFav();paintCont()}}catch(e){}try{syncNotify()}catch(e){}}
@@ -2467,7 +2473,7 @@ $('#cm-list').onclick=async e=>{
       <p style="color:var(--mu);font-size:12px;margin-top:12px">Los comentarios con varios reportes se ocultan automáticamente.</p>`);
     $('#cmx-copy').onclick=()=>{try{navigator.clipboard.writeText(c.body||'');toast('Texto copiado')}catch(err){}$('#sheet').classList.remove('on')};
     $('#cmx-rep').onclick=async()=>{$('#sheet').classList.remove('on');try{await sb('rpc/report_comment',{method:'POST',body:{cid:id,dev:devId()}});toast('Gracias, revisaremos ese comentario')}catch(err){toast(err.message)}}}};
-paintAccount();if(SESS)setTimeout(loadProfile,2500);
+paintAccount();if(SESS)setTimeout(async()=>{try{const r=await fetch(SB_URL+'/auth/v1/user',{headers:{apikey:SB_KEY,Authorization:'Bearer '+(await token()||'')}});if(r.status===401||r.status===403)return sessionLost()}catch(e){}loadProfile()},2500);
 
 /* ================= MI LISTA Y CONTINUAR VIENDO EN LA CUENTA ================= */
 let favDel=store.get('nx_favdel',{}),histDel=store.get('nx_histdel',{});

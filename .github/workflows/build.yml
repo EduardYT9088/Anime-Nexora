@@ -1,6 +1,8 @@
 name: Compilar APK
 on:
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   diag:
     runs-on: ubuntu-latest
@@ -23,5 +25,6 @@ jobs:
           g flv-home2.html https://animeflv.net/
           g jk-home.html https://jkanime.net/
           grep -o 'href="[^"]*psyren[^"]*"' mc-home.html mc-search.html | sort -u | head
-      - uses: actions/upload-artifact@v4
-        with: { name: paginas, path: out }
+      - run: |
+          cd out && git init -q && git checkout -q -b diag-datos && git add -A && git -c user.name=diag -c user.email=diag@x commit -q -m datos
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" diag-datos

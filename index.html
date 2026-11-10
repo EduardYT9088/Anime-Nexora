@@ -1212,12 +1212,13 @@ async function postForm(url,data,headers={}){const h={'User-Agent':(NJW&&NJW.ua)
   if(NXS&&NXS.httpPost){let r;try{r=await NXS.httpPost({url,body,headers:h})}catch(e){throw new Error('La fuente de Latino no responde')}if(r.status>=400)throw new Error('La fuente de Latino respondió '+r.status);return r.data}
   if(NH){let r;try{r=await NH.request({url,method:'POST',headers:h,data:body,responseType:'text',connectTimeout:15000,readTimeout:25000})}catch(e){throw new Error('La fuente de Latino no responde')}return r.data}
   const r=await fetch(url,{method:'POST',body:new URLSearchParams(data)});return r.text()}
-const NJC=store.get('nx_njv',0)<2?{}:store.get('nx_njc',{});store.set('nx_njv',2);
+let NJLAST='';const NJC=store.get('nx_njv',0)<3?{}:store.get('nx_njc',{});store.set('nx_njv',3);
 function njSave(){const k=Object.keys(NJC);if(k.length>30)k.sort((a,b)=>NJC[a].t-NJC[b].t).slice(0,k.length-30).forEach(x=>delete NJC[x]);store.set('nx_njc',NJC)}
 /* lista de episodios de la página: {temporada: [enlaces en orden]} y la lista completa */
 function njEpisodes(html){const out={all:[],by:{}};
-  for(const m of html.matchAll(/<div class='numerando'>\s*(\d+)\s*-\s*([\d.]+)\s*<\/div>\s*<div class='episodiotitle'>\s*<a href='([^']+)'/g)){
-    if(m[2].includes('.'))continue;const se=+m[1],url=m[3];if(!/-cap-\d+\/?$/.test(url))continue;(out.by[se]=out.by[se]||[])[+m[2]-1]=url;out.all.push(url)}
+  /* se lee como página (sirve igual si viene directa o del navegador interno) */
+  parseDoc(html).querySelectorAll('ul.episodios li').forEach(li=>{const m=(li.querySelector('.numerando')?.textContent||'').match(/(\d+)\s*-\s*([\d.]+)/);const url=li.querySelector('.episodiotitle a')?.getAttribute('href')||'';
+    if(!m||m[2].includes('.')||!/-cap-\d+\/?$/.test(url))return;const se=+m[1];(out.by[se]=out.by[se]||[])[+m[2]-1]=url;out.all.push(url)});
   return out}
 /* busca el mismo anime en la fuente de Latino y decide qué episodio corresponde a cada número */
 async function njFind(d,count){
@@ -1228,13 +1229,13 @@ async function njFind(d,count){
   const res=[...parseDoc(data).querySelectorAll('.result-item')].map(r=>{const a=r.querySelector('.title a');return a?{title:a.textContent.trim(),url:a.getAttribute('href')}:null}).filter(r=>r&&/\/online\//.test(r.url));
   const pick=res.find(r=>skel(r.title)===skel(d.title))||res.find(r=>want.includes(skel(r.title)));
   if(!pick)return save({});
-  const page=await getCF(pick.url);const E=njEpisodes(page.data);
+  const page=await getCF(pick.url);const E=njEpisodes(page.data);NJLAST=`${E.all.length} episodios, ${(page.data||'').length} bytes${page.via?', navegador':''}`;
   const si=seasonInfo({title:d.title,type:d.type},base);const sn=si&&si.s<99?si.s:1;const near=n=>Math.abs(n-count)<=3;
   let eps=null;const ss=E.by[sn]||[];
   if(ss.length&&near(ss.filter(Boolean).length))eps=ss;else if(near(E.all.length))eps=E.all;
   return save(eps?{eps,p:pick.url}:{})}
-const NJOPT=/data-type='(\w+)' data-post='(\d+)' data-nume='(\d+)'>[\s\S]*?<span class='title'>([^<]*)<\/span>/g;
-async function njEmbeds(epUrl,pg){const base=new URL(pg.url||epUrl).origin;const opts=[...pg.data.matchAll(NJOPT)].slice(0,4);
+const njOpts=h=>[...parseDoc(h||'').querySelectorAll('li.dooplay_player_option,li[data-post][data-nume]')].map(li=>[null,li.getAttribute('data-type')||'tv',li.getAttribute('data-post'),li.getAttribute('data-nume'),(li.querySelector('.title')?.textContent||'').trim()]).filter(o=>o[2]&&o[3]);
+async function njEmbeds(epUrl,pg){const base=new URL(pg.url||epUrl).origin;const opts=njOpts(pg.data).slice(0,4);
   const emb=t=>{try{const j=typeof t==='string'?JSON.parse(t):t;return(j&&j.embed_url)||''}catch(e){return''}};
   let out=[],via='directo';
   try{out=await Promise.all(opts.map(o=>postForm(base+'/wp-admin/admin-ajax.php',{action:'doo_player_ajax',post:o[2],nume:o[3],type:o[1]},{Referer:epUrl}).then(emb)))}catch(e){out=[]}
@@ -1245,8 +1246,9 @@ async function njEmbeds(epUrl,pg){const base=new URL(pg.url||epUrl).origin;const
 async function njServers(epUrl){const pg=await getCF(epUrl);const base=new URL(pg.url||epUrl).origin;const dub=[];const{list}=await njEmbeds(epUrl,pg);
   for(const o of list){const e=o.url;if(!e)continue;
     if(/latino/i.test(o.title)&&!/multi/i.test(o.title)){dub.push({server:hostOf(e),url:e});continue}
-    try{const ms=(await getCF(e,{Referer:base+'/'})).data;const blk=ms.match(/class="OD OD_LAT[^"]*">([\s\S]*?)<\/div>/);
-      if(blk)for(const m of blk[1].matchAll(/go_to_player\('([^']+)'\)[\s\S]*?<span>([^<]*)<\/span>/g))if(!dub.some(x=>x.url===m[1]))dub.push({server:m[2].trim()||hostOf(m[1]),url:m[1]})}catch(e){}}
+    try{const ms=(await getCF(e,{Referer:base+'/'})).data;
+      parseDoc(ms).querySelectorAll('.OD_LAT li,[class*="OD_LAT"] li').forEach(li=>{const m=(li.getAttribute('onclick')||'').match(/go_to_player\(\s*['"]([^'"]+)['"]/);if(!m||dub.some(x=>x.url===m[1]))return;
+        dub.push({server:(li.querySelector('span')?.textContent||'').trim()||hostOf(m[1]),url:m[1]})})}catch(e){}}
   return dub}
 async function njDub(ep){if(!D.data||!D.eps.length)return[];const f=await njFind(D.data,D.eps.length);if(!f)return[];
   const i=D.eps.findIndex(e=>e.url===ep.url);const n=+ep.number;const u=(f.eps[n-1])||(i>=0?f.eps[i]:null);return u?njServers(u):[]}
@@ -1864,11 +1866,11 @@ async function latTest(ep){const rows=[];const d=D.data||{};
     res=[...parseDoc(h).querySelectorAll('.result-item .title a')].map(a=>a.textContent.trim());if(!res.length)throw new Error('0 resultados · '+h.length+' bytes · '+NJB);
     return{msg:`${r.via?'(navegador interno) ':''}"${base}" → ${res.slice(0,4).join(' | ')}`}});
   if(!s1)return fin();
-  const s2=await step('2. Lista de episodios',async()=>{f=await njFind(d,D.eps.length);if(!f)throw new Error(`No coincide (la app tiene ${D.eps.length} episodios)`);return{msg:`${f.eps.length} episodios en la fuente · ${D.eps.length} en la app`}});
+  const s2=await step('2. Lista de episodios',async()=>{f=await njFind(d,D.eps.length);if(!f)throw new Error(`No coincide (la app tiene ${D.eps.length} episodios; la fuente ${NJLAST})`);return{msg:`${f.eps.length} episodios en la fuente · ${D.eps.length} en la app`}});
   if(!s2)return fin();
   let pg=null;
   const s3=await step('3. Página del episodio',async()=>{eurl=f.eps[+ep.number-1];if(!eurl)throw new Error('No existe el episodio '+ep.number);pg=await getCF(eurl);
-    opts=[...(pg.data||'').matchAll(NJOPT)];if(!opts.length)throw new Error('Sin opciones de video · '+(pg.data||'').length+' bytes');
+    opts=njOpts(pg.data);if(!opts.length)throw new Error('Sin opciones de video · '+(pg.data||'').length+' bytes');
     return{msg:(pg.via?'(navegador interno) ':'')+eurl.split('/').filter(Boolean).pop()+' · '+opts.map(o=>o[4]).join(', ')}});
   if(!s3)return fin();
   const s4=await step('4. Pedir el reproductor',async()=>{const r=await njEmbeds(eurl,pg);const ok=r.list.filter(x=>x.url);if(!ok.length)throw new Error('La página no entregó el reproductor ('+r.via+')');

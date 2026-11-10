@@ -1195,19 +1195,24 @@ function latestAll(){if(LATEST.p&&Date.now()-LATEST.t<45e3)return LATEST.p;LATES
 let NJB='https://ww4.animeonline.ninja';
 /* si la página bloquea la conexión directa (Cloudflare), se abre en un navegador invisible dentro de la app */
 let NJW=null;
-async function getCF(url,headers){let why='';
-  try{const r=await get(url,headers);const h=r.data||'';if(!(h.length<30000&&/just a moment|un momento|cf-chl|challenge-platform|attention required/i.test(h)))return r;why='verificación'}
-  catch(e){if(!/40[1-9]|429|50[0-9]/.test(e.message))throw e;why=(e.message.match(/\d{3}/)||['bloqueo'])[0]}
+const CFBLK=h=>String(h||'').length<30000&&/just a moment|un momento|cf-chl|challenge-platform|attention required/i.test(h);
+let cfToast=0;
+async function getCF(url,headers,js){let why='';
+  if(!js){try{const hh=NJW&&NJW.cookie?{...(headers||{}),Cookie:NJW.cookie,'User-Agent':NJW.ua}:headers;const r=await get(url,hh);if(!CFBLK(r.data))return r;why='verificación'}
+    catch(e){if(!/40[1-9]|429|50[0-9]/.test(e.message))throw e;why=(e.message.match(/\d{3}/)||['bloqueo'])[0]}}
   if(!NXS||!NXS.webGet)throw new Error('Bloqueado por Cloudflare ('+why+')');
-  const w=await NXS.webGet({url,timeout:30000});
-  if(!w||!w.data||/just a moment|un momento|attention required|access denied|error 10\d\d/i.test(w.title||''))throw new Error('Cloudflare bloquea también el navegador: '+((w&&w.title)||'sin respuesta'));
-  NJW={ua:w.ua,cookie:w.cookie||'',via:1};return{data:w.data,url:w.url||url,via:'navegador'}}const NJC=store.get('nx_njv',0)<2?{}:store.get('nx_njc',{});store.set('nx_njv',2);
+  if(Date.now()-cfToast>20000){cfToast=Date.now();toast('Verificando la fuente de Latino…')}
+  const w=await NXS.webGet({url,timeout:90000,quiet:8000,...(js?{js}:{})});
+  if(!w||!w.data||/just a moment|un momento|attention required|access denied|error 10\d\d/i.test(w.title||''))
+    throw new Error(w&&/cancel/.test(w.result||'')?'Verificación cancelada':'No se pudo pasar la verificación de Cloudflare ('+((w&&w.title)||'sin respuesta')+')');
+  NJW={ua:w.ua,cookie:w.cookie||''};return{data:w.data,url:w.url||url,via:'navegador',result:w.result}}
 async function postForm(url,data,headers={}){const h={'User-Agent':(NJW&&NJW.ua)||UA,'X-Requested-With':'XMLHttpRequest','Content-Type':'application/x-www-form-urlencoded; charset=UTF-8',...(NJW&&NJW.cookie?{Cookie:NJW.cookie}:{}),...headers};
   const body=new URLSearchParams(data).toString();
   /* el formulario lo envía Android directo: el plugin web lo mandaba como JSON y la página respondía error */
   if(NXS&&NXS.httpPost){let r;try{r=await NXS.httpPost({url,body,headers:h})}catch(e){throw new Error('La fuente de Latino no responde')}if(r.status>=400)throw new Error('La fuente de Latino respondió '+r.status);return r.data}
   if(NH){let r;try{r=await NH.request({url,method:'POST',headers:h,data:body,responseType:'text',connectTimeout:15000,readTimeout:25000})}catch(e){throw new Error('La fuente de Latino no responde')}return r.data}
   const r=await fetch(url,{method:'POST',body:new URLSearchParams(data)});return r.text()}
+const NJC=store.get('nx_njv',0)<2?{}:store.get('nx_njc',{});store.set('nx_njv',2);
 function njSave(){const k=Object.keys(NJC);if(k.length>30)k.sort((a,b)=>NJC[a].t-NJC[b].t).slice(0,k.length-30).forEach(x=>delete NJC[x]);store.set('nx_njc',NJC)}
 /* lista de episodios de la página: {temporada: [enlaces en orden]} y la lista completa */
 function njEpisodes(html){const out={all:[],by:{}};
@@ -1228,12 +1233,18 @@ async function njFind(d,count){
   let eps=null;const ss=E.by[sn]||[];
   if(ss.length&&near(ss.filter(Boolean).length))eps=ss;else if(near(E.all.length))eps=E.all;
   return save(eps?{eps,p:pick.url}:{})}
-async function njServers(epUrl){const{data,url}=await getCF(epUrl);const base=new URL(url).origin;const dub=[];
-  const opts=[...data.matchAll(/data-type='(\w+)' data-post='(\d+)' data-nume='(\d+)'>[\s\S]*?<span class='title'>([^<]*)<\/span>/g)].slice(0,4);
-  for(const o of opts){let j;try{const r=await postForm(base+'/wp-admin/admin-ajax.php',{action:'doo_player_ajax',post:o[2],nume:o[3],type:o[1]},{Referer:epUrl});j=typeof r==='string'?JSON.parse(r):r}catch(e){continue}
-    if(!j||typeof j!=='object')continue;
-    const e=j&&j.embed_url;if(!e)continue;
-    if(/latino/i.test(o[4])&&!/multi/i.test(o[4])){dub.push({server:hostOf(e),url:e});continue}
+const NJOPT=/data-type='(\w+)' data-post='(\d+)' data-nume='(\d+)'>[\s\S]*?<span class='title'>([^<]*)<\/span>/g;
+async function njEmbeds(epUrl,pg){const base=new URL(pg.url||epUrl).origin;const opts=[...pg.data.matchAll(NJOPT)].slice(0,4);
+  const emb=t=>{try{const j=typeof t==='string'?JSON.parse(t):t;return(j&&j.embed_url)||''}catch(e){return''}};
+  let out=[],via='directo';
+  try{out=await Promise.all(opts.map(o=>postForm(base+'/wp-admin/admin-ajax.php',{action:'doo_player_ajax',post:o[2],nume:o[3],type:o[1]},{Referer:epUrl}).then(emb)))}catch(e){out=[]}
+  if(!out.some(Boolean)&&opts.length&&NXS&&NXS.webGet){via='navegador';
+    const js="window.__nxr=null;Promise.all("+JSON.stringify(opts.map(o=>[o[1],o[2],o[3]]))+".map(function(o){return fetch('/wp-admin/admin-ajax.php',{method:'POST',credentials:'include',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:'action=doo_player_ajax&post='+o[1]+'&nume='+o[2]+'&type='+o[0]}).then(function(r){return r.text()}).catch(function(){return ''})})).then(function(a){window.__nxr=JSON.stringify(a)})";
+    const w=await getCF(epUrl,null,js);let arr=[];try{arr=JSON.parse(w.result||'[]')}catch(e){}out=arr.map(emb)}
+  return{list:opts.map((o,i)=>({title:o[4],url:out[i]||''})),via}}
+async function njServers(epUrl){const pg=await getCF(epUrl);const base=new URL(pg.url||epUrl).origin;const dub=[];const{list}=await njEmbeds(epUrl,pg);
+  for(const o of list){const e=o.url;if(!e)continue;
+    if(/latino/i.test(o.title)&&!/multi/i.test(o.title)){dub.push({server:hostOf(e),url:e});continue}
     try{const ms=(await getCF(e,{Referer:base+'/'})).data;const blk=ms.match(/class="OD OD_LAT[^"]*">([\s\S]*?)<\/div>/);
       if(blk)for(const m of blk[1].matchAll(/go_to_player\('([^']+)'\)[\s\S]*?<span>([^<]*)<\/span>/g))if(!dub.some(x=>x.url===m[1]))dub.push({server:m[2].trim()||hostOf(m[1]),url:m[1]})}catch(e){}}
   return dub}
@@ -1312,14 +1323,18 @@ const DIRECT_PROVS=['animeav1'];
 const SRC={
   async catalog(p,page=1,genre='',order=''){if(useApi()){const j=await api('catalog',{provider:p,page,genre});return{results:j.data?.results||[],hasMore:!!j.data?.hasMore}}
     return AVP.catalog(page,genre,order)},
-  async search(q,noAlias){
+  async search(q,noAlias,onPart){
     const one=t=>useApi()?api('search',{q:t}).then(j=>j.data?.results||[]):AVP.search(t);
-    const [r0,al]=await Promise.all([one(q).then(r=>({r}),e=>({e})),noAlias?[]:aliases(q)]);
-    const top=[],rest=[],seen=new Set();let err=r0.e||null;
-    for(const t of al){try{(await one(t)).forEach(a=>{if(seen.has(a.url))return;seen.add(a.url);(sameTitle(baseTitle(a.title),t)?top:rest).push(a)})}catch(e){err=err||e}}
-    (r0.r||[]).forEach(a=>{if(seen.has(a.url))return;seen.add(a.url);const n=normQ(q);(normQ(a.title).includes(n)||(a.alt||[]).some(x=>normQ(x).includes(n))?top:rest).push(a)});
+    const top=[],rest=[],seen=new Set();let err=null;
+    const push=(list,t,isAlias)=>{const n=normQ(t);(list||[]).forEach(a=>{if(seen.has(a.url))return;seen.add(a.url);
+      const hit=isAlias?sameTitle(baseTitle(a.title),t):(normQ(a.title).includes(n)||(a.alt||[]).some(x=>normQ(x).includes(n)));(hit?top:rest).push(a)})};
+    const emit=()=>{if(onPart)onPart([...top,...rest])};
+    const alP=noAlias?Promise.resolve([]):aliases(q).catch(()=>[]);
+    try{push(await one(q),q,false)}catch(e){err=e}emit();
+    const al=await alP;
+    await Promise.all(al.map(t=>one(t).then(r=>{push(r,t,true);emit()}).catch(e=>{err=err||e})));
     const out=[...top,...rest];
-    if(out.length<4&&!useApi()){const ex=await backupSearch(q).catch(()=>[]);const sk=out.map(a=>skel(a.title));
+    if(out.length<4&&!useApi()){const ex=await Promise.race([backupSearch(al[0]||q).catch(()=>[]),sleep(9000).then(()=>[])]);const sk=out.map(a=>skel(a.title));
       ex.forEach(b=>{const k=skel(b.title);if(sk.some(x=>sameSk(x,k)))return;sk.push(k);out.push(b)})}
     if(!out.length&&err)throw err;return out},
   async info(url){if(useApi()){const j=await api('info',{url});return j.data||{}}return provFor(url).info(url)},
@@ -1515,7 +1530,7 @@ async function runSearch(v){
   v=v.trim();const out=$('#s-res');
   if(v.length<2){out.innerHTML=empty('¿Qué quieres ver hoy?','Escribe el nombre de una serie para buscarla en todos los proveedores.');return}
   const my=++qSeq;out.innerHTML=`<div class="grid">${skCards(9)}</div>`;
-  try{const r=await SRC.search(v);if(my!==qSeq)return;
+  try{const r=await SRC.search(v,false,part=>{if(my!==qSeq||!part.length)return;out.innerHTML=`<div class="grid">${part.map(a=>card(a)).join('')}</div><p class="lg-note" style="text-align:center;margin:14px 0">Buscando más…</p>`;setTimeout(scheduleLat,0)});if(my!==qSeq)return;
     if(r.length)setTimeout(scheduleLat,0);out.innerHTML=r.length?`<div class="grid">${r.map(a=>card(a)).join('')}</div>`:empty('Sin resultados','Prueba con el nombre en español, inglés o japonés.')}
   catch(e){if(my===qSeq)out.innerHTML=empty('No se pudo buscar',esc(e.message))}
 }
@@ -1851,13 +1866,13 @@ async function latTest(ep){const rows=[];const d=D.data||{};
   if(!s1)return fin();
   const s2=await step('2. Lista de episodios',async()=>{f=await njFind(d,D.eps.length);if(!f)throw new Error(`No coincide (la app tiene ${D.eps.length} episodios)`);return{msg:`${f.eps.length} episodios en la fuente · ${D.eps.length} en la app`}});
   if(!s2)return fin();
-  const s3=await step('3. Página del episodio',async()=>{eurl=f.eps[+ep.number-1];if(!eurl)throw new Error('No existe el episodio '+ep.number);const r=await getCF(eurl);page=r.data||'';
-    opts=[...page.matchAll(/data-type='(\w+)' data-post='(\d+)' data-nume='(\d+)'>[\s\S]*?<span class='title'>([^<]*)<\/span>/g)];if(!opts.length)throw new Error('Sin opciones de video · '+page.length+' bytes');
-    return{msg:eurl.split('/').filter(Boolean).pop()+' · '+opts.map(o=>o[4]).join(', ')}});
+  let pg=null;
+  const s3=await step('3. Página del episodio',async()=>{eurl=f.eps[+ep.number-1];if(!eurl)throw new Error('No existe el episodio '+ep.number);pg=await getCF(eurl);
+    opts=[...(pg.data||'').matchAll(NJOPT)];if(!opts.length)throw new Error('Sin opciones de video · '+(pg.data||'').length+' bytes');
+    return{msg:(pg.via?'(navegador interno) ':'')+eurl.split('/').filter(Boolean).pop()+' · '+opts.map(o=>o[4]).join(', ')}});
   if(!s3)return fin();
-  let embed='';
-  const s4=await step('4. Pedir el reproductor',async()=>{const o=opts[0];const r=await postForm(new URL(eurl).origin+'/wp-admin/admin-ajax.php',{action:'doo_player_ajax',post:o[2],nume:o[3],type:o[1]},{Referer:eurl});
-    const txt=typeof r==='string'?r:JSON.stringify(r);let j=null;try{j=typeof r==='string'?JSON.parse(r):r}catch(e){}embed=j&&j.embed_url||'';if(!embed)throw new Error('Respuesta: '+txt.slice(0,120));return{msg:embed}});
+  const s4=await step('4. Pedir el reproductor',async()=>{const r=await njEmbeds(eurl,pg);const ok=r.list.filter(x=>x.url);if(!ok.length)throw new Error('La página no entregó el reproductor ('+r.via+')');
+    return{msg:'('+r.via+') '+ok.map(x=>x.title+': '+x.url).join(' · ')}});
   if(!s4)return fin();
   await step('5. Servidores en Latino',async()=>{const dub=await njServers(eurl);if(!dub.length)throw new Error('El reproductor no tiene Latino en este episodio');
     DUB[ep.url]={s:1,d:1,t:Date.now()};store.set('nx_dub',DUB);if(D.avail)D.avail.dub=true;

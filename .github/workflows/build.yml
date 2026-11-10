@@ -167,6 +167,13 @@ jobs:
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
+          import android.view.Gravity;
+          import android.view.View;
+          import android.view.ViewGroup;
+          import android.widget.Button;
+          import android.widget.FrameLayout;
+          import android.widget.LinearLayout;
+          import android.widget.TextView;
           import org.json.JSONArray;
           import com.getcapacitor.annotation.CapacitorPlugin;
 
@@ -298,44 +305,94 @@ jobs:
                   }).start();
               }
 
-              /* Abre una página en un navegador invisible (pasa la verificación de Cloudflare como Chrome) y devuelve su HTML */
+              private int px(int dp) { return (int) (dp * getContext().getResources().getDisplayMetrics().density + 0.5f); }
+
+              /* Abre una página en un navegador dentro de la app (detrás de la pantalla). Si Cloudflare pide verificación
+                 por más de unos segundos, se muestra para que el usuario toque la casilla. Opcional: ejecuta "js" ya en la página. */
               @PluginMethod
               public void webGet(PluginCall call) {
                   final String url = call.getString("url");
-                  final int tmo = call.getInt("timeout", 30000);
+                  final int tmo = call.getInt("timeout", 90000);
+                  final int quiet = call.getInt("quiet", 9000);
+                  final String js = call.getString("js", null);
                   getActivity().runOnUiThread(() -> {
                       try {
+                          final ViewGroup root = (ViewGroup) getActivity().findViewById(android.R.id.content);
+                          final LinearLayout box = new LinearLayout(getContext());
+                          box.setOrientation(LinearLayout.VERTICAL); box.setBackgroundColor(0xFF0B0A1A);
+                          final LinearLayout bar = new LinearLayout(getContext());
+                          bar.setOrientation(LinearLayout.HORIZONTAL); bar.setGravity(Gravity.CENTER_VERTICAL);
+                          bar.setPadding(px(16), px(36), px(12), px(10)); bar.setVisibility(View.GONE);
+                          final TextView tv = new TextView(getContext());
+                          tv.setText("Verificación de seguridad de la fuente de Latino. Si aparece una casilla, tócala.");
+                          tv.setTextColor(0xFFFFFFFF); tv.setTextSize(14);
+                          bar.addView(tv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                          final Button bt = new Button(getContext()); bt.setText("Cancelar");
+                          bar.addView(bt, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
                           final WebView w = new WebView(getContext());
                           final WebSettings st = w.getSettings();
-                          st.setJavaScriptEnabled(true); st.setDomStorageEnabled(true); st.setLoadsImagesAutomatically(false);
+                          st.setJavaScriptEnabled(true); st.setDomStorageEnabled(true);
                           CookieManager.getInstance().setAcceptCookie(true);
                           CookieManager.getInstance().setAcceptThirdPartyCookies(w, true);
+                          box.addView(bar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                          box.addView(w, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+                          root.addView(box, 0, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
                           final Handler hd = new Handler(Looper.getMainLooper());
                           final boolean[] done = {false};
+                          final boolean[] ran = {false};
                           final long t0 = System.currentTimeMillis();
+                          final String[] page = {"", ""};
                           final Runnable[] check = new Runnable[1];
+                          final Runnable[] poll = new Runnable[1];
+                          final java.util.function.Consumer<String> finish = res -> {
+                              if (done[0]) return;
+                              done[0] = true;
+                              JSObject r = new JSObject();
+                              r.put("title", page[0]); r.put("data", page[1]); r.put("url", w.getUrl());
+                              r.put("ua", st.getUserAgentString());
+                              r.put("cookie", CookieManager.getInstance().getCookie(url));
+                              if (res != null) r.put("result", res);
+                              call.resolve(r);
+                              hd.post(() -> { try { root.removeView(box); w.stopLoading(); w.destroy(); } catch (Exception e) { } });
+                          };
+                          bt.setOnClickListener(v -> finish.accept("ERR cancelado"));
                           check[0] = () -> {
                               if (done[0]) return;
                               w.evaluateJavascript("JSON.stringify([document.title||'',document.documentElement?document.documentElement.outerHTML:''])", v -> {
                                   if (done[0]) return;
                                   String title = "", html = "";
                                   try { JSONArray a = new JSONArray(new JSONArray("[" + v + "]").getString(0)); title = a.getString(0); html = a.getString(1); } catch (Exception e) { }
+                                  page[0] = title; page[1] = html;
                                   String tl = title.toLowerCase();
                                   boolean wait = tl.contains("just a moment") || tl.contains("un momento") || tl.contains("checking") || html.length() < 2000;
-                                  if (wait && System.currentTimeMillis() - t0 < tmo) { hd.postDelayed(check[0], 800); return; }
-                                  done[0] = true;
-                                  JSObject r = new JSObject();
-                                  r.put("title", title); r.put("data", html); r.put("url", w.getUrl());
-                                  r.put("ua", st.getUserAgentString());
-                                  r.put("cookie", CookieManager.getInstance().getCookie(url));
-                                  call.resolve(r);
-                                  hd.post(() -> { try { w.stopLoading(); w.destroy(); } catch (Exception e) { } });
+                                  long el = System.currentTimeMillis() - t0;
+                                  if (wait) {
+                                      if (el > quiet && bar.getVisibility() != View.VISIBLE) { bar.setVisibility(View.VISIBLE); box.bringToFront(); box.setElevation(px(60)); }
+                                      hd.removeCallbacks(check[0]);
+                                      if (el < tmo) hd.postDelayed(check[0], 800); else finish.accept(null);
+                                      return;
+                                  }
+                                  if (js == null) { finish.accept(null); return; }
+                                  if (ran[0]) return;
+                                  ran[0] = true;
+                                  if (bar.getVisibility() == View.VISIBLE) { root.removeView(box); root.addView(box, 0); bar.setVisibility(View.GONE); }
+                                  w.evaluateJavascript(js, null);
+                                  final long t1 = System.currentTimeMillis();
+                                  poll[0] = () -> {
+                                      if (done[0]) return;
+                                      w.evaluateJavascript("(typeof window.__nxr==='string')?window.__nxr:null", x -> {
+                                          if (done[0]) return;
+                                          if (x != null && !x.equals("null")) { String sres = x; try { sres = new JSONArray("[" + x + "]").getString(0); } catch (Exception e) { } finish.accept(sres); return; }
+                                          if (System.currentTimeMillis() - t1 < 25000) hd.postDelayed(poll[0], 400); else finish.accept("ERR tiempo agotado");
+                                      });
+                                  };
+                                  hd.postDelayed(poll[0], 300);
                               });
                           };
                           w.setWebViewClient(new WebViewClient() {
-                              @Override public void onPageFinished(WebView v, String u) { hd.postDelayed(check[0], 500); }
+                              @Override public void onPageFinished(WebView v, String u) { hd.removeCallbacks(check[0]); hd.postDelayed(check[0], 500); }
                           });
-                          hd.postDelayed(() -> { if (!done[0]) check[0].run(); }, tmo + 1500);
+                          hd.postDelayed(() -> { if (!done[0]) finish.accept(null); }, tmo + 35000);
                           w.loadUrl(url);
                       } catch (Exception e) { call.reject(String.valueOf(e.getMessage())); }
                   });

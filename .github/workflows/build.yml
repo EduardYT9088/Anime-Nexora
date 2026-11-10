@@ -7,17 +7,23 @@ jobs:
     steps:
       - run: |
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
-          curl -s -A "$UA" https://animeav1.com/ > h.html; wc -c h.html
-          echo "== todos los enlaces /media/slug/N (orden de aparición)"
-          grep -o '/media/[a-z0-9-]*/[0-9]*' h.html | awk '!s[$0]++' | head -60
-          echo "== mushoku: posiciones y contexto"
-          grep -bo 'mushoku[a-z0-9-]*' h.html | head -10
+          for u in https://www3.animeflv.net/ https://jkanime.net/ https://tioanime.com/ https://monoschinos2.com/; do
+            n=$(echo $u | sed 's#https://##;s#/##g'); code=$(curl -s -L -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o $n.html -w '%{http_code}' $u)
+            echo "######## $u HTTP $code bytes $(wc -c < $n.html) cf=$(grep -c -i 'just a moment\|cf-chl\|challenge-platform' $n.html)"
+          done
           python3 - <<'PY'
-          import re
-          h=open('h.html',encoding='utf8').read()
-          for m in re.finditer(r'mushoku[a-z0-9-]*',h):
-              print('---',m.start()); print(h[max(0,m.start()-400):m.start()+250].replace('\n',' '))
-          i=h.find('latestEpisodes'); print('latestEpisodes en',i)
-          for k in ['<section','<h2','<h3']:
-              print(k,[ (x.start(), re.sub(r'<[^>]+>','',h[x.start():x.start()+160])[:60]) for x in re.finditer(k,h)][:15])
+          import re,glob
+          for f in sorted(glob.glob('*.html')):
+              h=open(f,encoding='utf8',errors='ignore').read()
+              print('\n================',f,len(h))
+              print('titulo:',re.search(r'<title>(.*?)</title>',h,re.S).group(1).strip()[:100] if '<title>' in h else '-')
+              hs=[(m.start(),re.sub(r'\s+',' ',re.sub(r'<[^>]+>',' ',h[m.start():m.start()+200])).strip()[:70]) for m in re.finditer(r'<h[1-3][ >]',h)][:14]
+              print('encabezados:',hs)
+              links=[]
+              for m in re.finditer(r'href="([^"]+)"',h):
+                  l=m.group(1)
+                  if re.search(r'(/ver/|/episodio|-\d+/?$|/\d+/?$)',l) and l not in links: links.append(l)
+              print('enlaces tipo episodio (%d):'%len(links),links[:25])
+              if links:
+                  i=h.find('href="'+links[0]+'"'); print('--- contexto del primero:'); print(re.sub(r'\s+',' ',h[max(0,i-700):i+900]))
           PY

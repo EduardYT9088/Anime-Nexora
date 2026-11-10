@@ -592,6 +592,10 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 #skipop.on{display:flex}#skipop .i{width:18px;height:18px}
 .kbd #skipop:focus,.kbd #skipop:focus-visible{outline:3px solid var(--ac2);outline-offset:2px}
 #e-moreb.busy{opacity:.75}
+.rtag{display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:6px;font-size:10.5px;font-weight:900;letter-spacing:.06em;margin-left:6px;vertical-align:2px}
+.rtag.own{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#2a1a00}
+.rtag.adm{background:rgba(34,211,238,.16);color:#67e8f9;border:1px solid rgba(34,211,238,.45)}
+.cm .ch .rtag{margin-left:-2px}
 </style>
 </head>
 <body>
@@ -2237,10 +2241,11 @@ const CM_ON=!!(SB_URL&&SB_KEY);
 const PUB=SB_URL+'/storage/v1/object/public/nexora/';
 const CM={key:'',sort:'top',off:0,total:0,items:[],kids:{},rep:null,busy:false,loaded:false,img:null};
 const CM_COLORS=['linear-gradient(135deg,#7c5cff,#4f8cff)','linear-gradient(135deg,#ff5c7a,#ff9a5c)','linear-gradient(135deg,#22d3ee,#4f8cff)','linear-gradient(135deg,#34d399,#22d3ee)','linear-gradient(135deg,#f59e0b,#ef4444)','linear-gradient(135deg,#a855f7,#ec4899)','linear-gradient(135deg,#64748b,#334155)','linear-gradient(135deg,#eab308,#84cc16)'];
-const CM_SEL='id,anime,ep,parent_id,author,avatar,body,spoiler,likes,created_at,user_id,image_url,profile:profiles(name,avatar_url,color,official)';
+const CM_SEL='id,anime,ep,parent_id,author,avatar,body,spoiler,likes,created_at,user_id,image_url,profile:profiles(name,avatar_url,color,official,role)';
 const BAD=/\b(hijueputa|hijo ?de ?puta|malparid[oa]|gonorrea|put[oa]s?|mierda|verga|marica|pendej[oa]s?|idiota|est[uú]pid[oa]|imb[eé]cil|zorra|perra|culer[oa])\b/i;
 const BADG=new RegExp(BAD.source,'gi');
 const IC_OK='<svg class="vbadge" viewBox="0 0 24 24" role="img" aria-label="Cuenta oficial"><path d="M12 2l2.4 1.8 3-.2.9 2.9 2.5 1.7-1 2.8 1 2.8-2.5 1.7-.9 2.9-3-.2L12 22l-2.4-1.8-3 .2-.9-2.9-2.5-1.7 1-2.8-1-2.8 2.5-1.7.9-2.9 3 .2z" fill="#22d3ee"/><path d="M8 12.2l2.6 2.6L16 9.4" fill="none" stroke="#0b0a1a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const roleTag=r=>r==='owner'?'<span class="rtag own">OWNER</span>':r==='admin'?'<span class="rtag adm">ADMIN</span>':'';
 const IC_USER='<svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#cfcbee" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg>';
 let SESS=store.get('nx_sess',null),PROF=store.get('nx_prof',null);
 function devId(){let d=store.get('nx_dev','');if(!d){d=Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,'0')).join('');store.set('nx_dev',d)}return d}
@@ -2281,7 +2286,7 @@ async function authPost(path,body){let r;try{r=await fetch(SB_URL+'/auth/v1/'+pa
 async function nameProblem(n){const r=await sb('rpc/nx_name_ok',{method:'POST',body:{n}});return typeof r.data==='string'&&r.data?r.data:null}
 /* ---------- cuenta ---------- */
 async function loadProfile(){if(!SESS)return null;
-  try{const r=await sb(`profiles?select=id,name,avatar_url,color,official&id=eq.${SESS.uid}`);PROF=(Array.isArray(r.data)&&r.data[0])||null;store.set('nx_prof',PROF)}catch(e){}
+  try{const r=await sb(`profiles?select=id,name,avatar_url,color,official,role&id=eq.${SESS.uid}`);PROF=(Array.isArray(r.data)&&r.data[0])||null;store.set('nx_prof',PROF)}catch(e){}
   paintAccount();paintMe();return PROF}
 async function signOut(silent){
   /* al cerrar sesión a mano: se sube lo pendiente y el teléfono queda limpio, así otra cuenta empieza con su propia lista */
@@ -2296,7 +2301,7 @@ function paintAccount(){const el=$('#s-acct');if(!el)return;el.classList.toggle(
     <div class="ac-btns"><button class="btn pri" id="ac-in">Iniciar sesión</button><button class="btn" id="ac-up">Crear cuenta</button></div>`;
     $('#ac-in').onclick=()=>askLogin('in');$('#ac-up').onclick=()=>askLogin('up');return}
   const p=PROF||{name:(SESS.email||'').split('@')[0],color:0};
-  el.innerHTML=`<div class="ac-row">${avHTML(p.name,p.color,p.avatar_url,'lg')}<div class="ac-t"><b>${esc(p.name)}${p.official?IC_OK:''}</b><small>${esc(SESS.email||'')}</small><small class="ac-sync">Mi lista y Continuar viendo se guardan en tu cuenta</small>${PROF?'':'<small style="color:var(--warn)">Falta completar tu perfil</small>'}</div></div>
+  el.innerHTML=`<div class="ac-row">${avHTML(p.name,p.color,p.avatar_url,'lg')}<div class="ac-t"><b>${esc(p.name)}${p.official?IC_OK:''}${roleTag(p.role)}</b><small>${esc(SESS.email||'')}</small><small class="ac-sync">Mi lista y Continuar viendo se guardan en tu cuenta</small>${PROF?'':'<small style="color:var(--warn)">Falta completar tu perfil</small>'}</div></div>
     <div class="ac-btns"><button class="btn pri" id="ac-ed">Editar perfil</button><button class="btn" id="ac-out">Cerrar sesión</button></div>`;
   $('#ac-ed').onclick=()=>askProfile();$('#ac-out').onclick=()=>signOut()}
 function paintMe(){const m=$('#cm-me');if(!m)return;
@@ -2397,7 +2402,7 @@ const IC_LIKE='<svg viewBox="0 0 24 24"><path d="M7 10v11H3V10h4zm0 0l4-8a3 3 0 
 const IC_REP='<svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4V5z"/></svg>';
 function cmItem(c,kid){const liked=(store.get('nx_liked',[])||[]).includes(c.id);const p=c.profile;const name=p?p.name:c.author;
   return `<div class="cm" data-id="${c.id}">${avHTML(name,p?p.color:c.avatar,p&&p.avatar_url,kid?'sm':'')}<div class="cb">
-    <div class="ch"><b>${esc(name)}</b>${p&&p.official?IC_OK:''}<small>${ago(Date.parse(c.created_at))}</small><button class="dots" data-act="more" aria-label="Opciones">···</button></div>
+    <div class="ch"><b>${esc(name)}</b>${p&&p.official?IC_OK:''}${p?roleTag(p.role):''}<small>${ago(Date.parse(c.created_at))}</small><button class="dots" data-act="more" aria-label="Opciones">···</button></div>
     ${c.body?`<div class="cmt">${fmtCm(c.body)}</div>`:''}
     ${okImg(c.image_url)?`<button class="cm-img" data-act="img" aria-label="Ver imagen"><img src="${esc(c.image_url)}" alt="Imagen del comentario" loading="lazy"></button>`:''}
     <div class="ca"><button data-act="like" class="${liked?'on':''}">${IC_LIKE}<span>${c.likes?c.likes:'Me gusta'}</span></button><button data-act="reply">${IC_REP}<span>Responder</span></button></div>

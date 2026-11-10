@@ -6,24 +6,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
+          mkdir out; cd out
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
-          for u in https://www3.animeflv.net/ https://jkanime.net/ https://tioanime.com/ https://monoschinos2.com/; do
-            n=$(echo $u | sed 's#https://##;s#/##g'); code=$(curl -s -L -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o $n.html -w '%{http_code}' $u)
-            echo "######## $u HTTP $code bytes $(wc -c < $n.html) cf=$(grep -c -i 'just a moment\|cf-chl\|challenge-platform' $n.html)"
-          done
-          python3 - <<'PY'
-          import re,glob
-          for f in sorted(glob.glob('*.html')):
-              h=open(f,encoding='utf8',errors='ignore').read()
-              print('\n================',f,len(h))
-              print('titulo:',re.search(r'<title>(.*?)</title>',h,re.S).group(1).strip()[:100] if '<title>' in h else '-')
-              hs=[(m.start(),re.sub(r'\s+',' ',re.sub(r'<[^>]+>',' ',h[m.start():m.start()+200])).strip()[:70]) for m in re.finditer(r'<h[1-3][ >]',h)][:14]
-              print('encabezados:',hs)
-              links=[]
-              for m in re.finditer(r'href="([^"]+)"',h):
-                  l=m.group(1)
-                  if re.search(r'(/ver/|/episodio|-\d+/?$|/\d+/?$)',l) and l not in links: links.append(l)
-              print('enlaces tipo episodio (%d):'%len(links),links[:25])
-              if links:
-                  i=h.find('href="'+links[0]+'"'); print('--- contexto del primero:'); print(re.sub(r'\s+',' ',h[max(0,i-700):i+900]))
-          PY
+          g(){ code=$(curl -s -L -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o "$1" -w '%{http_code} %{url_effective}' "$2"); echo "$1 -> $code $(wc -c < "$1")"; }
+          g tio-home.html https://tioanime.com/
+          g tio-anime.html https://tioanime.com/anime/psyren
+          g tio-ep.html https://tioanime.com/ver/psyren-5
+          g tio-search.html "https://tioanime.com/directorio?q=psyren"
+          g tio-search2.html "https://tioanime.com/directorio?search=psyren"
+          g mc-home.html https://monoschinos2.com/
+          g mc-anime.html https://monoschinos.st/anime/psyren-sub-espanol
+          g mc-anime2.html https://monoschinos.st/anime/psyren
+          g mc-ep.html https://monoschinos.st/ver/psyren-episodio-5
+          g mc-search.html "https://monoschinos.st/buscar?q=psyren"
+          g flv-home.html https://www3.animeflv.net/
+          g flv-home2.html https://animeflv.net/
+          g jk-home.html https://jkanime.net/
+          grep -o 'href="[^"]*psyren[^"]*"' mc-home.html mc-search.html | sort -u | head
+      - uses: actions/upload-artifact@v4
+        with: { name: paginas, path: out }

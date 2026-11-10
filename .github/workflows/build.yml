@@ -495,7 +495,9 @@ jobs:
           import java.net.HttpURLConnection;
           import java.net.URL;
           import java.util.ArrayList;
+          import java.text.Normalizer;
           import java.util.HashMap;
+          import java.util.Locale;
           import java.util.Map;
           import java.util.HashSet;
           import java.util.LinkedHashSet;
@@ -674,6 +676,60 @@ jobs:
                   return "";
               }
 
+              static final String TIO = "https://tioanime.com", MC = "https://monoschinos.st";
+              static final Pattern SEAS = Pattern.compile("\\b(\\d+(st|nd|rd|th)\\s+(season|cour)|(season|temporada|cour|part|parte)\\s*\\d+|s\\d+|\\d+(st|nd|rd|th)|sub\\s+espanol|latino|castellano)\\b");
+
+              /** "Huella" de un título para saber si dos fuentes hablan del mismo anime. */
+              static String skel(String s) {
+                  String t = Normalizer.normalize(s == null ? "" : s, Normalizer.Form.NFD).replaceAll("\\p{M}", "").toLowerCase(Locale.ROOT).replaceAll("[-_:.,!?'\"()\\[\\]]+", " ");
+                  t = SEAS.matcher(t).replaceAll(" ");
+                  return t.replaceAll("[^a-z]", "").replaceAll("[aeiou]", "").replaceAll("(.)\\1+", "$1");
+              }
+
+              static boolean same(String a, String b) {
+                  if (a.isEmpty() || b.isEmpty()) return false;
+                  if (a.equals(b)) return a.length() >= 3;
+                  return Math.min(a.length(), b.length()) >= 6 && (a.startsWith(b) || b.startsWith(a));
+              }
+
+              static String unent(String s) {
+                  return s.replace("&quot;", "\"").replace("&#039;", "'").replace("&#39;", "'").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").trim();
+              }
+
+              static String section(String h, String a, String b) {
+                  int i = h.indexOf(a); if (i < 0) return "";
+                  int j = h.indexOf(b, i); return j > i ? h.substring(i, j) : h.substring(i);
+              }
+
+              /** TioAnime "Últimos Episodios": {slug, ep, título, imagen} */
+              static List<String[]> tioLatest(String h) {
+                  List<String[]> out = new ArrayList<>();
+                  Matcher m = Pattern.compile("<a href=\"/ver/([a-z0-9-]+)\">.*?<img src=\"([^\"]+)\".*?<h3 class=\"title\">([^<]+)</h3>", Pattern.DOTALL)
+                      .matcher(section(h, "Últimos Episodios", "Últimas Peliculas"));
+                  while (m.find()) {
+                      Matcher t = Pattern.compile("^(.*\\S)\\s+(\\d+)$").matcher(unent(m.group(3)));
+                      if (!t.find()) continue;
+                      String n = t.group(2), sl = m.group(1);
+                      if (sl.endsWith("-" + n)) sl = sl.substring(0, sl.length() - n.length() - 1);
+                      out.add(new String[]{sl, n, t.group(1), m.group(2).startsWith("http") ? m.group(2) : TIO + m.group(2)});
+                  }
+                  return out;
+              }
+
+              /** MonosChinos "Últimos capítulos": {slug, ep, título, imagen} */
+              static List<String[]> mcLatest(String h) {
+                  List<String[]> out = new ArrayList<>();
+                  Matcher m = Pattern.compile("href=\"https://[^\"/]+/ver/([a-z0-9-]+?)-episodio-(\\d+)\"(.*?)</article>", Pattern.DOTALL)
+                      .matcher(section(h, "Últimos capítulos", "Series recientes"));
+                  while (m.find()) {
+                      String blk = m.group(3);
+                      Matcher ti = Pattern.compile("<h3[^>]*>([^<]+)</h3>").matcher(blk); if (!ti.find()) continue;
+                      Matcher im = Pattern.compile("data-src=\"([^\"]+)\"").matcher(blk);
+                      out.add(new String[]{m.group(1), m.group(2), unent(ti.group(1)), im.find() ? im.group(1) : ""});
+                  }
+                  return out;
+              }
+
               static JSONObject item(String sl, int ep, String title, String url, String image) throws Exception {
                   return new JSONObject().put("key", sl + "#" + ep).put("ep", ep).put("title", title).put("url", url).put("image", image == null ? "" : image);
               }
@@ -717,8 +773,11 @@ jobs:
                               } catch (Exception e) { }
                           }
                       }
+                      Map<String, JSONObject> favByUrl = new HashMap<>();
+                      for (int i = 0; i < favs.length(); i++) favByUrl.put(favs.getJSONObject(i).optString("url"), favs.getJSONObject(i));
+                      List<String> avSk = new ArrayList<>();
                       /* episodios recientes de la página principal: estrenos de toda la app y de Mi lista */
-                      if (on || all) {
+                      if (on || all) try {
                           String h = get(SITE + "/");
                           Matcher m = Pattern.compile("/media/([a-z0-9-]+)/(\\d+)(?![\\d#])").matcher(latestPart(h));
                           LinkedHashSet<String> keys = new LinkedHashSet<>();
@@ -746,6 +805,42 @@ jobs:
                               LinkedHashSet<String> merged = new LinkedHashSet<>(keys);
                               for (String o : oldList) { if (merged.size() >= 300) break; merged.add(o); }
                               sp.edit().putString("seen", new JSONArray(new ArrayList<>(merged)).toString()).apply();
+                          }
+                      } catch (Exception e) { }
+                      /* fuentes de respaldo: solo lo que la principal no tiene (y Mi lista si el anime es de ahí) */
+                      try {
+                          JSONArray sa = new JSONArray(sp.getString("seen", "[]"));
+                          for (int i = 0; i < sa.length(); i++) avSk.add(skel(sa.getString(i).split("#")[0]));
+                      } catch (Exception e) { }
+                      if (on || all) {
+                          for (int src = 0; src < 2; src++) {
+                              try {
+                                  String tag = src == 0 ? "tio" : "mc", base = src == 0 ? TIO : MC;
+                                  List<String[]> lst = src == 0 ? tioLatest(get(TIO + "/")) : mcLatest(get(MC + "/"));
+                                  if (lst.isEmpty()) continue;
+                                  String raw = sp.getString("seen_" + tag, null);
+                                  Set<String> seen = new HashSet<>(); List<String> oldList = new ArrayList<>();
+                                  if (raw != null) { JSONArray ja = new JSONArray(raw); for (int i = 0; i < ja.length(); i++) { seen.add(ja.getString(i)); oldList.add(ja.getString(i)); } }
+                                  LinkedHashSet<String> keys = new LinkedHashSet<>(); int cnt = 0;
+                                  for (String[] it : lst) {
+                                      String key = tag + ":" + it[0] + "#" + it[1], url = base + "/anime/" + it[0]; int ep = Integer.parseInt(it[1]);
+                                      keys.add(key);
+                                      JSONObject f = favByUrl.get(url);
+                                      if (f != null) {
+                                          int last = f.optInt("last", 0);
+                                          if (on && last > 0 && ep > last) { news.put(item(it[0], ep, f.optString("title", it[2]), url, it[3]).put("key", key)); f.put("last", ep); changed = true; }
+                                          continue;
+                                      }
+                                      String k = skel(it[2]); boolean dup = false;
+                                      for (String x : avSk) if (same(x, k)) { dup = true; break; }
+                                      avSk.add(k);
+                                      if (dup || !all || raw == null || seen.contains(key) || cnt >= 10) continue;
+                                      news.put(item(it[0], ep, it[2], url, it[3]).put("key", key)); cnt++;
+                                  }
+                                  LinkedHashSet<String> merged = new LinkedHashSet<>(keys);
+                                  for (String o : oldList) { if (merged.size() >= 200) break; merged.add(o); }
+                                  sp.edit().putString("seen_" + tag, new JSONArray(new ArrayList<>(merged)).toString()).apply();
+                              } catch (Exception e) { }
                           }
                       }
                       if (changed) sp.edit().putString("favs", favs.toString()).apply();

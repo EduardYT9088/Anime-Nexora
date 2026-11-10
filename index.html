@@ -958,7 +958,7 @@ const diag=t=>{try{(P.diag||(P.diag=[])).push(t)}catch(e){}};
 const mtype=s=>/\.m3u8|\/hls|master/i.test(s)?'hls':'mp4';
 const hostOf=u=>{try{return new URL(u).hostname.replace(/^www\d*\./,'')}catch(e){return u}};
 const abs=(u,b)=>{try{return u?new URL(u,b).href:null}catch(e){return null}};
-const srcLabel=u=>/animeav1/i.test(u)?'La fuente principal':/animeflv/i.test(u)?'La fuente alterna':'El servidor de video';
+const srcLabel=u=>/animeav1/i.test(u)?'La fuente principal':/animeflv/i.test(u)?'La fuente alterna':/tioanime/i.test(u)?'La fuente de respaldo 1':/monoschinos/i.test(u)?'La fuente de respaldo 2':'El servidor de video';
 const isO=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
 async function get(url,headers={}){
   const h={'User-Agent':UA,'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8','Accept-Language':'es-ES,es;q=0.9,en;q=0.8',...headers};
@@ -1114,8 +1114,83 @@ AVP.latest=async function(){
     const card=a.closest('article')||a;const title=(card.querySelector('h3,h2,header')?.textContent||card.querySelector('img')?.getAttribute('alt')||'').replace(/episodio\s*\d+/i,'').trim();if(!title)return;
     push({title,slug:mm[1]},mm[2],card.querySelector('img')?.getAttribute('src'))})}
   return out.slice(0,24)};
-const PROV={animeav1:AVP,animeflv:FLVP};
-const provFor=url=>/animeflv/i.test(url)?FLVP:AVP;
+/* ---------- Fuentes de respaldo: episodios recientes, búsqueda y reproducción ---------- */
+const TIO='https://tioanime.com',MC='https://monoschinos.st';
+/* "huella" de un título para saber si dos fuentes hablan del mismo anime (sin temporada, vocales ni signos) */
+const skel=t=>String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[-_:.,!?'"()\[\]]+/g,' ')
+  .replace(/\b(\d+(st|nd|rd|th)\s+(season|cour)|(season|temporada|cour|part|parte)\s*\d+|s\d+|\d+(st|nd|rd|th)|sub\s+espanol|latino|castellano)\b/g,' ')
+  .replace(/[^a-z]/g,'').replace(/[aeiou]/g,'').replace(/(.)\1+/g,'$1');
+const sameSk=(a,b)=>!!a&&!!b&&(a===b?a.length>=3:Math.min(a.length,b.length)>=6&&(a.startsWith(b)||b.startsWith(a)));
+const isBk=u=>/tioanime|monoschinos/i.test(String(u||''));
+const TIO_EP={},MC_MAX=store.get('nx_mcmax',{});
+const TIOP={
+  parseLatest(data){const a=data.indexOf('Últimos Episodios'),b=data.indexOf('Últimas Peliculas',a);const d=parseDoc(a>=0?data.slice(a,b>a?b:undefined):data),out=[];
+    d.querySelectorAll('article.episode a[href^="/ver/"]').forEach(x=>{const href=x.getAttribute('href');const t=(x.querySelector('.title')?.textContent||x.querySelector('img')?.getAttribute('alt')||'').trim();
+      const m=t.match(/^(.*\S)\s+(\d+)$/);if(!m)return;const n=+m[2];let slug=href.replace(/^\/ver\//,'');if(slug.endsWith('-'+n))slug=slug.slice(0,-(String(n).length+1));if(!slug)return;
+      const url=`${TIO}/anime/${slug}`;TIO_EP[url]=abs(href,TIO);
+      out.push({title:m[1],url,image:abs(x.querySelector('img')?.getAttribute('src'),TIO),epNum:n,type:'TV',provider:'tioanime'})});
+    return out},
+  async latest(){const{data}=await get(TIO+'/');return TIOP.parseLatest(data)},
+  async search(q){const{data}=await get(`${TIO}/directorio?q=${encodeURIComponent(q)}`);const out=[];
+    parseDoc(data).querySelectorAll('article.anime a[href^="/anime/"]').forEach(x=>{const title=(x.querySelector('.title')?.textContent||'').trim();if(!title)return;
+      out.push({title,url:abs(x.getAttribute('href'),TIO),image:abs(x.querySelector('img')?.getAttribute('src'),TIO),type:'TV',provider:'tioanime'})});return out.slice(0,12)},
+  async info(url){const p=new URL(url).pathname.split('/').filter(Boolean);let slug=p[0]==='ver'?(p[1]||'').replace(/-\d+$/,''):(p[1]||'');
+    let data='';try{data=(await get(`${TIO}/anime/${slug}`)).data}catch(e){}
+    if(!/anime_info/.test(data)&&TIO_EP[url]){try{const m=(await get(TIO_EP[url])).data.match(/href="\/anime\/([^"]+)"/);if(m){slug=m[1];data=(await get(`${TIO}/anime/${slug}`)).data}}catch(e){}}
+    if(!/anime_info/.test(data))throw new Error('La fuente de respaldo ya no tiene este anime');
+    const d=parseDoc(data);let nums=[];const lit=varLiteral(data,'episodes');if(lit){const l=await evalSafe(lit);if(Array.isArray(l))nums=l.map(Number).filter(Boolean)}
+    return{title:d.querySelector('h1.title')?.textContent.trim(),description:(d.querySelector('p.sinopsis')?.textContent||'').trim(),
+      image:abs(d.querySelector('.thumb img')?.getAttribute('src'),TIO),type:(d.querySelector('[class^="anime-type"]')?.textContent||'').trim()||null,
+      year:+(d.querySelector('.meta .year')?.textContent||0)||null,status:(d.querySelector('.thumb .status')?.textContent||'').trim()||null,
+      genres:[...d.querySelectorAll('p.genres a')].map(a=>({name:a.textContent.trim()})),
+      episodes:[...new Set(nums)].sort((a,b)=>a-b).map(n=>({number:n,url:`${TIO}/ver/${slug}-${n}`}))}},
+  async episode(url){const{data}=await get(url);const out={sub:[],dub:[]};const lit=varLiteral(data,'videos');const v=lit?await evalSafe(lit):null;
+    if(Array.isArray(v))v.forEach(x=>{if(!Array.isArray(x))return;const u=String(x[1]||'').replace(/\\\//g,'/');if(!/^https?:/.test(u))return;const l={server:String(x[0]||hostOf(u)),url:u};if(!isMega(l))out.sub.push(l)});
+    return out}
+};
+async function mcHas(es,n){try{const{data}=await get(`${MC}/ver/${es}-episodio-${n}`);return /data-player=/.test(data)}catch(e){return false}}
+/* MonosChinos no deja leer su lista de episodios: se averigua el último probando páginas */
+async function mcLast(es,hint){
+  if(hint&&await mcHas(es,hint)){let n=hint;while(n<hint+40&&await mcHas(es,n+1))n++;return n}
+  if(!await mcHas(es,1))return 0;let lo=1,hi=2;while(hi<4096&&await mcHas(es,hi)){lo=hi;hi*=2}
+  while(hi-lo>1){const m=(lo+hi)>>1;if(await mcHas(es,m))lo=m;else hi=m}return lo}
+const MCP={
+  parseLatest(data){const a=data.indexOf('Últimos capítulos'),b=data.indexOf('Series recientes',a);if(a<0)return[];const d=parseDoc(data.slice(a,b>a?b:undefined)),out=[];
+    d.querySelectorAll('a[href*="/ver/"]').forEach(x=>{const m=(x.getAttribute('href')||'').match(/\/ver\/([a-z0-9-]+?)-episodio-(\d+)/);if(!m)return;const title=(x.querySelector('h3')?.textContent||'').trim();if(!title)return;
+      const n=+m[2];if((MC_MAX[m[1]]||0)<n)MC_MAX[m[1]]=n;const im=x.querySelector('img');
+      out.push({title,url:`${MC}/anime/${m[1]}`,image:im?.getAttribute('data-src')||im?.getAttribute('src'),epNum:n,type:'TV',dub:/latino/i.test(m[1]),provider:'monoschinos'})});
+    store.set('nx_mcmax',MC_MAX);return out},
+  async latest(){const{data}=await get(MC+'/');return MCP.parseLatest(data)},
+  async search(q){const{data}=await get(`${MC}/buscar?q=${encodeURIComponent(q)}`);const out=[];
+    parseDoc(data).querySelectorAll('article a[href*="/anime/"]').forEach(x=>{const im=x.querySelector('img');const title=(x.querySelector('h3')?.textContent||im?.getAttribute('alt')||'').trim();if(!title)return;
+      out.push({title,url:abs(x.getAttribute('href'),MC),image:im?.getAttribute('data-src')||im?.getAttribute('src'),type:'TV',provider:'monoschinos'})});return out.slice(0,12)},
+  async info(url){const p=new URL(url).pathname.split('/').filter(Boolean);let slug=(p[1]||'');if(p[0]==='ver')slug=slug.replace(/-episodio-\d+$/,'');
+    const{data}=await get(`${MC}/anime/${slug}`);const d=parseDoc(data);const h1=d.querySelector('h1');if(!h1)throw new Error('La fuente de respaldo ya no tiene este anime');
+    const fm=(d.querySelector('a[href*="/ver/"]')?.getAttribute('href')||'').match(/\/ver\/(.+?)-episodio-\d+/);const es=fm?fm[1]:slug.replace(/-sub-espanol$/,'');
+    const last=await mcLast(es,MC_MAX[es]||0);if(last){MC_MAX[es]=last;store.set('nx_mcmax',MC_MAX)}
+    const dt=[...d.querySelectorAll('dt')],dd=k=>{const x=dt.find(e=>e.textContent.trim()===k);return x&&x.nextElementSibling?x.nextElementSibling.textContent.trim():null};
+    const syn=[...(h1.parentElement||d).querySelectorAll('p')].map(x=>x.textContent.trim()).find(t=>t.length>60)||'';
+    return{title:h1.textContent.trim(),description:syn,image:d.querySelector('meta[property="og:image"]')?.getAttribute('content')||null,type:dd('Tipo'),status:dd('Estado'),
+      year:+((dd('Emisión')||'').match(/\d{4}/)||[0])[0]||null,genres:[...(h1.parentElement||d).querySelectorAll('a[href*="/genero/"]')].map(a=>({name:a.textContent.trim()})),
+      episodes:Array.from({length:last},(_,i)=>({number:i+1,url:`${MC}/ver/${es}-episodio-${i+1}`}))}},
+  async episode(url){const{data}=await get(url);const out={sub:[],dub:[]};const lang=/latino/i.test(url)?'dub':'sub';
+    parseDoc(data).querySelectorAll('[data-player]').forEach(x=>{let u='';try{u=atob(x.getAttribute('data-player'))}catch(e){}if(!/^https?:/.test(u))return;
+      const l={server:x.textContent.trim()||hostOf(u),url:u};if(!isMega(l)&&!out[lang].some(y=>y.url===u))out[lang].push(l)});
+    return out}
+};
+async function backupSearch(q){const r=await Promise.allSettled([TIOP.search(q),MCP.search(q)]);return r.flatMap(x=>x.status==='fulfilled'?x.value:[])}
+/* episodios recientes de todas las fuentes: primero la principal y luego lo que solo tienen las de respaldo */
+let LATEST={t:0,p:null};
+function latestAll(){if(LATEST.p&&Date.now()-LATEST.t<45e3)return LATEST.p;LATEST.t=Date.now();
+  LATEST.p=(async()=>{const[av,tio,mc]=await Promise.allSettled([AVP.latest(),TIOP.latest(),MCP.latest()]);
+    const base=av.status==='fulfilled'?av.value:[];const sk=[];
+    base.forEach(a=>{sk.push(skel(a.title));if(a.esTitle)sk.push(skel(a.esTitle));const m=a.url.match(/\/media\/([^/?#]+)/);if(m)sk.push(skel(m[1]))});
+    (store.get('nx_lseen',[])||[]).forEach(k=>{const m=String(k).match(/\/media\/([^/?#]+)/);if(m)sk.push(skel(m[1]))});
+    const extra=[];[tio,mc].forEach(r=>{if(r.status!=='fulfilled')return;r.value.forEach(a=>{const k=skel(a.title);if(sk.some(x=>sameSk(x,k)))return;sk.push(k);extra.push(a)})});
+    const out=base.concat(extra);if(!out.length){LATEST.p=null;throw(av.reason||new Error('Sin conexión con las fuentes'))}return out})();
+  LATEST.p.catch(()=>{LATEST.p=null});return LATEST.p}
+const PROV={animeav1:AVP,animeflv:FLVP,tioanime:TIOP,monoschinos:MCP};
+const provFor=url=>/animeflv/i.test(url)?FLVP:/tioanime/i.test(url)?TIOP:/monoschinos/i.test(url)?MCP:AVP;
 
 /* ---------- Extractores de video ---------- */
 function b64(s){s=String(s).replace(/[^A-Za-z0-9+/=]/g,'');s=s.replace(/=+$/,'');while(s.length%4)s+='=';return atob(s)}
@@ -1190,7 +1265,10 @@ const SRC={
     const top=[],rest=[],seen=new Set();let err=r0.e||null;
     for(const t of al){try{(await one(t)).forEach(a=>{if(seen.has(a.url))return;seen.add(a.url);(sameTitle(baseTitle(a.title),t)?top:rest).push(a)})}catch(e){err=err||e}}
     (r0.r||[]).forEach(a=>{if(seen.has(a.url))return;seen.add(a.url);const n=normQ(q);(normQ(a.title).includes(n)||(a.alt||[]).some(x=>normQ(x).includes(n))?top:rest).push(a)});
-    const out=[...top,...rest];if(!out.length&&err)throw err;return out},
+    const out=[...top,...rest];
+    if(out.length<4&&!useApi()){const ex=await backupSearch(q).catch(()=>[]);const sk=out.map(a=>skel(a.title));
+      ex.forEach(b=>{const k=skel(b.title);if(sk.some(x=>sameSk(x,k)))return;sk.push(k);out.push(b)})}
+    if(!out.length&&err)throw err;return out},
   async info(url){if(useApi()){const j=await api('info',{url});return j.data||{}}return provFor(url).info(url)},
   async episode(url){if(useApi()){const j=await api('episode',{url});const s=j.data?.servers||{};return{sub:s.sub||[],dub:s.dub||[]}}return provFor(url).episode(url)},
   async resolve(urls){if(useApi())return api('resolve',{urls:JSON.stringify(urls)});return resolveDirect(urls)},
@@ -1324,7 +1402,7 @@ async function loadHome(){
     $('#r'+i).innerHTML=list.map(a=>isEp?epCard(a):card(a)).join('');scheduleLat();return true};
   const load=async(r,i)=>{
     try{
-      if(r.k==='eps'){show(i,await AVP.latest(),true);return}
+      if(r.k==='eps'){show(i,await latestAll(),true);return}
       if(r.k==='top'){const l=await mostViewed(sigs);seenAll.push(...l);show(i,l);return}
       if(r.k==='lat')return;
       let list;
@@ -2163,10 +2241,11 @@ setTimeout(async()=>{afterUpdate=()=>setTimeout(showPermIfNeeded,400);const show
 
 /* ================= AVISOS DE EPISODIOS NUEVOS ================= */
 async function askNotify(){if(!LN||(!cfg.notify&&cfg.notifyAll===false))return;try{const p=await LN.checkPermissions();if(p.display!=='granted')await LN.requestPermissions()}catch(e){}}
-const epKey=(url,ep)=>{const m=String(url||'').match(/\/media\/([^/?#]+)/);return m?m[1]+'#'+ep:null};
+const epKey=(url,ep)=>{const u=String(url||'');let m=u.match(/\/media\/([^/?#]+)/);if(m)return m[1]+'#'+ep;
+  m=u.match(/tioanime\.[a-z]+\/anime\/([^/?#]+)/);if(m)return 'tio:'+m[1]+'#'+ep;m=u.match(/monoschinos\d*\.[a-z]+\/anime\/([^/?#]+)/);if(m)return 'mc:'+m[1]+'#'+ep;return null};
 const HAS_NN=!!(NXS&&NXS.postEpisodes);
 function syncNotify(){if(!HAS_NN)return;try{NXS.syncCheck({on:!!cfg.notify,all:cfg.notifyAll!==false,
-  seen:store.get('nx_lseen',[]).slice(0,150).map(k=>{const[u,e]=String(k).split('#');return epKey(u,e)}).filter(Boolean),
+  seen:store.get('nx_lseen',[]).filter(k=>/\/media\//.test(k)).slice(0,150).map(k=>{const[u,e]=String(k).split('#');return epKey(u,e)}).filter(Boolean),
   favs:favs.map(f=>({url:f.url,title:esTitle(f),last:f.last||0,image:f.image||''}))}).catch(()=>{})}catch(e){}}
 /* aviso en la barra de estado del teléfono (también con la app abierta) */
 function postEps(list){if(!list.length)return;
@@ -2194,15 +2273,16 @@ if(LN){LN.addListener('localNotificationActionPerformed',a=>{const x=a?.notifica
 let lastLat=0;
 async function checkLatest(force){
   if((cfg.notifyAll===false&&!cfg.notify)||(!force&&Date.now()-lastLat<50e3))return;lastLat=Date.now();
-  let list;try{list=await AVP.latest()}catch(e){return}if(!list||!list.length)return;
+  let list;try{list=await latestAll()}catch(e){return}if(!list||!list.length)return;
   const seen=store.get('nx_lseen',null);const keys=list.map(a=>a.url+'#'+a.epNum);
-  if(!seen){store.set('nx_lseen',keys);syncNotify();return}   /* primera vez: solo se guarda */
+  if(!seen){store.set('nx_lseen',keys);store.set('nx_bk0',1);syncNotify();return}   /* primera vez: solo se guarda */
+  if(!store.get('nx_bk0',0)){store.set('nx_bk0',1);store.set('nx_lseen',[...new Set([...keys,...seen])].slice(0,300));return}   /* fuentes de respaldo nuevas: solo se guardan */
   const old=new Set(seen),favU=new Set(favs.map(f=>f.url));
   /* episodio nuevo de un anime de Mi lista que ya salió en recientes */
   const favNews=[];if(cfg.notify)list.forEach(a=>{const f=favs.find(x=>x.url===a.url);if(f&&f.last&&a.epNum>f.last){f.last=a.epNum;favNews.push({url:f.url,title:esTitle(f),image:f.image,ep:a.epNum})}});
   if(favNews.length){store.set('nx_fav',favs);favNews.forEach(n=>addInbox(n));postEps(favNews)}
   const news=cfg.notifyAll===false?[]:list.filter(a=>!old.has(a.url+'#'+a.epNum)&&!favU.has(a.url));
-  store.set('nx_lseen',[...new Set([...keys,...seen])].slice(0,150));syncNotify();
+  store.set('nx_lseen',[...new Set([...keys,...seen])].slice(0,300));syncNotify();
   if(!news.length)return;
   news.slice().reverse().forEach(a=>addInbox({url:a.url,title:esTitle(a),image:a.image,ep:a.epNum}));
   postEps(news.map(a=>({url:a.url,title:esTitle(a),image:a.image,ep:a.epNum})));

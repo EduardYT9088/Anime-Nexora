@@ -1,37 +1,27 @@
 name: Compilar APK
 on:
   workflow_dispatch:
-permissions:
-  contents: write
 jobs:
   diag:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          set +e; mkdir out; cd out
+          set +e
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
           B=https://ww4.animeonline.ninja
-          for n in 1 1100 1180; do curl -s -L -m 30 -A "$UA" -o ep$n.html -w "ep$n %{http_code} %{size_download}\n" "$B/episodio/one-piece-cap-$n/"; done
-          for n in 1 1100 1180; do echo "== ep$n opciones:"; grep -o "<li id='player-option-[^>]*>.\{0,300\}" ep$n.html | sed 's/<img[^>]*>//g' | head -8; done
-          P=$(grep -o "data-post='[0-9]*'" ep1.html | head -1 | grep -o '[0-9]*'); T=$(grep -o "data-type='[a-z]*'" ep1.html | head -1 | sed "s/.*='//;s/'//"); echo "post=$P type=$T"
-          for n in 1 1100 1180; do
-            P=$(grep -o "data-post='[0-9]*'" ep$n.html | head -1 | grep -o '[0-9]*')
-            for nu in 1 2; do
-              J=$(curl -s -m 20 -A "$UA" -X POST -H 'X-Requested-With: XMLHttpRequest' --data "action=doo_player_ajax&post=$P&nume=$nu&type=tv" "$B/wp-admin/admin-ajax.php")
-              U=$(echo "$J" | python3 -c "import sys,json;print(json.load(sys.stdin).get('embed_url') or '')" 2>/dev/null)
-              echo "== ep$n opt$nu -> $U"
-              [ -n "$U" ] && curl -s -L -m 30 -A "$UA" -H "Referer: $B/" -o ms-$n-$nu.html -w "   HTTP %{http_code} %{size_download}\n" "$U"
-            done
-          done
-          for f in ms-*.html; do echo "######## $f"; python3 - "$f" <<'PY2'
+          cnt(){ python3 -c "
           import sys,re
-          h=open(sys.argv[1],encoding='utf8',errors='ignore').read()
-          t=re.sub(r'<script[\s\S]*?</script>|<style[\s\S]*?</style>','',h)
-          print('texto:',re.sub(r'\s+',' ',re.sub(r'<[^>]+>',' ',t))[:600])
-          print('urls:',sorted(set(re.findall(r'https?://[^"\'\s<>]+',h)))[:40])
-          for m in re.finditer(r'(data-[a-z-]+)="([^"]{8,})"',h):
-              print('  ',m.group(1),m.group(2)[:120])
-          PY2
+          h=sys.stdin.read()
+          out=[]
+          for lang in ['SUB','LAT','ES']:
+              m=re.search(r'class=\"OD OD_'+lang+r'[^\"]*\">([\s\S]*?)</div>',h)
+              out.append(lang+'='+str(len(re.findall(r'go_to_player',m.group(1))) if m else 0))
+          print(' '.join(out))"; }
+          for n in 1 100 200 300 400 500 600 700 800 900 950 1000 1050 1080 1090 1100; do
+            P=$(curl -s -m 25 -A "$UA" "$B/episodio/one-piece-cap-$n/" | grep -o "data-post='[0-9]*'" | head -1 | grep -o '[0-9]*')
+            r=""
+            for nu in 1 2 3; do U=$(curl -s -m 20 -A "$UA" -X POST -H 'X-Requested-With: XMLHttpRequest' --data "action=doo_player_ajax&post=$P&nume=$nu&type=tv" "$B/wp-admin/admin-ajax.php" | python3 -c "import sys,json;print(json.load(sys.stdin).get('embed_url') or '')" 2>/dev/null)
+              [ -z "$U" ] && break
+              r="$r | opt$nu: $(curl -s -m 25 -A "$UA" -H "Referer: $B/" "$U" | cnt)"; done
+            echo "ep $n (post $P)$r"
           done
-          cd .. && cd out && git init -q && git checkout -q -b diag-datos && git add -A && git -c user.name=diag -c user.email=diag@x commit -q -m datos
-          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" diag-datos

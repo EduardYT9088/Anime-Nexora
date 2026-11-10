@@ -7,12 +7,15 @@ jobs:
     steps:
       - run: |
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
-          for s in kusuriya-no-hitorigoto-2nd-season cyberpunk-edgerunners-2 shingeki-no-kyojin boku-no-hero-academia-7th-season; do
-            echo "== $s"; curl -s -A "$UA" https://animeav1.com/media/$s | python3 -c "
-          import sys,re
-          h=sys.stdin.read(); i=h.find('relations:')
-          print(h[i:i+2500] if i>=0 else 'sin relations')"
-          done
-          echo "== busqueda kusuriya"; curl -s -A "$UA" "https://animeav1.com/catalogo?search=kusuriya" | python3 -c "
-          import sys,re
-          h=sys.stdin.read(); print(sorted(set(re.findall(r'/media/([a-z0-9-]+)',h)))); i=h.find('kusuriya'); print(h[i-300:i+400])"
+          chk(){ code=$(curl -s -L -m 25 -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o p.html -w '%{http_code} %{url_effective}' "$1"); cf=$(grep -c -i 'just a moment\|cf-chl\|challenge-platform' p.html); echo "$1 -> $code bytes=$(wc -c < p.html) cf=$cf latino=$(grep -o -i 'latino' p.html | wc -l) onepiece=$(grep -o -i 'one-piece' p.html | wc -l)"; }
+          echo "#### fuente principal: One Piece"
+          for e in 1 500 1100; do curl -s -A "$UA" https://animeav1.com/media/one-piece/$e > av.html; echo "ep $e bytes $(wc -c < av.html) DUB=$(grep -o 'DUB:\[[^]]\{0,300\}' av.html | head -c 300) SUB=$(grep -o 'SUB:\[' av.html | wc -l)"; done
+          echo "#### monoschinos"
+          chk "https://monoschinos.st/buscar?q=one+piece"; grep -o 'href="https://monoschinos.st/anime/[^"]*"' p.html | sort -u | head
+          echo "#### candidatas"
+          for u in https://www.animelatinohd.com/ https://animelatinohd.com/ https://ww3.animeonline.ninja/ https://animeonline.ninja/ https://animefenix.tv/ https://www.animefenix.tv/ https://animeyt.es/ https://veranimes.net/ https://henaojara.com/ https://www3.animeflv.net/ https://animeflv.ac/ https://animeid.tv/ https://www.animeid.tv/ https://jkanime.net/ https://anitube.vip/ https://animesaturn.cx/ https://otakuanime.net/ https://animexyz.net/ https://serieslan.com/ https://zonaleros.com/; do chk "$u"; done
+          echo "#### busquedas one piece"
+          chk "https://www.animelatinohd.com/animes?search=one+piece"; grep -o 'href="[^"]*one-piece[^"]*"' p.html | sort -u | head -5
+          chk "https://ww3.animeonline.ninja/?s=one+piece"; grep -o 'href="[^"]*one-piece[^"]*"' p.html | sort -u | head -8
+          chk "https://animefenix.tv/animes?q=one+piece"; grep -o 'href="[^"]*one-piece[^"]*"' p.html | sort -u | head -8
+          chk "https://serieslan.com/b.php?q=one+piece"; grep -o 'href="[^"]*one-piece[^"]*"' p.html | sort -u | head -5

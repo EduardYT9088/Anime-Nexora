@@ -14,9 +14,24 @@ jobs:
           for n in 1 1100 1180; do curl -s -L -m 30 -A "$UA" -o ep$n.html -w "ep$n %{http_code} %{size_download}\n" "$B/episodio/one-piece-cap-$n/"; done
           for n in 1 1100 1180; do echo "== ep$n opciones:"; grep -o "<li id='player-option-[^>]*>.\{0,300\}" ep$n.html | sed 's/<img[^>]*>//g' | head -8; done
           P=$(grep -o "data-post='[0-9]*'" ep1.html | head -1 | grep -o '[0-9]*'); T=$(grep -o "data-type='[a-z]*'" ep1.html | head -1 | sed "s/.*='//;s/'//"); echo "post=$P type=$T"
-          for nu in 1 2 3 4; do
-            echo "== ajax nume=$nu"; curl -s -m 20 -A "$UA" -X POST -H 'X-Requested-With: XMLHttpRequest' -H "Referer: $B/episodio/one-piece-cap-1/" --data "action=doo_player_ajax&post=$P&nume=$nu&type=$T" -w ' HTTP %{http_code}' "$B/wp-admin/admin-ajax.php" | head -c 400; echo
-            echo "== rest nume=$nu"; curl -s -m 20 -A "$UA" -w ' HTTP %{http_code}' "$B/wp-json/dooplayer/v2/$P/$T/$nu" | head -c 400; echo
+          for n in 1 1100 1180; do
+            P=$(grep -o "data-post='[0-9]*'" ep$n.html | head -1 | grep -o '[0-9]*')
+            for nu in 1 2; do
+              J=$(curl -s -m 20 -A "$UA" -X POST -H 'X-Requested-With: XMLHttpRequest' --data "action=doo_player_ajax&post=$P&nume=$nu&type=tv" "$B/wp-admin/admin-ajax.php")
+              U=$(echo "$J" | python3 -c "import sys,json;print(json.load(sys.stdin).get('embed_url') or '')" 2>/dev/null)
+              echo "== ep$n opt$nu -> $U"
+              [ -n "$U" ] && curl -s -L -m 30 -A "$UA" -H "Referer: $B/" -o ms-$n-$nu.html -w "   HTTP %{http_code} %{size_download}\n" "$U"
+            done
+          done
+          for f in ms-*.html; do echo "######## $f"; python3 - "$f" <<'PY2'
+          import sys,re
+          h=open(sys.argv[1],encoding='utf8',errors='ignore').read()
+          t=re.sub(r'<script[\s\S]*?</script>|<style[\s\S]*?</style>','',h)
+          print('texto:',re.sub(r'\s+',' ',re.sub(r'<[^>]+>',' ',t))[:600])
+          print('urls:',sorted(set(re.findall(r'https?://[^"\'\s<>]+',h)))[:40])
+          for m in re.finditer(r'(data-[a-z-]+)="([^"]{8,})"',h):
+              print('  ',m.group(1),m.group(2)[:120])
+          PY2
           done
           cd .. && cd out && git init -q && git checkout -q -b diag-datos && git add -A && git -c user.name=diag -c user.email=diag@x commit -q -m datos
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" diag-datos

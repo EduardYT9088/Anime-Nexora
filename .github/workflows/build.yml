@@ -1,54 +1,21 @@
 name: Compilar APK
 on:
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   diag:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          set +e
+          set +e; mkdir out; cd out
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
-          B=https://ww4.animeonline.ninja
-          cnt(){ python3 -c "
-          import sys,re
-          h=sys.stdin.read()
-          out=[]
-          for lang in ['SUB','LAT','ES']:
-              m=re.search(r'class=\"OD OD_'+lang+r'[^\"]*\">([\s\S]*?)</div>',h)
-              out.append(lang+'='+str(len(re.findall(r'go_to_player',m.group(1))) if m else 0))
-          print(' '.join(out))"; }
-          cat > seas.txt <<'SEAS'
-          1 https://ww4.animeonline.ninja/episodio/one-piece-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-cap-32/ https://ww4.animeonline.ninja/episodio/one-piece-episodio-del-east-blue/
-          2 https://ww4.animeonline.ninja/episodio/one-piece-t2-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t2-cap-9/ https://ww4.animeonline.ninja/episodio/one-piece-t2-cap-16/
-          3 https://ww4.animeonline.ninja/episodio/one-piece-t3-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t3-cap-8/ https://ww4.animeonline.ninja/episodio/one-piece-t3-cap-14/
-          4 https://ww4.animeonline.ninja/episodio/one-piece-t4-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t4-cap-20/ https://ww4.animeonline.ninja/episodio/one-piece-t4-cap-39/
-          5 https://ww4.animeonline.ninja/episodio/one-piece-t5-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t5-cap-7/ https://ww4.animeonline.ninja/episodio/one-piece-t5-cap-13/
-          6 https://ww4.animeonline.ninja/episodio/one-piece-t6-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t6-cap-27/ https://ww4.animeonline.ninja/episodio/one-piece-episode-of-skypiea/
-          7 https://ww4.animeonline.ninja/episodio/one-piece-t7-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t7-cap-17/ https://ww4.animeonline.ninja/episodio/one-piece-t7-cap-33/
-          8 https://ww4.animeonline.ninja/episodio/one-piece-t8-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t8-cap-18/ https://ww4.animeonline.ninja/episodio/one-piece-t8-cap-35/
-          9 https://ww4.animeonline.ninja/episodio/one-piece-t9-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t9-cap-37/ https://ww4.animeonline.ninja/episodio/one-piece-t9-cap-73/
-          10 https://ww4.animeonline.ninja/episodio/one-piece-t10-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t10-cap-24/ https://ww4.animeonline.ninja/episodio/one-piece-strong-world/
-          11 https://ww4.animeonline.ninja/episodio/one-piece-t11-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t11-cap-14/ https://ww4.animeonline.ninja/episodio/one-piece-t11-cap-26/
-          12 https://ww4.animeonline.ninja/episodio/one-piece-t12-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t12-cap-8/ https://ww4.animeonline.ninja/episodio/one-piece-t12-cap-14/
-          13 https://ww4.animeonline.ninja/episodio/one-piece-t13-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t13-cap-52/ https://ww4.animeonline.ninja/episodio/one-piece-t13-cap-101/
-          14 https://ww4.animeonline.ninja/episodio/one-piece-t14-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t14-cap-31/ https://ww4.animeonline.ninja/episodio/one-piece-t14-cap-58/
-          15 https://ww4.animeonline.ninja/episodio/one-piece-t15-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t15-cap-32/ https://ww4.animeonline.ninja/episodio/one-piece-t15-cap-62/
-          16 https://ww4.animeonline.ninja/episodio/one-piece-t16-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t16-cap-26/ https://ww4.animeonline.ninja/episodio/one-piece-t16-cap-50/
-          17 https://ww4.animeonline.ninja/episodio/one-piece-t17-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t17-cap-29/ https://ww4.animeonline.ninja/episodio/one-piece-t17-cap-56/
-          18 https://ww4.animeonline.ninja/episodio/one-piece-t18-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t18-cap-27/ https://ww4.animeonline.ninja/episodio/one-piece-t18-cap-55/
-          19 https://ww4.animeonline.ninja/episodio/one-piece-t19-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t19-cap-38/ https://ww4.animeonline.ninja/episodio/one-piece-t19-cap-74/
-          20 https://ww4.animeonline.ninja/episodio/one-piece-t20-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-t20-cap-8/ https://ww4.animeonline.ninja/episodio/one-piece-t20-cap-14/
-          21 https://ww4.animeonline.ninja/episodio/one-piece-t21-cap-1/ https://ww4.animeonline.ninja/episodio/one-piece-cap-994/ https://ww4.animeonline.ninja/episodio/one-piece-especial-wano-cap-11/
-          22 https://ww4.animeonline.ninja/episodio/one-piece-cap-1086/ https://ww4.animeonline.ninja/episodio/one-piece-cap-1120/ https://ww4.animeonline.ninja/episodio/one-piece-cap-1155/
-          23 https://ww4.animeonline.ninja/episodio/one-piece-cap-1156/ https://ww4.animeonline.ninja/episodio/one-piece-heroines/ https://ww4.animeonline.ninja/episodio/one-piece-cap-1180/
-          SEAS
-          while read T a m z; do
-            r="T$T"
-            for E in $a $m $z; do
-              P=$(curl -s -m 25 -A "$UA" "$E" | grep -o "data-post='[0-9]*'" | head -1 | grep -o '[0-9]*'); x=""
-              for nu in 1 2; do U=$(curl -s -m 20 -A "$UA" -X POST -H 'X-Requested-With: XMLHttpRequest' --data "action=doo_player_ajax&post=$P&nume=$nu&type=tv" "$B/wp-admin/admin-ajax.php" | python3 -c "import sys,json;print(json.load(sys.stdin).get('embed_url') or '')" 2>/dev/null)
-                [ -z "$U" ] && break; x="$x[$(curl -s -m 25 -A "$UA" -H "Referer: $B/" "$U" | cnt)]"; done
-              r="$r | $(basename $E) $x"
-            done
-            echo "$r"
-          done < seas.txt
+          curl -s -L -m 30 -A "$UA" -o nj-s-op.html -w "%{http_code} %{url_effective}\n" "https://ww3.animeonline.ninja/?s=One+Piece"
+          curl -s -L -m 30 -A "$UA" -o nj-s-kus.html -w "%{http_code} %{url_effective}\n" "https://ww3.animeonline.ninja/?s=Kusuriya+no+Hitorigoto"
+          curl -s -L -m 30 -A "$UA" -o nj-ep1.html -w "%{http_code}\n" "https://ww4.animeonline.ninja/episodio/one-piece-cap-1/"
+          P=$(grep -o "data-post='[0-9]*'" nj-ep1.html | head -1 | grep -o '[0-9]*')
+          U=$(curl -s -A "$UA" -X POST -H 'X-Requested-With: XMLHttpRequest' --data "action=doo_player_ajax&post=$P&nume=1&type=tv" https://ww4.animeonline.ninja/wp-admin/admin-ajax.php | python3 -c "import sys,json;print(json.load(sys.stdin)['embed_url'])")
+          curl -s -A "$UA" -o nj-ms.html "$U"; echo "ms sin referer: $(grep -c go_to_player nj-ms.html)"
+          curl -s -A "$UA" -H "Referer: https://ww4.animeonline.ninja/" -o nj-ms2.html "$U"; echo "ms con referer: $(grep -c go_to_player nj-ms2.html)"
+          git init -q && git checkout -q -b diag-datos && git add -A && git -c user.name=diag -c user.email=diag@x commit -q -m datos
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" diag-datos

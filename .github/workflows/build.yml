@@ -11,20 +11,14 @@ jobs:
           mkdir out; cd out
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
           g(){ code=$(curl -s -L -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o "$1" -w '%{http_code} %{url_effective}' "$2"); echo "$1 -> $code $(wc -c < "$1")"; }
-          g tio-home.html https://tioanime.com/
-          g tio-anime.html https://tioanime.com/anime/psyren
-          g tio-ep.html https://tioanime.com/ver/psyren-5
-          g tio-search.html "https://tioanime.com/directorio?q=psyren"
-          g tio-search2.html "https://tioanime.com/directorio?search=psyren"
-          g mc-home.html https://monoschinos2.com/
-          g mc-anime.html https://monoschinos.st/anime/psyren-sub-espanol
-          g mc-anime2.html https://monoschinos.st/anime/psyren
-          g mc-ep.html https://monoschinos.st/ver/psyren-episodio-5
-          g mc-search.html "https://monoschinos.st/buscar?q=psyren"
-          g flv-home.html https://www3.animeflv.net/
-          g flv-home2.html https://animeflv.net/
-          g jk-home.html https://jkanime.net/
-          grep -o 'href="[^"]*psyren[^"]*"' mc-home.html mc-search.html | sort -u | head
+          curl -s -c jar.txt -A "$UA" -o mc-a.html https://monoschinos.st/anime/psyren-sub-espanol
+          T=$(grep -o 'csrf-token" content="[^"]*"' mc-a.html | sed 's/.*content="//;s/"//'); echo "csrf=$T"
+          echo "== sin cookie"; curl -s -A "$UA" -X POST -H "X-CSRF-TOKEN: $T" -H 'X-Requested-With: XMLHttpRequest' -w ' HTTP %{http_code}' https://monoschinos.st/ajax/ajax_pagination/6326 | head -c 600; echo
+          echo "== sin csrf ni cookie"; curl -s -A "$UA" -X POST -H 'X-Requested-With: XMLHttpRequest' -w ' HTTP %{http_code}' https://monoschinos.st/ajax/ajax_pagination/6326 | head -c 300; echo
+          echo "== con cookie"; curl -s -b jar.txt -A "$UA" -X POST -H "X-CSRF-TOKEN: $T" -H 'X-Requested-With: XMLHttpRequest' -w ' HTTP %{http_code}' https://monoschinos.st/ajax/ajax_pagination/6326 > pag.json; head -c 700 pag.json; echo
+          PU=$(python3 -c "import json;print(json.load(open('pag.json')).get('paginate_url',''))" 2>/dev/null); echo "paginate=$PU"
+          [ -n "$PU" ] && { echo "== caps con cookie"; curl -s -b jar.txt -A "$UA" -X POST -H "X-CSRF-TOKEN: $T" -H 'X-Requested-With: XMLHttpRequest' "$PU?p=1" | head -c 700; echo; echo "== caps sin cookie"; curl -s -A "$UA" -X POST -H "X-CSRF-TOKEN: $T" -H 'X-Requested-With: XMLHttpRequest' -w ' HTTP %{http_code}' "$PU?p=1" | head -c 300; echo; }
+          echo "== ep 1 links"; curl -s -A "$UA" https://monoschinos.st/ver/psyren-episodio-1 | grep -o 'href="https://monoschinos.st/ver/psyren[^"]*"' | sort -u
       - run: |
           cd out && git init -q && git checkout -q -b diag-datos && git add -A && git -c user.name=diag -c user.email=diag@x commit -q -m datos
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" diag-datos

@@ -6,6 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
+          set +e
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
           chk(){ code=$(curl -s -L -m 25 -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o p.html -w '%{http_code} %{url_effective}' "$1"); cf=$(grep -c -i 'just a moment\|cf-chl\|challenge-platform' p.html); echo "$1 -> $code bytes=$(wc -c < p.html) cf=$cf latino=$(grep -o -i 'latino' p.html | wc -l) onepiece=$(grep -o -i 'one-piece' p.html | wc -l)"; }
           echo "#### fuente principal: One Piece"

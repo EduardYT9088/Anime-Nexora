@@ -1192,8 +1192,17 @@ function latestAll(){if(LATEST.p&&Date.now()-LATEST.t<45e3)return LATEST.p;LATES
     const out=base.concat(extra);if(!out.length){LATEST.p=null;throw(av.reason||new Error('Sin conexión con las fuentes'))}return out})();
   LATEST.p.catch(()=>{LATEST.p=null});return LATEST.p}
 /* ---------- Fuente de Latino: completa el doblaje cuando la principal no lo tiene ---------- */
-let NJB='https://ww4.animeonline.ninja';const NJC=store.get('nx_njv',0)<2?{}:store.get('nx_njc',{});store.set('nx_njv',2);
-async function postForm(url,data,headers={}){const h={'User-Agent':UA,'X-Requested-With':'XMLHttpRequest','Content-Type':'application/x-www-form-urlencoded; charset=UTF-8',...headers};
+let NJB='https://ww4.animeonline.ninja';
+/* si la página bloquea la conexión directa (Cloudflare), se abre en un navegador invisible dentro de la app */
+let NJW=null;
+async function getCF(url,headers){let why='';
+  try{const r=await get(url,headers);const h=r.data||'';if(!(h.length<30000&&/just a moment|un momento|cf-chl|challenge-platform|attention required/i.test(h)))return r;why='verificación'}
+  catch(e){if(!/40[1-9]|429|50[0-9]/.test(e.message))throw e;why=(e.message.match(/\d{3}/)||['bloqueo'])[0]}
+  if(!NXS||!NXS.webGet)throw new Error('Bloqueado por Cloudflare ('+why+')');
+  const w=await NXS.webGet({url,timeout:30000});
+  if(!w||!w.data||/just a moment|un momento|attention required|access denied|error 10\d\d/i.test(w.title||''))throw new Error('Cloudflare bloquea también el navegador: '+((w&&w.title)||'sin respuesta'));
+  NJW={ua:w.ua,cookie:w.cookie||'',via:1};return{data:w.data,url:w.url||url,via:'navegador'}}const NJC=store.get('nx_njv',0)<2?{}:store.get('nx_njc',{});store.set('nx_njv',2);
+async function postForm(url,data,headers={}){const h={'User-Agent':(NJW&&NJW.ua)||UA,'X-Requested-With':'XMLHttpRequest','Content-Type':'application/x-www-form-urlencoded; charset=UTF-8',...(NJW&&NJW.cookie?{Cookie:NJW.cookie}:{}),...headers};
   const body=new URLSearchParams(data).toString();
   /* el formulario lo envía Android directo: el plugin web lo mandaba como JSON y la página respondía error */
   if(NXS&&NXS.httpPost){let r;try{r=await NXS.httpPost({url,body,headers:h})}catch(e){throw new Error('La fuente de Latino no responde')}if(r.status>=400)throw new Error('La fuente de Latino respondió '+r.status);return r.data}
@@ -1210,22 +1219,22 @@ async function njFind(d,count){
   const c=NJC[D.url];if(c&&Date.now()-c.t<(c.eps?2*864e5:20*60e3))return c.eps?c:null;
   const base=D.frBase||baseTitle(d.title||'');const want=[d.title,d.esTitle,...(d.alt||[]),base].filter(Boolean).map(skel).filter(x=>x.length>=2);
   const save=v=>{NJC[D.url]={t:Date.now(),...v};njSave();return v.eps?NJC[D.url]:null};
-  const{data,url}=await get(`${NJB}/?s=${encodeURIComponent(base)}`);NJB=new URL(url).origin;
+  const{data,url}=await getCF(`${NJB}/?s=${encodeURIComponent(base)}`);NJB=new URL(url).origin;
   const res=[...parseDoc(data).querySelectorAll('.result-item')].map(r=>{const a=r.querySelector('.title a');return a?{title:a.textContent.trim(),url:a.getAttribute('href')}:null}).filter(r=>r&&/\/online\//.test(r.url));
   const pick=res.find(r=>skel(r.title)===skel(d.title))||res.find(r=>want.includes(skel(r.title)));
   if(!pick)return save({});
-  const page=await get(pick.url);const E=njEpisodes(page.data);
+  const page=await getCF(pick.url);const E=njEpisodes(page.data);
   const si=seasonInfo({title:d.title,type:d.type},base);const sn=si&&si.s<99?si.s:1;const near=n=>Math.abs(n-count)<=3;
   let eps=null;const ss=E.by[sn]||[];
   if(ss.length&&near(ss.filter(Boolean).length))eps=ss;else if(near(E.all.length))eps=E.all;
   return save(eps?{eps,p:pick.url}:{})}
-async function njServers(epUrl){const{data,url}=await get(epUrl);const base=new URL(url).origin;const dub=[];
+async function njServers(epUrl){const{data,url}=await getCF(epUrl);const base=new URL(url).origin;const dub=[];
   const opts=[...data.matchAll(/data-type='(\w+)' data-post='(\d+)' data-nume='(\d+)'>[\s\S]*?<span class='title'>([^<]*)<\/span>/g)].slice(0,4);
   for(const o of opts){let j;try{const r=await postForm(base+'/wp-admin/admin-ajax.php',{action:'doo_player_ajax',post:o[2],nume:o[3],type:o[1]},{Referer:epUrl});j=typeof r==='string'?JSON.parse(r):r}catch(e){continue}
     if(!j||typeof j!=='object')continue;
     const e=j&&j.embed_url;if(!e)continue;
     if(/latino/i.test(o[4])&&!/multi/i.test(o[4])){dub.push({server:hostOf(e),url:e});continue}
-    try{const ms=(await get(e,{Referer:base+'/'})).data;const blk=ms.match(/class="OD OD_LAT[^"]*">([\s\S]*?)<\/div>/);
+    try{const ms=(await getCF(e,{Referer:base+'/'})).data;const blk=ms.match(/class="OD OD_LAT[^"]*">([\s\S]*?)<\/div>/);
       if(blk)for(const m of blk[1].matchAll(/go_to_player\('([^']+)'\)[\s\S]*?<span>([^<]*)<\/span>/g))if(!dub.some(x=>x.url===m[1]))dub.push({server:m[2].trim()||hostOf(m[1]),url:m[1]})}catch(e){}}
   return dub}
 async function njDub(ep){if(!D.data||!D.eps.length)return[];const f=await njFind(D.data,D.eps.length);if(!f)return[];
@@ -1835,14 +1844,14 @@ async function latTest(ep){const rows=[];const d=D.data||{};
   const fin=()=>{paint();const b=$('#lt-ok');if(b)b.onclick=()=>$('#sheet').classList.remove('on')};
   const step=async(n,fn)=>{const r={n,d:'Probando…',ok:null};rows.push(r);paint();try{const v=await fn();r.ok=true;r.d=v.msg;paint();return v}catch(e){r.ok=false;r.d=(e&&e.message)||String(e);paint();return null}};
   delete NJC[D.url];const base=D.frBase||baseTitle(d.title||'');let res=[],f=null,opts=[],eurl='',page='';
-  const s1=await step('1. Buscar el anime',async()=>{const r=await get(`${NJB}/?s=${encodeURIComponent(base)}`);NJB=new URL(r.url).origin;const h=r.data||'';
+  const s1=await step('1. Buscar el anime',async()=>{const r=await getCF(`${NJB}/?s=${encodeURIComponent(base)}`);NJB=new URL(r.url).origin;const h=r.data||'';
     if(/just a moment|cf-chl|challenge-platform/i.test(h)&&!/result-item/.test(h))throw new Error('Bloqueado por Cloudflare ('+h.length+' bytes)');
     res=[...parseDoc(h).querySelectorAll('.result-item .title a')].map(a=>a.textContent.trim());if(!res.length)throw new Error('0 resultados · '+h.length+' bytes · '+NJB);
-    return{msg:`"${base}" → ${res.slice(0,4).join(' | ')}`}});
+    return{msg:`${r.via?'(navegador interno) ':''}"${base}" → ${res.slice(0,4).join(' | ')}`}});
   if(!s1)return fin();
   const s2=await step('2. Lista de episodios',async()=>{f=await njFind(d,D.eps.length);if(!f)throw new Error(`No coincide (la app tiene ${D.eps.length} episodios)`);return{msg:`${f.eps.length} episodios en la fuente · ${D.eps.length} en la app`}});
   if(!s2)return fin();
-  const s3=await step('3. Página del episodio',async()=>{eurl=f.eps[+ep.number-1];if(!eurl)throw new Error('No existe el episodio '+ep.number);const r=await get(eurl);page=r.data||'';
+  const s3=await step('3. Página del episodio',async()=>{eurl=f.eps[+ep.number-1];if(!eurl)throw new Error('No existe el episodio '+ep.number);const r=await getCF(eurl);page=r.data||'';
     opts=[...page.matchAll(/data-type='(\w+)' data-post='(\d+)' data-nume='(\d+)'>[\s\S]*?<span class='title'>([^<]*)<\/span>/g)];if(!opts.length)throw new Error('Sin opciones de video · '+page.length+' bytes');
     return{msg:eurl.split('/').filter(Boolean).pop()+' · '+opts.map(o=>o[4]).join(', ')}});
   if(!s3)return fin();

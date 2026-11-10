@@ -161,6 +161,13 @@ jobs:
           import java.net.HttpURLConnection;
           import java.net.URL;
           import java.util.Iterator;
+          import android.os.Handler;
+          import android.os.Looper;
+          import android.webkit.CookieManager;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import org.json.JSONArray;
           import com.getcapacitor.annotation.CapacitorPlugin;
 
           @CapacitorPlugin(name = "NexoraScreen")
@@ -289,6 +296,49 @@ jobs:
                           JSObject r = new JSObject(); r.put("status", code); r.put("data", txt); call.resolve(r);
                       } catch (Exception e) { call.reject(String.valueOf(e.getMessage())); }
                   }).start();
+              }
+
+              /* Abre una página en un navegador invisible (pasa la verificación de Cloudflare como Chrome) y devuelve su HTML */
+              @PluginMethod
+              public void webGet(PluginCall call) {
+                  final String url = call.getString("url");
+                  final int tmo = call.getInt("timeout", 30000);
+                  getActivity().runOnUiThread(() -> {
+                      try {
+                          final WebView w = new WebView(getContext());
+                          final WebSettings st = w.getSettings();
+                          st.setJavaScriptEnabled(true); st.setDomStorageEnabled(true); st.setLoadsImagesAutomatically(false);
+                          CookieManager.getInstance().setAcceptCookie(true);
+                          CookieManager.getInstance().setAcceptThirdPartyCookies(w, true);
+                          final Handler hd = new Handler(Looper.getMainLooper());
+                          final boolean[] done = {false};
+                          final long t0 = System.currentTimeMillis();
+                          final Runnable[] check = new Runnable[1];
+                          check[0] = () -> {
+                              if (done[0]) return;
+                              w.evaluateJavascript("JSON.stringify([document.title||'',document.documentElement?document.documentElement.outerHTML:''])", v -> {
+                                  if (done[0]) return;
+                                  String title = "", html = "";
+                                  try { JSONArray a = new JSONArray(new JSONArray("[" + v + "]").getString(0)); title = a.getString(0); html = a.getString(1); } catch (Exception e) { }
+                                  String tl = title.toLowerCase();
+                                  boolean wait = tl.contains("just a moment") || tl.contains("un momento") || tl.contains("checking") || html.length() < 2000;
+                                  if (wait && System.currentTimeMillis() - t0 < tmo) { hd.postDelayed(check[0], 800); return; }
+                                  done[0] = true;
+                                  JSObject r = new JSObject();
+                                  r.put("title", title); r.put("data", html); r.put("url", w.getUrl());
+                                  r.put("ua", st.getUserAgentString());
+                                  r.put("cookie", CookieManager.getInstance().getCookie(url));
+                                  call.resolve(r);
+                                  hd.post(() -> { try { w.stopLoading(); w.destroy(); } catch (Exception e) { } });
+                              });
+                          };
+                          w.setWebViewClient(new WebViewClient() {
+                              @Override public void onPageFinished(WebView v, String u) { hd.postDelayed(check[0], 500); }
+                          });
+                          hd.postDelayed(() -> { if (!done[0]) check[0].run(); }, tmo + 1500);
+                          w.loadUrl(url);
+                      } catch (Exception e) { call.reject(String.valueOf(e.getMessage())); }
+                  });
               }
 
               /* Prueba con la app cerrada: el aviso sale a los segundos indicados */

@@ -1066,14 +1066,15 @@ const AVP={
     /* relacionados / temporadas / recomendados dentro de la página */
     const rel=[],rec=[];
     walk(sd,(n,key)=>{if(!Array.isArray(n)||n===m.episodes||!n.length)return;const isRel=/relat|franq|franch|season|tempor|saga|sequel|prequel/i.test(key),isRec=/recom|similar|suggest|also/i.test(key);if(!isRel&&!isRec)return;
-      n.forEach(x=>{const src=isO(x)&&isO(x.media)?x.media:isO(x)&&isO(x.anime)?x.anime:x;const it=avItem(src);if(!it||it.url===url)return;it.rel=isO(x)?(avName(x.relation)||avName(x.type)||x.kind||''):'';(isRel?rel:rec).push(it)})});
+      n.forEach(x=>{const src=isO(x)&&isO(x.media)?x.media:isO(x)&&isO(x.anime)?x.anime:isO(x)&&isO(x.destination)?x.destination:x;const it=avItem(src);if(!it||it.url===url)return;it.rel=isO(x)?(avName(x.relation)||avName(x.type)||x.kind||''):'';
+        it.relType=isO(x)&&typeof x.type==='number'?x.type:null;it.start=src.startDate||null;(isRel?rel:rec).push(it)})});
     const fmtDate=v=>{if(!v)return null;const d=new Date(v);return isNaN(d)?String(v):d.toLocaleDateString('es',{day:'numeric',month:'long',year:'numeric'})};
     return{id:m.id??null,esTitle:akaEs(m.aka),title:m.title,description:m.description||m.synopsis,image:abs(m.poster||m.image||m.cover||(m.id?`https://cdn.animeav1.com/covers/${m.id}.jpg`:null),AV),
       backdrop:abs(m.backdrop||m.banner||m.thumbnail||(m.id?`https://cdn.animeav1.com/backdrops/${m.id}.jpg`:null),AV),
       type:avName(m.category)||m.type,year:m.year?String(m.year):(m.startDate?String(m.startDate).slice(0,4):null),status:avName(m.status),
       score:Number(m.score)||null,votes:Number(m.votes||m.scoreVotes||m.voters||m.views)||null,
       alt:altTitles(m),rating:avName(m.rating)||avName(m.classification)||avName(m.ageRating)||null,aired:fmtDate(m.startDate||m.start_date||m.aired||m.releaseDate),
-      genres:(m.genres||[]).map(g=>({name:typeof g==='string'?g:(g.name||g.title),slug:isO(g)?g.slug:null})).filter(g=>g.name),episodes:eps,related:rel,recs:rec}},
+      genres:(m.genres||[]).map(g=>({name:typeof g==='string'?g:(g.name||g.title),slug:isO(g)?g.slug:null})).filter(g=>g.name),episodes:eps,related:rel,recs:rec,start:m.startDate||null}},
   async episode(url){const{data}=await get(url);const sd=await svelteData(data);return avStreamLinks(sd||{},data)}
 };
 
@@ -1600,22 +1601,41 @@ async function loadLangs(my){
 }
 function seasonNum(t){t=String(t);let m=t.match(/(?:season|temporada|part|parte)\s*(\d+)/i)||t.match(/(\d+)(?:st|nd|rd|th)\s+season/i)||t.match(/\s(II|III|IV|V|VI)\b/)||t.match(/\s(\d+)$/);
   if(!m)return 1;const r={II:2,III:3,IV:4,V:5,VI:6}[m[1]];return r||Number(m[1])||1}
+/* nombre sin la parte de temporada, sin cortar en ":" ("Cyberpunk: Edgerunners 2" → "Cyberpunk: Edgerunners") */
+const stripSeason=t=>String(t||'').replace(/\b(\d+(st|nd|rd|th)\s+)?(season|temporada|part|parte|cour)\b.*$/i,'').replace(/\s+(II|III|IV|V|VI|\d+)$/,'').replace(/[\s.,:!¡?¿-]+$/,'').trim();
+const FRC=new Map();const frInfo=u=>{if(!FRC.has(u))FRC.set(u,SRC.info(u).catch(()=>null));return FRC.get(u)};
 async function loadFranchise(d,my){
-  const cur={title:d.title,url:D.url,image:d.image,type:d.type,year:d.year,id:d.id};
-  let list=[...(d.related||[])];const b=baseTitle(d.title||'');
-  if(b){try{const r=await SRC.search(b,true);const nb=normQ(b);list=list.concat(r.filter(x=>normQ(x.title).includes(nb)||(x.alt||[]).some(a=>normQ(a).includes(nb))))}catch(e){}}
-  if(my!==D.seq)return;
-  const seen=new Set([D.url]),items=[cur];list.forEach(x=>{if(!seen.has(x.url)){seen.add(x.url);items.push(x)}});
-  if(items.length<2)return;
-  {const bs=baseTitle(d.title||'');const rk=x=>{const i=seasonInfo(x,bs);return i?[0,i.s,i.p]:[1,Number(x.year)||0,0]};
-    items.sort((a,b)=>{const A=rk(a),B=rk(b);return A[0]-B[0]||A[1]-B[1]||A[2]-B[2]})}
-  D.fr=items;const ss=seasonsOf();if($('#epv').classList.contains('on')){renderSeasons();renderEpisodes()}
-  const lab=x=>{const o=ss.find(o=>o.x.url===x.url);if(o)return seasonText(o.i);const t=(x.type||'')+' '+x.title;
-    return/pel[ií]cula|movie|film|gekijou/i.test(t)?'Película':/\bova\b|\boad\b/i.test(t)?'OVA':/especial|special|recap/i.test(t)?'Especial':'Serie relacionada'};
-  const extra=items.length-ss.length;
-  $('#d-frc').textContent='· '+(ss.length>1?`${ss.length} temporadas`:'1 temporada')+(extra>0?` · ${extra} ${extra===1?'extra':'extras'}`:'');
-  setTimeout(scheduleLat,0);$('#d-frow').innerHTML=items.map((x,i)=>(i?'<span class="arr">›</span>':'')+card(x,(x.url===D.url?'<span class="now-tag">ACTUAL</span>':'')+`<span class="fr-lab">${esc(lab(x))}</span>`).replace('class="card"',x.url===D.url?'class="card now"':'class="card"')).join('');
-  $('#d-fr').classList.remove('hide');
+  const cur={title:d.title,url:D.url,image:d.image,type:d.type,year:d.year,id:d.id,start:d.start};
+  const nodes=new Map([[D.url,cur]]),main=new Set([D.url]);
+  const add=(list,chain)=>{let n=0;(list||[]).forEach(x=>{if(!x||!x.url)return;if(!nodes.has(x.url)){nodes.set(x.url,x);n++}else{const o=nodes.get(x.url);o.start=o.start||x.start}
+    if(chain&&(x.relType===1||x.relType===2)&&!main.has(x.url)){main.add(x.url);n++}});return n};
+  const render=()=>{
+    const items=[],tk=new Set();for(const x of nodes.values()){const k=normQ(x.title);if(!k||(tk.has(k)&&x.url!==D.url))continue;tk.add(k);items.push(x)}
+    if(items.length<2)return;
+    /* nombre base que reconoce más temporadas */
+    const cands=[...new Set([stripSeason(d.title),baseTitle(d.title||'')])].filter(x=>x.length>=3);
+    let bs=cands[0]||'',best=-1;cands.forEach(c=>{const n=items.filter(x=>seasonInfo(x,c)).length;if(n>best){best=n;bs=c}});D.frBase=bs;
+    const sd=x=>Date.parse(x.start||'')||(x.year?Date.parse(x.year+'-07-01'):0)||0;
+    const rk=x=>{const i=seasonInfo(x,bs);return i?[0,i.s,i.p,sd(x)]:[1,sd(x),0,0]};
+    items.sort((a,b)=>{const A=rk(a),B=rk(b);return A[0]-B[0]||A[1]-B[1]||A[2]-B[2]||A[3]-B[3]});
+    D.fr=items;const ss=seasonsOf();if($('#epv').classList.contains('on')){renderSeasons();renderEpisodes()}
+    const lab=x=>{const o=ss.find(o=>o.x.url===x.url);if(o)return seasonText(o.i);const t=(x.type||'')+' '+x.title;
+      return/pel[ií]cula|movie|film|gekijou/i.test(t)?'Película':/\bova\b|\boad\b/i.test(t)?'OVA':/especial|special|recap/i.test(t)?'Especial':'Serie relacionada'};
+    const extra=items.length-ss.length;
+    $('#d-frc').textContent='· '+(ss.length>1?`${ss.length} temporadas`:'1 temporada')+(extra>0?` · ${extra} ${extra===1?'extra':'extras'}`:'');
+    setTimeout(scheduleLat,0);$('#d-frow').innerHTML=items.map((x,i)=>(i?'<span class="arr">›</span>':'')+card(x,(x.url===D.url?'<span class="now-tag">ACTUAL</span>':'')+`<span class="fr-lab">${esc(lab(x))}</span>`).replace('class="card"',x.url===D.url?'class="card now"':'class="card"')).join('');
+    $('#d-fr').classList.remove('hide')};
+  add(d.related,true);
+  const b=baseTitle(d.title||'');
+  if(b){try{const r=await SRC.search(b,true);const nb=normQ(b);
+    add(r.filter(x=>!isBk(x.url)||isBk(D.url)).filter(x=>normQ(x.title).includes(nb)||(x.alt||[]).some(a=>normQ(a).includes(nb))),false)}catch(e){}}
+  if(my!==D.seq)return;render();
+  /* sigue la cadena de temporadas (anterior / siguiente) aunque la búsqueda no las encuentre */
+  if(isBk(D.url))return;const done=new Set([D.url]);let fetched=0;
+  while(fetched<12){const pend=[...main].filter(u=>!done.has(u)).slice(0,4);if(!pend.length)break;pend.forEach(u=>done.add(u));fetched+=pend.length;
+    const infos=await Promise.all(pend.map(frInfo));if(my!==D.seq)return;let ch=0;
+    infos.forEach((inf,i)=>{if(!inf)return;const n=nodes.get(pend[i]);if(n){n.start=n.start||inf.start;n.type=n.type||inf.type;n.image=n.image||inf.image}ch+=add(inf.related,true)});
+    if(ch)render()}
 }
 async function loadRecs(d,my){
   let r=(d.recs||[]).slice(0,15);
@@ -1652,7 +1672,7 @@ function seasonInfo(x,base){
   return s==null?null:{s,p}}
 const seasonText=i=>i.s===99?'Temporada final':`Temporada ${i.s}${i.p>1?' · Parte '+i.p:''}`;
 function seasonsOf(){
-  const fr=D.fr||[];const base=baseTitle(D.data?.title||'');const out=[],keys=new Set();
+  const fr=D.fr||[];const base=D.frBase||baseTitle(D.data?.title||'');const out=[],keys=new Set();
   fr.forEach(x=>{const i=seasonInfo(x,base);if(!i)return;const k=i.s+'.'+i.p;if(keys.has(k)&&x.url!==D.url)return;keys.add(k);out.push({x,i})});
   if(!out.some(o=>o.x.url===D.url))return[];
   return out.sort((a,b)=>a.i.s-b.i.s||a.i.p-b.i.p)}

@@ -7,21 +7,12 @@ jobs:
     steps:
       - run: |
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
-          for q in "Kusuriya no Hitorigoto" "Cyberpunk" "Dreamland" "Shingeki no Kyojin" "Kimetsu no Yaiba" "Boku no Hero Academia"; do
-            echo "== busqueda: $q"
-            curl -s -A "$UA" "https://animeav1.com/catalogo?search=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$q")" | python3 -c "
+          for s in kusuriya-no-hitorigoto-2nd-season cyberpunk-edgerunners-2 shingeki-no-kyojin boku-no-hero-academia-7th-season; do
+            echo "== $s"; curl -s -A "$UA" https://animeav1.com/media/$s | python3 -c "
           import sys,re
-          h=sys.stdin.read()
-          seen=set()
-          for m in re.finditer(r'title:\"((?:[^\"\\\\]|\\\\.)*)\",slug:\"([a-z0-9-]+)\"',h):
-              if m.group(2) in seen: continue
-              seen.add(m.group(2)); print('  ',m.group(1),'|',m.group(2))
-          print('  total',len(seen))"
+          h=sys.stdin.read(); i=h.find('relations:')
+          print(h[i:i+2500] if i>=0 else 'sin relations')"
           done
-          echo "== relacionados en ficha kusuriya"
-          curl -s -A "$UA" https://animeav1.com/media/kusuriya-no-hitorigoto | python3 -c "
+          echo "== busqueda kusuriya"; curl -s -A "$UA" "https://animeav1.com/catalogo?search=kusuriya" | python3 -c "
           import sys,re
-          h=sys.stdin.read(); i=h.find('relations'); j=h.find('related'); print('relations',i,'related',j)
-          for k in ['relations','related','franchise']:
-              i=h.find(k+':')
-              if i>=0: print(k, h[i:i+1500])"
+          h=sys.stdin.read(); print(sorted(set(re.findall(r'/media/([a-z0-9-]+)',h)))); i=h.find('kusuriya'); print(h[i-300:i+400])"

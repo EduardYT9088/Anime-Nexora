@@ -1,24 +1,27 @@
 name: Compilar APK
 on:
   workflow_dispatch:
-permissions:
-  contents: write
 jobs:
   diag:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          mkdir out; cd out
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
-          g(){ code=$(curl -s -L -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o "$1" -w '%{http_code} %{url_effective}' "$2"); echo "$1 -> $code $(wc -c < "$1")"; }
-          curl -s -c jar.txt -A "$UA" -o mc-a.html https://monoschinos.st/anime/psyren-sub-espanol
-          T=$(grep -o 'csrf-token" content="[^"]*"' mc-a.html | sed 's/.*content="//;s/"//'); echo "csrf=$T"
-          echo "== sin cookie"; curl -s -A "$UA" -X POST -H "X-CSRF-TOKEN: $T" -H 'X-Requested-With: XMLHttpRequest' -w ' HTTP %{http_code}' https://monoschinos.st/ajax/ajax_pagination/6326 | head -c 600; echo
-          echo "== sin csrf ni cookie"; curl -s -A "$UA" -X POST -H 'X-Requested-With: XMLHttpRequest' -w ' HTTP %{http_code}' https://monoschinos.st/ajax/ajax_pagination/6326 | head -c 300; echo
-          echo "== con cookie"; curl -s -b jar.txt -A "$UA" -X POST -H "X-CSRF-TOKEN: $T" -H 'X-Requested-With: XMLHttpRequest' -w ' HTTP %{http_code}' https://monoschinos.st/ajax/ajax_pagination/6326 > pag.json; head -c 700 pag.json; echo
-          PU=$(python3 -c "import json;print(json.load(open('pag.json')).get('paginate_url',''))" 2>/dev/null); echo "paginate=$PU"
-          [ -n "$PU" ] && { echo "== caps con cookie"; curl -s -b jar.txt -A "$UA" -X POST -H "X-CSRF-TOKEN: $T" -H 'X-Requested-With: XMLHttpRequest' "$PU?p=1" | head -c 700; echo; echo "== caps sin cookie"; curl -s -A "$UA" -X POST -H "X-CSRF-TOKEN: $T" -H 'X-Requested-With: XMLHttpRequest' -w ' HTTP %{http_code}' "$PU?p=1" | head -c 300; echo; }
-          echo "== ep 1 links"; curl -s -A "$UA" https://monoschinos.st/ver/psyren-episodio-1 | grep -o 'href="https://monoschinos.st/ver/psyren[^"]*"' | sort -u
-      - run: |
-          cd out && git init -q && git checkout -q -b diag-datos && git add -A && git -c user.name=diag -c user.email=diag@x commit -q -m datos
-          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" diag-datos
+          for q in "Kusuriya no Hitorigoto" "Cyberpunk" "Dreamland" "Shingeki no Kyojin" "Kimetsu no Yaiba" "Boku no Hero Academia"; do
+            echo "== busqueda: $q"
+            curl -s -A "$UA" "https://animeav1.com/catalogo?search=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$q")" | python3 -c "
+          import sys,re
+          h=sys.stdin.read()
+          seen=set()
+          for m in re.finditer(r'title:\"((?:[^\"\\\\]|\\\\.)*)\",slug:\"([a-z0-9-]+)\"',h):
+              if m.group(2) in seen: continue
+              seen.add(m.group(2)); print('  ',m.group(1),'|',m.group(2))
+          print('  total',len(seen))"
+          done
+          echo "== relacionados en ficha kusuriya"
+          curl -s -A "$UA" https://animeav1.com/media/kusuriya-no-hitorigoto | python3 -c "
+          import sys,re
+          h=sys.stdin.read(); i=h.find('relations'); j=h.find('related'); print('relations',i,'related',j)
+          for k in ['relations','related','franchise']:
+              i=h.find(k+':')
+              if i>=0: print(k, h[i:i+1500])"

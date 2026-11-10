@@ -351,6 +351,118 @@ jobs:
               }
           }
           EOF
+          ls $JDIR
+          # Permitir APIs http:// y pantalla completa de video
+          sed -i 's/<application/<application android:usesCleartextTraffic="true" android:banner="@drawable\/nx_banner"/' AndroidManifest.xml
+          # Android TV: aparece en el menú del televisor y no exige pantalla táctil
+          sed -i 's|<application|<uses-feature android:name="android.software.leanback" android:required="false"/>\n    <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>\n    <application|' AndroidManifest.xml
+          sed -i -E 's|(<category android:name="android.intent.category.LAUNCHER" ?/>)|\1\n                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>|' AndroidManifest.xml
+          grep -q LEANBACK_LAUNCHER AndroidManifest.xml && echo "Android TV OK" || { echo "No se pudo agregar Android TV"; exit 1; }
+
+          # Colores propios
+          cat > $RES/values/nx_colors.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+            <color name="nx_bg">#070611</color>
+            <color name="nx_a">#7C5CFF</color>
+            <color name="nx_b">#22D3EE</color>
+          </resources>
+          EOF
+
+          # Logo oficial Nexora: se toma la imagen que va dentro de index.html y se generan los iconos
+          rm -f $RES/drawable*/ic_launcher_foreground.xml $RES/drawable*/ic_launcher_background.xml
+          grep -o 'data:image/webp;base64,[A-Za-z0-9+/=]*' "$GITHUB_WORKSPACE/index.html" | head -1 | cut -d, -f2 | base64 -d > /tmp/nx_logo.webp
+          pip install --quiet pillow
+          python3 - "$RES" <<'PY'
+          import os, sys
+          from PIL import Image, ImageFilter, ImageDraw, ImageEnhance
+          res = sys.argv[1]
+          src = Image.open('/tmp/nx_logo.webp').convert('RGBA')
+          def rounded(im, r):
+              m = Image.new('L', im.size, 0); ImageDraw.Draw(m).rounded_rectangle([0, 0, im.size[0]-1, im.size[1]-1], radius=r, fill=255)
+              out = Image.new('RGBA', im.size, (0, 0, 0, 0)); out.paste(im, (0, 0), m); return out
+          def soft(size, f):
+              m = Image.new('L', (size, size), 0); ImageDraw.Draw(m).ellipse([f, f, size-1-f, size-1-f], fill=255)
+              return m.filter(ImageFilter.GaussianBlur(f*0.8))
+          src = rounded(src, int(src.size[0]*.11))
+          for d, px in {'mdpi':108,'hdpi':162,'xhdpi':216,'xxhdpi':324,'xxxhdpi':432}.items():
+              os.makedirs(f'{res}/mipmap-{d}', exist_ok=True)
+              # logo tal cual, completo dentro de la zona visible del icono, sobre fondo oscuro
+              bg = Image.new('RGBA', (px, px), (11, 8, 26, 255))
+              s = int(px*70/108); lg = src.resize((s, s), Image.LANCZOS)
+              bg.paste(lg, ((px-s)//2, (px-s)//2), lg)
+              bg.save(f'{res}/mipmap-{d}/nx_ic_bg.png')
+              Image.new('RGBA', (px, px), (0, 0, 0, 0)).save(f'{res}/mipmap-{d}/nx_ic_fg.png')
+          for d, px in {'mdpi':48,'hdpi':72,'xhdpi':96,'xxhdpi':144,'xxxhdpi':192}.items():
+              ic = src.resize((px, px), Image.LANCZOS)
+              ic.save(f'{res}/mipmap-{d}/ic_launcher.png'); ic.save(f'{res}/mipmap-{d}/ic_launcher_round.png')
+          os.makedirs(f'{res}/drawable-nodpi', exist_ok=True)
+          src.resize((640, 640), Image.LANCZOS).save(f'{res}/drawable-nodpi/nx_logo_img.png')
+          # banner para el menú de Android TV (320x180)
+          os.makedirs(f'{res}/drawable-xhdpi', exist_ok=True)
+          ban = Image.new('RGBA', (320, 180), (11, 8, 26, 255)); g = ImageDraw.Draw(ban)
+          for y in range(180): g.line([(0, y), (320, y)], fill=(int(40-22*y/180), int(22-12*y/180), int(92-50*y/180), 255))
+          lg = src.resize((164, 164), Image.LANCZOS); ban.paste(lg, (78, 8), lg)
+          ban.save(f'{res}/drawable-xhdpi/nx_banner.png')
+          print('iconos generados')
+          PY
+          cat > $RES/drawable/ic_stat_nexora.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+            <path android:pathData="M7,18V6l10,12V6" android:strokeColor="#FFFFFFFF" android:strokeWidth="2.6"
+                android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"/>
+          </vector>
+          EOF
+          # permiso para instalar la actualización descargada desde la app
+          grep -q REQUEST_INSTALL_PACKAGES AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <application|' AndroidManifest.xml
+          grep -q REQUEST_IGNORE_BATTERY_OPTIMIZATIONS AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>\n    <application|' AndroidManifest.xml
+          grep -q POST_NOTIFICATIONS AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application|' AndroidManifest.xml
+          cat > $RES/drawable/nx_icon_mono.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
+            <group android:scaleX="0.86" android:scaleY="0.86" android:pivotX="54" android:pivotY="54">
+              <path android:pathData="M38,71V37l32,34V37"
+                  android:strokeColor="#FFFFFFFF" android:strokeWidth="9"
+                  android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"/>
+            </group>
+          </vector>
+          EOF
+          mkdir -p $RES/mipmap-anydpi-v26
+          for n in ic_launcher ic_launcher_round; do
+          cat > $RES/mipmap-anydpi-v26/$n.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+            <background android:drawable="@mipmap/nx_ic_bg"/>
+            <foreground android:drawable="@mipmap/nx_ic_fg"/>
+            <monochrome android:drawable="@drawable/nx_icon_mono"/>
+          </adaptive-icon>
+          EOF
+          done
+
+          # Pantalla de carga: fondo oscuro + logo oficial
+          find $RES -name 'splash.png' -delete
+          cat > $RES/drawable/splash.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+            <item android:drawable="@color/nx_bg"/>
+            <item android:width="220dp" android:height="220dp" android:gravity="center" android:drawable="@drawable/nx_logo_img"/>
+          </layer-list>
+          EOF
+          # Versión automática (Android 8+ para que el icono oficial se vea en todos los equipos)
+          cd ../../
+          sed -i 's/minSdkVersion = 2[0-9]/minSdkVersion = 26/' ../variables.gradle
+          # WorkManager: revisor nativo de episodios nuevos con la app cerrada
+          sed -i 's/^dependencies {/dependencies {\n    implementation "androidx.work:work-runtime:2.9.1"/' build.gradle
+          grep -q "work-runtime" build.gradle && echo "WorkManager OK" || { echo "No se pudo agregar WorkManager"; exit 1; }
+          sed -i "s/versionCode 1$/versionCode ${GITHUB_RUN_NUMBER}/" build.gradle
+          sed -i "s/versionName \"1.0\"/versionName \"${APP_VERSION}\"/" build.gradle
+
+      - name: Revisor nativo de episodios nuevos (notificaciones)
+        run: |
+          cd _build/android/app/src/main
+          JDIR=java/$(echo "$APP_ID" | tr . /)
+          mkdir -p $JDIR
           cat > $JDIR/NexoraCheck.java <<'JAVA'
           package __PKG__;
 
@@ -687,112 +799,7 @@ jobs:
           }
           JAVA
           sed -i "s/__PKG__/${APP_ID}/" $JDIR/NexoraCheck.java
-          ls $JDIR
-          # Permitir APIs http:// y pantalla completa de video
-          sed -i 's/<application/<application android:usesCleartextTraffic="true" android:banner="@drawable\/nx_banner"/' AndroidManifest.xml
-          # Android TV: aparece en el menú del televisor y no exige pantalla táctil
-          sed -i 's|<application|<uses-feature android:name="android.software.leanback" android:required="false"/>\n    <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>\n    <application|' AndroidManifest.xml
-          sed -i -E 's|(<category android:name="android.intent.category.LAUNCHER" ?/>)|\1\n                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>|' AndroidManifest.xml
-          grep -q LEANBACK_LAUNCHER AndroidManifest.xml && echo "Android TV OK" || { echo "No se pudo agregar Android TV"; exit 1; }
-
-          # Colores propios
-          cat > $RES/values/nx_colors.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-            <color name="nx_bg">#070611</color>
-            <color name="nx_a">#7C5CFF</color>
-            <color name="nx_b">#22D3EE</color>
-          </resources>
-          EOF
-
-          # Logo oficial Nexora: se toma la imagen que va dentro de index.html y se generan los iconos
-          rm -f $RES/drawable*/ic_launcher_foreground.xml $RES/drawable*/ic_launcher_background.xml
-          grep -o 'data:image/webp;base64,[A-Za-z0-9+/=]*' "$GITHUB_WORKSPACE/index.html" | head -1 | cut -d, -f2 | base64 -d > /tmp/nx_logo.webp
-          pip install --quiet pillow
-          python3 - "$RES" <<'PY'
-          import os, sys
-          from PIL import Image, ImageFilter, ImageDraw, ImageEnhance
-          res = sys.argv[1]
-          src = Image.open('/tmp/nx_logo.webp').convert('RGBA')
-          def rounded(im, r):
-              m = Image.new('L', im.size, 0); ImageDraw.Draw(m).rounded_rectangle([0, 0, im.size[0]-1, im.size[1]-1], radius=r, fill=255)
-              out = Image.new('RGBA', im.size, (0, 0, 0, 0)); out.paste(im, (0, 0), m); return out
-          def soft(size, f):
-              m = Image.new('L', (size, size), 0); ImageDraw.Draw(m).ellipse([f, f, size-1-f, size-1-f], fill=255)
-              return m.filter(ImageFilter.GaussianBlur(f*0.8))
-          src = rounded(src, int(src.size[0]*.11))
-          for d, px in {'mdpi':108,'hdpi':162,'xhdpi':216,'xxhdpi':324,'xxxhdpi':432}.items():
-              os.makedirs(f'{res}/mipmap-{d}', exist_ok=True)
-              # logo tal cual, completo dentro de la zona visible del icono, sobre fondo oscuro
-              bg = Image.new('RGBA', (px, px), (11, 8, 26, 255))
-              s = int(px*70/108); lg = src.resize((s, s), Image.LANCZOS)
-              bg.paste(lg, ((px-s)//2, (px-s)//2), lg)
-              bg.save(f'{res}/mipmap-{d}/nx_ic_bg.png')
-              Image.new('RGBA', (px, px), (0, 0, 0, 0)).save(f'{res}/mipmap-{d}/nx_ic_fg.png')
-          for d, px in {'mdpi':48,'hdpi':72,'xhdpi':96,'xxhdpi':144,'xxxhdpi':192}.items():
-              ic = src.resize((px, px), Image.LANCZOS)
-              ic.save(f'{res}/mipmap-{d}/ic_launcher.png'); ic.save(f'{res}/mipmap-{d}/ic_launcher_round.png')
-          os.makedirs(f'{res}/drawable-nodpi', exist_ok=True)
-          src.resize((640, 640), Image.LANCZOS).save(f'{res}/drawable-nodpi/nx_logo_img.png')
-          # banner para el menú de Android TV (320x180)
-          os.makedirs(f'{res}/drawable-xhdpi', exist_ok=True)
-          ban = Image.new('RGBA', (320, 180), (11, 8, 26, 255)); g = ImageDraw.Draw(ban)
-          for y in range(180): g.line([(0, y), (320, y)], fill=(int(40-22*y/180), int(22-12*y/180), int(92-50*y/180), 255))
-          lg = src.resize((164, 164), Image.LANCZOS); ban.paste(lg, (78, 8), lg)
-          ban.save(f'{res}/drawable-xhdpi/nx_banner.png')
-          print('iconos generados')
-          PY
-          cat > $RES/drawable/ic_stat_nexora.xml <<'EOF'
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
-            <path android:pathData="M7,18V6l10,12V6" android:strokeColor="#FFFFFFFF" android:strokeWidth="2.6"
-                android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"/>
-          </vector>
-          EOF
-          # permiso para instalar la actualización descargada desde la app
-          grep -q REQUEST_INSTALL_PACKAGES AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <application|' AndroidManifest.xml
-          grep -q REQUEST_IGNORE_BATTERY_OPTIMIZATIONS AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>\n    <application|' AndroidManifest.xml
-          grep -q POST_NOTIFICATIONS AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application|' AndroidManifest.xml
-          cat > $RES/drawable/nx_icon_mono.xml <<'EOF'
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp" android:height="108dp"
-              android:viewportWidth="108" android:viewportHeight="108">
-            <group android:scaleX="0.86" android:scaleY="0.86" android:pivotX="54" android:pivotY="54">
-              <path android:pathData="M38,71V37l32,34V37"
-                  android:strokeColor="#FFFFFFFF" android:strokeWidth="9"
-                  android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"/>
-            </group>
-          </vector>
-          EOF
-          mkdir -p $RES/mipmap-anydpi-v26
-          for n in ic_launcher ic_launcher_round; do
-          cat > $RES/mipmap-anydpi-v26/$n.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-            <background android:drawable="@mipmap/nx_ic_bg"/>
-            <foreground android:drawable="@mipmap/nx_ic_fg"/>
-            <monochrome android:drawable="@drawable/nx_icon_mono"/>
-          </adaptive-icon>
-          EOF
-          done
-
-          # Pantalla de carga: fondo oscuro + logo oficial
-          find $RES -name 'splash.png' -delete
-          cat > $RES/drawable/splash.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-            <item android:drawable="@color/nx_bg"/>
-            <item android:width="220dp" android:height="220dp" android:gravity="center" android:drawable="@drawable/nx_logo_img"/>
-          </layer-list>
-          EOF
-          # Versión automática (Android 8+ para que el icono oficial se vea en todos los equipos)
-          cd ../../
-          sed -i 's/minSdkVersion = 2[0-9]/minSdkVersion = 26/' ../variables.gradle
-          # WorkManager: revisor nativo de episodios nuevos con la app cerrada
-          sed -i 's/^dependencies {/dependencies {\n    implementation "androidx.work:work-runtime:2.9.1"/' build.gradle
-          grep -q "work-runtime" build.gradle && echo "WorkManager OK" || { echo "No se pudo agregar WorkManager"; exit 1; }
-          sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/" build.gradle
-          sed -i "s/versionName \"1.0\"/versionName \"${APP_VERSION}\"/" build.gradle
+          grep -q "package ${APP_ID};" $JDIR/NexoraCheck.java && echo "Revisor nativo OK" || { echo "No se pudo crear el revisor"; exit 1; }
 
       - name: Firma fija del APK (para poder actualizar sin desinstalar)
         env:

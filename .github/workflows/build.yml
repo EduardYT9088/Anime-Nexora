@@ -654,6 +654,26 @@ jobs:
                   return mx;
               }
 
+              /** Solo la sección "Episodios Recientemente Actualizado" (no los comentarios ni otras secciones). */
+              static String latestPart(String h) {
+                  int a = h.indexOf("Recientemente Actualizado");
+                  if (a >= 0) {
+                      int b = h.indexOf("<section", a);
+                      if (b < 0) b = h.indexOf("<h2", a + 30);
+                      if (b > a) return h.substring(a, b);
+                  }
+                  int k = h.indexOf("latestEpisodes:[");
+                  if (k >= 0) {
+                      int s = k + 15, d = 0; boolean q = false;
+                      for (int j = s; j < h.length() && j < s + 400000; j++) {
+                          char ch = h.charAt(j);
+                          if (q) { if (ch == '\\') j++; else if (ch == '"') q = false; continue; }
+                          if (ch == '"') q = true; else if (ch == '[') d++; else if (ch == ']') { d--; if (d == 0) return h.substring(s, j + 1); }
+                      }
+                  }
+                  return "";
+              }
+
               static JSONObject item(String sl, int ep, String title, String url, String image) throws Exception {
                   return new JSONObject().put("key", sl + "#" + ep).put("ep", ep).put("title", title).put("url", url).put("image", image == null ? "" : image);
               }
@@ -700,7 +720,7 @@ jobs:
                       /* episodios recientes de la página principal: estrenos de toda la app y de Mi lista */
                       if (on || all) {
                           String h = get(SITE + "/");
-                          Matcher m = Pattern.compile("/media/([a-z0-9-]+)/(\\d+)").matcher(h);
+                          Matcher m = Pattern.compile("/media/([a-z0-9-]+)/(\\d+)(?![\\d#])").matcher(latestPart(h));
                           LinkedHashSet<String> keys = new LinkedHashSet<>();
                           while (m.find()) keys.add(m.group(1) + "#" + m.group(2));
                           if (!keys.isEmpty()) {

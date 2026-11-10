@@ -69,7 +69,7 @@ jobs:
           npm init -y > /dev/null
           npm i @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 \
                 @capacitor/app@6 @capacitor/screen-orientation@6 @capacitor/status-bar@6 \
-                @capacitor/local-notifications@6 @capacitor/background-runner@2.0.0 \
+                @capacitor/local-notifications@6 \
                 @capacitor/filesystem@6 @capawesome-team/capacitor-file-opener@6 \
                 hls.js@1.5.17 qrcode@1.5.4
           cp node_modules/hls.js/dist/hls.min.js www/hls.min.js
@@ -83,74 +83,6 @@ jobs:
           }).catch(e=>{console.error(e);process.exit(1)});
           EOF
           node qr.js
-          # Revisión en segundo plano: avisa cuando sale un episodio nuevo de "Mi lista"
-          mkdir -p www/runners
-          cat > www/runners/nexora.js <<'EOF'
-          function kvGet(k){ try{ const v = CapacitorKV.get(k); return typeof v === 'string' ? v : (v && v.value) || null; }catch(e){ return null; } }
-          function kvSet(k,v){ try{ CapacitorKV.set(k, v); }catch(e){} }
-          addEventListener('syncFavs', (resolve, reject, args) => {
-            try{
-              kvSet('favs', JSON.stringify((args && args.favs) || []));
-              if (args && args.on !== undefined) kvSet('on', args.on ? '1' : '0');
-              if (args && args.all !== undefined) kvSet('all', args.all ? '1' : '0');
-              if (args && Array.isArray(args.seen) && args.seen.length) {
-                const mine = args.seen.map(k => String(k).replace(/^.*\/media\//, ''));
-                const prev = JSON.parse(kvGet('seenSlugs') || '[]');
-                kvSet('seenSlugs', JSON.stringify([...new Set([...mine, ...prev])].slice(0, 200)));
-              }
-              resolve();
-            }catch(e){ reject(e); }
-          });
-          addEventListener('checkNew', async (resolve, reject) => {
-            try{
-              if (kvGet('on') === '0') { resolve(); return; }
-              const favs = JSON.parse(kvGet('favs') || '[]'); let changed = false, id = Math.floor(Date.now()/1000) % 100000;
-              for (const f of favs.slice(0, 25)) {
-                try{
-                  const m = (f.url || '').match(/\/media\/([^/?#]+)/); if (!m) continue;
-                  const res = await fetch(f.url, { headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36' } });
-                  const html = await res.text(); const re = new RegExp('/media/' + m[1] + '/(\\d+)', 'g'); let mx = 0, r;
-                  while ((r = re.exec(html))) mx = Math.max(mx, +r[1]);
-                  const k = html.indexOf('episodes:['); if (k >= 0) { const part = html.slice(k, k + 400000), re2 = /"?number"?\s*:\s*(\d+)/g; while ((r = re2.exec(part))) mx = Math.max(mx, +r[1]); }
-                  if (mx && f.last && mx > f.last) {
-                    CapacitorNotifications.schedule([{ id: id++, title: 'Nuevo episodio en Nexora', body: (f.title || 'Tu anime') + ' · Episodio ' + mx + ' ya disponible', scheduleAt: new Date(Date.now() + 1000), smallIcon: 'ic_stat_nexora' }]);
-                  }
-                  if (mx && mx !== f.last) { f.last = mx; changed = true; }
-                }catch(e){}
-              }
-              if (changed) kvSet('favs', JSON.stringify(favs));
-              // Estrenos de toda la app (no solo Mi lista)
-              if (kvGet('all') !== '0') {
-                try{
-                  const res = await fetch('https://animeav1.com/', { headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36' } });
-                  const html = await res.text(); const re = /\/media\/([a-z0-9-]+)\/(\d+)/g; const found = [], keys = new Set(); let r;
-                  while ((r = re.exec(html))) { const k = r[1] + '#' + r[2]; if (!keys.has(k)) { keys.add(k); found.push([r[1], +r[2]]); } }
-                  if (found.length) {
-                    const raw = kvGet('seenSlugs');
-                    if (raw) {
-                      const seen = new Set(JSON.parse(raw));
-                      const favSlugs = new Set(favs.map(f => ((f.url || '').match(/\/media\/([^/?#]+)/) || [])[1]));
-                      const news = found.filter(([sl, n]) => !seen.has(sl + '#' + n) && !favSlugs.has(sl)).slice(0, 24);
-                      const nice = sl => {
-                        const i = html.indexOf('slug:"' + sl + '"') >= 0 ? html.indexOf('slug:"' + sl + '"') : html.indexOf('"slug":"' + sl + '"');
-                        if (i >= 0) { const st = Math.max(0, i - 700), win = html.slice(st, i + 700), re = /"?title"?:\s*"((?:[^"\\]|\\.){2,120})"/g; let m, best = null, bd = 1e9;
-                          while ((m = re.exec(win))) { const d = Math.abs(st + m.index - i); if (d < bd) { bd = d; best = m[1]; } }
-                          if (best) { try { return JSON.parse('"' + best + '"'); } catch (e) { return best; } } }
-                        const t = sl.replace(/-/g, ' '); return t.charAt(0).toUpperCase() + t.slice(1); };
-                      if (news.length && news.length <= 3) {
-                        CapacitorNotifications.schedule(news.map(([sl, n]) => ({ id: id++, title: 'Nuevo episodio en Nexora', body: nice(sl) + ' · Episodio ' + n + ' ya disponible', scheduleAt: new Date(Date.now() + 1000), smallIcon: 'ic_stat_nexora' })));
-                      } else if (news.length > 3) {
-                        CapacitorNotifications.schedule([{ id: id++, title: news.length + ' episodios nuevos en Nexora', body: news.slice(0, 4).map(([sl, n]) => nice(sl) + ' · Ep. ' + n).join('\n'), scheduleAt: new Date(Date.now() + 1000), smallIcon: 'ic_stat_nexora' }]);
-                      }
-                      kvSet('seenSlugs', JSON.stringify([...new Set([...keys, ...seen])].slice(0, 200)));
-                    } else kvSet('seenSlugs', JSON.stringify([...keys].slice(0, 200)));
-                  }
-                }catch(e){}
-              }
-              resolve();
-            }catch(e){ reject(e); }
-          });
-          EOF
           cat > capacitor.config.json <<EOF
           {
             "appId": "${APP_ID}",
@@ -161,8 +93,7 @@ jobs:
             "android": { "allowMixedContent": true },
             "plugins": {
               "CapacitorHttp": { "enabled": false },
-              "LocalNotifications": { "smallIcon": "ic_stat_nexora", "iconColor": "#8B6BFF" },
-              "BackgroundRunner": { "label": "com.nexora.animesplus.check", "src": "runners/nexora.js", "event": "checkNew", "repeat": true, "interval": 15, "autoStart": true }
+              "LocalNotifications": { "smallIcon": "ic_stat_nexora", "iconColor": "#8B6BFF" }
             }
           }
           EOF
@@ -189,6 +120,7 @@ jobs:
               public void onCreate(Bundle savedInstanceState) {
                   registerPlugin(NexoraScreen.class);
                   super.onCreate(savedInstanceState);
+                  NexoraCheck.schedule(this);
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                       WindowManager.LayoutParams lp = getWindow().getAttributes();
                       lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
@@ -200,8 +132,14 @@ jobs:
           cat > $JDIR/NexoraScreen.java <<EOF
           package ${APP_ID};
 
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
           import android.app.UiModeManager;
           import android.content.ComponentName;
+          import android.content.SharedPreferences;
+          import androidx.core.app.NotificationManagerCompat;
+          import com.getcapacitor.JSArray;
+          import org.json.JSONArray;
           import android.content.Context;
           import android.content.Intent;
           import android.net.Uri;
@@ -221,6 +159,116 @@ jobs:
 
           @CapacitorPlugin(name = "NexoraScreen")
           public class NexoraScreen extends Plugin {
+              @Override
+              public void load() {
+                  NexoraCheck.schedule(getContext());
+                  try { fromNotification(getActivity().getIntent()); } catch (Exception e) { }
+              }
+
+              @Override
+              protected void handleOnNewIntent(Intent intent) {
+                  super.handleOnNewIntent(intent);
+                  fromNotification(intent);
+              }
+
+              /* Al tocar una notificación: abre el anime o la campana dentro de la app */
+              private void fromNotification(Intent i) {
+                  if (i == null) return;
+                  String u = i.getStringExtra("nx_url");
+                  boolean inbox = i.getBooleanExtra("nx_inbox", false);
+                  if (u == null && !inbox) return;
+                  JSObject d = new JSObject();
+                  if (u != null) { d.put("url", u); d.put("ep", i.getIntExtra("nx_ep", 0)); }
+                  d.put("inbox", inbox);
+                  i.removeExtra("nx_url"); i.removeExtra("nx_inbox");
+                  notifyListeners("nxOpen", d, true);
+              }
+
+              /* Datos para el revisor nativo: Mi lista, ajustes y episodios ya vistos */
+              @PluginMethod
+              public void syncCheck(PluginCall call) {
+                  try {
+                      SharedPreferences sp = getContext().getSharedPreferences(NexoraCheck.PREFS, 0);
+                      SharedPreferences.Editor ed = sp.edit();
+                      ed.putBoolean("on", Boolean.TRUE.equals(call.getBoolean("on", true)));
+                      ed.putBoolean("all", Boolean.TRUE.equals(call.getBoolean("all", true)));
+                      JSArray favs = call.getArray("favs", null);
+                      if (favs != null) {
+                          JSONArray old = new JSONArray(sp.getString("favs", "[]"));
+                          for (int i = 0; i < favs.length(); i++) {
+                              org.json.JSONObject f = favs.getJSONObject(i);
+                              for (int j = 0; j < old.length(); j++) {
+                                  org.json.JSONObject o = old.getJSONObject(j);
+                                  if (o.optString("url").equals(f.optString("url")) && o.optInt("last", 0) > f.optInt("last", 0)) f.put("last", o.optInt("last"));
+                              }
+                          }
+                          ed.putString("favs", favs.toString());
+                      }
+                      JSArray seen = call.getArray("seen", null);
+                      if (seen != null && seen.length() > 0) {
+                          java.util.LinkedHashSet<String> m = new java.util.LinkedHashSet<>();
+                          JSONArray old = new JSONArray(sp.getString("seen", "[]"));
+                          for (int i = 0; i < seen.length(); i++) m.add(seen.getString(i));
+                          for (int i = 0; i < old.length() && m.size() < 300; i++) m.add(old.getString(i));
+                          ed.putString("seen", new JSONArray(new java.util.ArrayList<>(m)).toString());
+                      }
+                      ed.apply();
+                      NexoraCheck.schedule(getContext());
+                  } catch (Exception e) { }
+                  call.resolve();
+              }
+
+              /* Publica en la barra de estado los episodios que encontró la app abierta */
+              @PluginMethod
+              public void postEpisodes(PluginCall call) {
+                  final JSArray items = call.getArray("items", new JSArray());
+                  final Context c = getContext();
+                  new Thread(() -> {
+                      try { NexoraCheck.post(c, new JSONArray(items.toString()), true); } catch (Exception e) { }
+                  }).start();
+                  call.resolve();
+              }
+
+              /* Lo que encontró el revisor con la app cerrada, para la campana */
+              @PluginMethod
+              public void takeInbox(PluginCall call) {
+                  JSObject r = new JSObject();
+                  try {
+                      SharedPreferences sp = getContext().getSharedPreferences(NexoraCheck.PREFS, 0);
+                      r.put("items", new JSArray(sp.getString("inbox", "[]")));
+                      sp.edit().putString("inbox", "[]").apply();
+                  } catch (Exception e) { r.put("items", new JSArray()); }
+                  call.resolve(r);
+              }
+
+              @PluginMethod
+              public void notifState(PluginCall call) {
+                  boolean on = false;
+                  try {
+                      on = NotificationManagerCompat.from(getContext()).areNotificationsEnabled();
+                      NotificationManager nm = getContext().getSystemService(NotificationManager.class);
+                      NotificationChannel ch = nm == null ? null : nm.getNotificationChannel(NexoraCheck.CH);
+                      if (ch != null && ch.getImportance() == NotificationManager.IMPORTANCE_NONE) on = false;
+                  } catch (Exception e) { }
+                  JSObject r = new JSObject(); r.put("enabled", on); call.resolve(r);
+              }
+
+              @PluginMethod
+              public void openNotifSettings(PluginCall call) {
+                  Intent i = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                  i.putExtra(Settings.EXTRA_APP_PACKAGE, getContext().getPackageName());
+                  boolean ok = launch(i);
+                  if (!ok) ok = appDetails();
+                  done(call, ok);
+              }
+
+              /* Prueba con la app cerrada: el aviso sale a los segundos indicados */
+              @PluginMethod
+              public void testLater(PluginCall call) {
+                  NexoraCheck.test(getContext(), call.getInt("sec", 30));
+                  call.resolve();
+              }
+
               @PluginMethod
               public void immersive(PluginCall call) {
                   final boolean on = Boolean.TRUE.equals(call.getBoolean("on", true));
@@ -303,6 +351,342 @@ jobs:
               }
           }
           EOF
+          cat > $JDIR/NexoraCheck.java <<'JAVA'
+          package __PKG__;
+
+          import android.annotation.SuppressLint;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.graphics.Bitmap;
+          import android.graphics.BitmapFactory;
+          import androidx.annotation.NonNull;
+          import androidx.core.app.NotificationCompat;
+          import androidx.core.app.NotificationManagerCompat;
+          import androidx.work.Constraints;
+          import androidx.work.Data;
+          import androidx.work.ExistingPeriodicWorkPolicy;
+          import androidx.work.NetworkType;
+          import androidx.work.OneTimeWorkRequest;
+          import androidx.work.PeriodicWorkRequest;
+          import androidx.work.WorkManager;
+          import androidx.work.Worker;
+          import androidx.work.WorkerParameters;
+          import java.io.ByteArrayOutputStream;
+          import java.io.InputStream;
+          import java.net.HttpURLConnection;
+          import java.net.URL;
+          import java.util.ArrayList;
+          import java.util.HashSet;
+          import java.util.LinkedHashSet;
+          import java.util.List;
+          import java.util.Set;
+          import java.util.concurrent.TimeUnit;
+          import java.util.regex.Matcher;
+          import java.util.regex.Pattern;
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+
+          /**
+           * Revisor nativo de episodios nuevos (Android WorkManager, cada 15 min aunque la app esté cerrada)
+           * y publicador de notificaciones en la barra de estado con su propio canal.
+           */
+          public class NexoraCheck extends Worker {
+              static final String PREFS = "nexora_chk";
+              static final String CH = "nexora_episodios";
+              static final String SITE = "https://animeav1.com";
+              static final String UA = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36";
+
+              public NexoraCheck(@NonNull Context c, @NonNull WorkerParameters p) { super(c, p); }
+
+              public static void schedule(Context c) {
+                  try {
+                      Constraints k = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
+                      PeriodicWorkRequest r = new PeriodicWorkRequest.Builder(NexoraCheck.class, 15, TimeUnit.MINUTES).setConstraints(k).build();
+                      WorkManager.getInstance(c).enqueueUniquePeriodicWork("nexora_check", ExistingPeriodicWorkPolicy.KEEP, r);
+                  } catch (Exception e) { }
+              }
+
+              public static void test(Context c, long sec) {
+                  try {
+                      OneTimeWorkRequest r = new OneTimeWorkRequest.Builder(NexoraCheck.class)
+                          .setInitialDelay(sec, TimeUnit.SECONDS)
+                          .setInputData(new Data.Builder().putBoolean("test", true).build()).build();
+                      WorkManager.getInstance(c).enqueue(r);
+                  } catch (Exception e) { }
+              }
+
+              static String get(String u) throws Exception {
+                  HttpURLConnection h = (HttpURLConnection) new URL(u).openConnection();
+                  h.setRequestProperty("User-Agent", UA);
+                  h.setRequestProperty("Accept-Language", "es-ES,es;q=0.9");
+                  h.setConnectTimeout(15000); h.setReadTimeout(25000); h.setInstanceFollowRedirects(true);
+                  try (InputStream in = h.getInputStream()) {
+                      ByteArrayOutputStream o = new ByteArrayOutputStream(); byte[] b = new byte[16384]; int n;
+                      while ((n = in.read(b)) > 0) { o.write(b, 0, n); if (o.size() > 6000000) break; }
+                      return o.toString("UTF-8");
+                  } finally { h.disconnect(); }
+              }
+
+              static String slug(String url) {
+                  Matcher m = Pattern.compile("/media/([^/?#]+)").matcher(url == null ? "" : url);
+                  return m.find() ? m.group(1) : null;
+              }
+
+              static String niceSlug(String s) {
+                  String t = s.replace('-', ' ');
+                  return t.isEmpty() ? t : Character.toUpperCase(t.charAt(0)) + t.substring(1);
+              }
+
+              /* ---- lectura del objeto { ... slug:"x" ... } que rodea a un anime en la página ---- */
+              static int[] objAround(String h, int i) {
+                  int d = 0, s = -1;
+                  for (int j = i - 1; j >= 0 && j > i - 20000; j--) {
+                      char ch = h.charAt(j);
+                      if (ch == '}') d++;
+                      else if (ch == '{') { if (d == 0) { s = j; break; } d--; }
+                  }
+                  if (s < 0) return null;
+                  d = 0; boolean q = false;
+                  for (int j = s; j < h.length() && j < s + 40000; j++) {
+                      char ch = h.charAt(j);
+                      if (q) { if (ch == '\\') j++; else if (ch == '"') q = false; continue; }
+                      if (ch == '"') q = true;
+                      else if (ch == '{') d++;
+                      else if (ch == '}') { d--; if (d == 0) return new int[]{s, j + 1}; }
+                  }
+                  return null;
+              }
+
+              /** Valor de una clave del primer nivel del objeto (texto o número), o null. */
+              static String topField(String o, String key) {
+                  int d = 0; boolean q = false;
+                  for (int j = 0; j < o.length(); j++) {
+                      char ch = o.charAt(j);
+                      if (q) { if (ch == '\\') j++; else if (ch == '"') q = false; continue; }
+                      if (ch == '"') { q = true; continue; }
+                      if (ch == '{' || ch == '[') d++;
+                      else if (ch == '}' || ch == ']') d--;
+                      if (d == 1 && (ch == '{' || ch == ',')) {
+                          int k = j + 1; while (k < o.length() && o.charAt(k) == ' ') k++;
+                          String a = key + ":", b = "\"" + key + "\":";
+                          int v = o.startsWith(a, k) ? k + a.length() : o.startsWith(b, k) ? k + b.length() : -1;
+                          if (v > 0) {
+                              while (v < o.length() && o.charAt(v) == ' ') v++;
+                              if (v < o.length() && o.charAt(v) == '"') {
+                                  int e = v + 1; while (e < o.length() && o.charAt(e) != '"') { if (o.charAt(e) == '\\') e++; e++; }
+                                  try { return new JSONArray("[" + o.substring(v, e + 1) + "]").getString(0); } catch (Exception x) { return o.substring(v + 1, e); }
+                              }
+                              int e = v; while (e < o.length() && Character.isDigit(o.charAt(e))) e++;
+                              return e > v ? o.substring(v, e) : null;
+                          }
+                      }
+                  }
+                  return null;
+              }
+
+              static String[] info(String h, String sl) {
+                  String title = null, img = null;
+                  int i = h.indexOf("slug:\"" + sl + "\""); if (i < 0) i = h.indexOf("\"slug\":\"" + sl + "\"");
+                  if (i >= 0) {
+                      int[] r = objAround(h, i);
+                      if (r != null) {
+                          String o = h.substring(r[0], r[1]);
+                          title = topField(o, "title");
+                          String id = topField(o, "id");
+                          if (id != null && id.matches("\\d+")) img = "https://cdn.animeav1.com/covers/" + id + ".jpg";
+                      }
+                  }
+                  if (title == null || title.trim().length() < 2) title = niceSlug(sl);
+                  return new String[]{title, img};
+              }
+
+              /** Número de episodio más alto de la página de un anime. */
+              static int maxEp(String h, String sl) {
+                  int mx = 0;
+                  Matcher m = Pattern.compile("/media/" + Pattern.quote(sl) + "/(\\d+)").matcher(h);
+                  while (m.find()) mx = Math.max(mx, Integer.parseInt(m.group(1)));
+                  int k = h.indexOf("episodes:[");
+                  if (k >= 0) {
+                      int s = k + 9, d = 0, e = Math.min(h.length(), s + 400000); boolean q = false;
+                      for (int j = s; j < Math.min(h.length(), s + 400000); j++) {
+                          char ch = h.charAt(j);
+                          if (q) { if (ch == '\\') j++; else if (ch == '"') q = false; continue; }
+                          if (ch == '"') q = true; else if (ch == '[') d++; else if (ch == ']') { d--; if (d == 0) { e = j; break; } }
+                      }
+                      Matcher m2 = Pattern.compile("\"?number\"?\\s*:\\s*(\\d+)").matcher(h.substring(s, e));
+                      while (m2.find()) mx = Math.max(mx, Integer.parseInt(m2.group(1)));
+                  }
+                  return mx;
+              }
+
+              static JSONObject item(String sl, int ep, String title, String url, String image) throws Exception {
+                  return new JSONObject().put("key", sl + "#" + ep).put("ep", ep).put("title", title).put("url", url).put("image", image == null ? "" : image);
+              }
+
+              @NonNull
+              @Override
+              public Result doWork() {
+                  Context c = getApplicationContext();
+                  if (getInputData().getBoolean("test", false)) {
+                      JSONArray t = new JSONArray();
+                      try { t.put(new JSONObject().put("key", "test#" + System.currentTimeMillis()).put("test", true)
+                          .put("title", "Prueba de Nexora").put("body", "¡Los avisos con la app cerrada funcionan! 🎉")); } catch (Exception e) { }
+                      post(c, t, false);
+                      return Result.success();
+                  }
+                  SharedPreferences sp = c.getSharedPreferences(PREFS, 0);
+                  JSONArray news = new JSONArray();
+                  try {
+                      boolean on = sp.getBoolean("on", true), all = sp.getBoolean("all", true);
+                      JSONArray favs = new JSONArray(sp.getString("favs", "[]"));
+                      Set<String> favSlugs = new HashSet<>();
+                      for (int i = 0; i < favs.length(); i++) { String s = slug(favs.getJSONObject(i).optString("url")); if (s != null) favSlugs.add(s); }
+                      if (on) {
+                          boolean changed = false;
+                          for (int i = 0; i < Math.min(25, favs.length()); i++) {
+                              JSONObject f = favs.getJSONObject(i); String sl = slug(f.optString("url")); if (sl == null) continue;
+                              try {
+                                  int mx = maxEp(get(f.optString("url")), sl), last = f.optInt("last", 0);
+                                  if (mx > 0 && last > 0 && mx > last)
+                                      news.put(item(sl, mx, f.optString("title", niceSlug(sl)), f.optString("url"), f.optString("image", "")));
+                                  if (mx > 0 && mx != last) { f.put("last", mx); changed = true; }
+                              } catch (Exception e) { }
+                          }
+                          if (changed) sp.edit().putString("favs", favs.toString()).apply();
+                      }
+                      if (all) {
+                          String h = get(SITE + "/");
+                          Matcher m = Pattern.compile("/media/([a-z0-9-]+)/(\\d+)").matcher(h);
+                          LinkedHashSet<String> keys = new LinkedHashSet<>();
+                          while (m.find()) keys.add(m.group(1) + "#" + m.group(2));
+                          if (!keys.isEmpty()) {
+                              String raw = sp.getString("seen", null);
+                              LinkedHashSet<String> merged = new LinkedHashSet<>(keys);
+                              if (raw != null) {
+                                  JSONArray sa = new JSONArray(raw); Set<String> seen = new HashSet<>();
+                                  for (int i = 0; i < sa.length(); i++) seen.add(sa.getString(i));
+                                  int cnt = 0;
+                                  for (String k : keys) {
+                                      if (cnt >= 24) break;
+                                      String[] p = k.split("#");
+                                      if (seen.contains(k) || favSlugs.contains(p[0])) continue;
+                                      String[] inf = info(h, p[0]);
+                                      news.put(item(p[0], Integer.parseInt(p[1]), inf[0], SITE + "/media/" + p[0], inf[1])); cnt++;
+                                  }
+                                  for (int i = 0; i < sa.length() && merged.size() < 300; i++) merged.add(sa.getString(i));
+                              }
+                              sp.edit().putString("seen", new JSONArray(new ArrayList<>(merged)).toString()).apply();
+                          }
+                      }
+                  } catch (Exception e) { }
+                  if (news.length() > 0) post(c, news, false);
+                  return Result.success();
+              }
+
+              static void ensureChannel(Context c) {
+                  NotificationManager nm = c.getSystemService(NotificationManager.class);
+                  if (nm == null || nm.getNotificationChannel(CH) != null) return;
+                  NotificationChannel ch = new NotificationChannel(CH, "Episodios nuevos", NotificationManager.IMPORTANCE_HIGH);
+                  ch.setDescription("Aviso cuando sale un capítulo nuevo");
+                  ch.enableLights(true); ch.setLightColor(0xFF8B6BFF); ch.setShowBadge(true);
+                  nm.createNotificationChannel(ch);
+              }
+
+              static Bitmap poster(String u) {
+                  if (u == null || u.isEmpty()) return null;
+                  try {
+                      HttpURLConnection h = (HttpURLConnection) new URL(u).openConnection();
+                      h.setRequestProperty("User-Agent", UA); h.setConnectTimeout(8000); h.setReadTimeout(10000);
+                      try (InputStream in = h.getInputStream()) {
+                          ByteArrayOutputStream o = new ByteArrayOutputStream(); byte[] b = new byte[16384]; int n;
+                          while ((n = in.read(b)) > 0) { o.write(b, 0, n); if (o.size() > 4000000) return null; }
+                          byte[] a = o.toByteArray();
+                          BitmapFactory.Options op = new BitmapFactory.Options(); op.inJustDecodeBounds = true;
+                          BitmapFactory.decodeByteArray(a, 0, a.length, op);
+                          int s = 1; while (op.outWidth / (s * 2) >= 256) s *= 2;
+                          op = new BitmapFactory.Options(); op.inSampleSize = s;
+                          return BitmapFactory.decodeByteArray(a, 0, a.length, op);
+                      } finally { h.disconnect(); }
+                  } catch (Exception e) { return null; }
+              }
+
+              static PendingIntent open(Context c, int code, String url, int ep, boolean inbox) {
+                  Intent i = new Intent(c, MainActivity.class);
+                  i.setAction("nexora.open." + code);
+                  i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                  if (url != null && !url.isEmpty()) { i.putExtra("nx_url", url); i.putExtra("nx_ep", ep); }
+                  if (inbox) i.putExtra("nx_inbox", true);
+                  return PendingIntent.getActivity(c, code, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+              }
+
+              /** Publica en la barra de estado (sin repetir el mismo episodio) y guarda lo hallado para la campana de la app. */
+              @SuppressLint("MissingPermission")
+              static synchronized void post(Context c, JSONArray items, boolean fromApp) {
+                  try {
+                      SharedPreferences sp = c.getSharedPreferences(PREFS, 0);
+                      List<String> done = new ArrayList<>();
+                      JSONArray da = new JSONArray(sp.getString("notified", "[]"));
+                      for (int i = 0; i < da.length(); i++) done.add(da.getString(i));
+                      JSONArray pend = new JSONArray(sp.getString("inbox", "[]"));
+                      List<JSONObject> fresh = new ArrayList<>();
+                      for (int i = 0; i < items.length(); i++) {
+                          JSONObject it = items.getJSONObject(i);
+                          if (it.optBoolean("test")) { fresh.add(it); continue; }
+                          String k = it.optString("key"); if (k.isEmpty() || done.contains(k)) continue;
+                          done.add(k); fresh.add(it);
+                          if (!fromApp) pend.put(new JSONObject().put("url", it.optString("url")).put("title", it.optString("title"))
+                              .put("ep", it.optInt("ep")).put("image", it.optString("image")).put("ts", System.currentTimeMillis()));
+                      }
+                      while (done.size() > 400) done.remove(0);
+                      JSONArray pk = new JSONArray(); for (int i = Math.max(0, pend.length() - 60); i < pend.length(); i++) pk.put(pend.get(i));
+                      sp.edit().putString("notified", new JSONArray(done).toString()).putString("inbox", pk.toString()).apply();
+                      if (fresh.isEmpty()) return;
+                      NotificationManagerCompat nm = NotificationManagerCompat.from(c);
+                      if (!nm.areNotificationsEnabled()) return;
+                      ensureChannel(c);
+                      if (fresh.size() <= 3) {
+                          for (JSONObject it : fresh) {
+                              boolean test = it.optBoolean("test");
+                              int id = it.optString("key").hashCode() & 0x7fffffff;
+                              String title = it.optString("title", "Animes Nexora Plus");
+                              String text = test ? it.optString("body") : "Episodio " + it.optInt("ep") + " ya disponible · Toca para verlo";
+                              NotificationCompat.Builder b = new NotificationCompat.Builder(c, CH)
+                                  .setSmallIcon(R.drawable.ic_stat_nexora).setColor(0xFF8B6BFF)
+                                  .setContentTitle(title).setContentText(text)
+                                  .setStyle(new NotificationCompat.BigTextStyle().bigText(text))
+                                  .setSubText(test ? "Prueba" : "Nuevo episodio")
+                                  .setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true)
+                                  .setDefaults(NotificationCompat.DEFAULT_ALL)
+                                  .setContentIntent(open(c, id, it.optString("url"), it.optInt("ep"), false));
+                              Bitmap bm = test ? null : poster(it.optString("image")); if (bm != null) b.setLargeIcon(bm);
+                              try { nm.notify(id, b.build()); } catch (SecurityException e) { }
+                          }
+                      } else {
+                          NotificationCompat.InboxStyle st = new NotificationCompat.InboxStyle();
+                          StringBuilder sb = new StringBuilder();
+                          for (int i = 0; i < fresh.size() && i < 6; i++) {
+                              JSONObject it = fresh.get(i); String line = it.optString("title") + " · Ep. " + it.optInt("ep");
+                              st.addLine(line); if (i < 3) sb.append(i > 0 ? ", " : "").append(it.optString("title"));
+                          }
+                          if (fresh.size() > 6) st.setSummaryText("+" + (fresh.size() - 6) + " más");
+                          String title = fresh.size() + " episodios nuevos en Nexora";
+                          NotificationCompat.Builder b = new NotificationCompat.Builder(c, CH)
+                              .setSmallIcon(R.drawable.ic_stat_nexora).setColor(0xFF8B6BFF)
+                              .setContentTitle(title).setContentText(sb.toString()).setStyle(st.setBigContentTitle(title))
+                              .setNumber(fresh.size()).setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true)
+                              .setDefaults(NotificationCompat.DEFAULT_ALL)
+                              .setContentIntent(open(c, 4242, null, 0, true));
+                          try { nm.notify(4242, b.build()); } catch (SecurityException e) { }
+                      }
+                  } catch (Exception e) { }
+              }
+          }
+          JAVA
+          sed -i "s/__PKG__/${APP_ID}/" $JDIR/NexoraCheck.java
           ls $JDIR
           # Permitir APIs http:// y pantalla completa de video
           sed -i 's/<application/<application android:usesCleartextTraffic="true" android:banner="@drawable\/nx_banner"/' AndroidManifest.xml
@@ -404,9 +788,9 @@ jobs:
           # Versión automática (Android 8+ para que el icono oficial se vea en todos los equipos)
           cd ../../
           sed -i 's/minSdkVersion = 2[0-9]/minSdkVersion = 26/' ../variables.gradle
-          # librería que necesita el revisor en segundo plano
-          sed -i "/dirs '..\/capacitor-cordova-android-plugins/ s#'libs'#'libs', '../../node_modules/@capacitor/background-runner/android/src/main/libs'#" build.gradle
-          grep -n "background-runner/android" build.gradle || echo "AVISO: flatDir no modificado"
+          # WorkManager: revisor nativo de episodios nuevos con la app cerrada
+          sed -i 's/^dependencies {/dependencies {\n    implementation "androidx.work:work-runtime:2.9.1"/' build.gradle
+          grep -q "work-runtime" build.gradle && echo "WorkManager OK" || { echo "No se pudo agregar WorkManager"; exit 1; }
           sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/" build.gradle
           sed -i "s/versionName \"1.0\"/versionName \"${APP_VERSION}\"/" build.gradle
 

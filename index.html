@@ -922,7 +922,7 @@ let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add
 const cap=window.Capacitor, native=!!(cap&&cap.isNativePlatform&&cap.isNativePlatform());
 const plug=n=>{try{return native?((cap.Plugins&&cap.Plugins[n])||cap.registerPlugin(n)):null}catch(e){return null}};
 const NXS=plug('NexoraScreen');
-const App=plug('App'), Orient=plug('ScreenOrientation'), SBar=plug('StatusBar'), LN=plug('LocalNotifications'), BGR=plug('BackgroundRunner');
+const App=plug('App'), Orient=plug('ScreenOrientation'), SBar=plug('StatusBar'), LN=plug('LocalNotifications');
 
 let cfg=Object.assign({source:'direct',apiBase:'',apiKey:'nexora-plus-key',autoNext:true,notify:true,countdown:10,lang:'dub',rot:true,proxy:true,askLang:true,esTitles:true},store.get('nx_cfg',{}));
 if(!cfg.v101){cfg.lang='dub';cfg.askLang=true;cfg.esTitles=true;cfg.v101=true;try{localStorage.setItem('nx_cfg',JSON.stringify(cfg))}catch(e){}}
@@ -2163,7 +2163,16 @@ setTimeout(async()=>{afterUpdate=()=>setTimeout(showPermIfNeeded,400);const show
 
 /* ================= AVISOS DE EPISODIOS NUEVOS ================= */
 async function askNotify(){if(!LN||(!cfg.notify&&cfg.notifyAll===false))return;try{const p=await LN.checkPermissions();if(p.display!=='granted')await LN.requestPermissions()}catch(e){}}
-function syncNotify(){if(!BGR)return;try{BGR.dispatchEvent({label:'com.nexora.animesplus.check',event:'syncFavs',details:{on:cfg.notify,all:cfg.notifyAll!==false,seen:store.get('nx_lseen',[]).slice(0,150),favs:favs.map(f=>({url:f.url,title:esTitle(f),last:f.last||0}))}}).catch(()=>{})}catch(e){}}
+const epKey=(url,ep)=>{const m=String(url||'').match(/\/media\/([^/?#]+)/);return m?m[1]+'#'+ep:null};
+const HAS_NN=!!(NXS&&NXS.postEpisodes);
+function syncNotify(){if(!HAS_NN)return;try{NXS.syncCheck({on:!!cfg.notify,all:cfg.notifyAll!==false,
+  seen:store.get('nx_lseen',[]).slice(0,150).map(k=>{const[u,e]=String(k).split('#');return epKey(u,e)}).filter(Boolean),
+  favs:favs.map(f=>({url:f.url,title:esTitle(f),last:f.last||0,image:f.image||''}))}).catch(()=>{})}catch(e){}}
+/* aviso en la barra de estado del teléfono (también con la app abierta) */
+function postEps(list){if(!list.length)return;
+  if(HAS_NN){NXS.postEpisodes({items:list.map(a=>({key:epKey(a.url,a.ep),title:a.title,ep:+a.ep,url:a.url,image:a.image||''})).filter(x=>x.key)}).catch(()=>{});return}
+  if(list.length<=3)list.forEach(a=>notify('Nuevo episodio en Nexora',`${a.title} · Episodio ${a.ep} ya disponible`,{url:a.url,ep:String(a.ep)}));
+  else notify(`${list.length} episodios nuevos en Nexora`,list.slice(0,4).map(a=>`${a.title} · Ep. ${a.ep}`).join('\n'),{})}
 async function notify(title,body,extra){
   if(LN){try{await LN.schedule({notifications:[{id:Math.floor(Math.random()*2e9),title,body,extra,smallIcon:'ic_stat_nexora'}]});return}catch(e){}}
   toast(body)}
@@ -2175,8 +2184,9 @@ async function checkFavs(force){
   const news=[];
   for(const f of favs.slice(0,25)){try{const mx=await latestEp(f.url);if(mx&&f.last&&mx>f.last)news.push({f,mx});if(mx)f.last=mx}catch(e){}}
   store.set('nx_fav',favs);syncNotify();
-  for(const n of news){addInbox({url:n.f.url,title:esTitle(n.f),image:n.f.image,ep:n.mx});if(document.hidden)notify('Nuevo episodio en Nexora',`${esTitle(n.f)} · Episodio ${n.mx} ya disponible`,{url:n.f.url,ep:String(n.mx)})}
-  if(news.length&&!document.hidden)toast(news.length===1?`Nuevo: ${esTitle(news[0].f)} · Ep. ${news[0].mx}`:`${news.length} episodios nuevos en Mi lista`);
+  for(const n of news)addInbox({url:n.f.url,title:esTitle(n.f),image:n.f.image,ep:n.mx});
+  postEps(news.map(n=>({url:n.f.url,title:esTitle(n.f),image:n.f.image,ep:n.mx})));
+  if(news.length&&!document.hidden&&!HAS_NN)toast(news.length===1?`Nuevo: ${esTitle(news[0].f)} · Ep. ${news[0].mx}`:`${news.length} episodios nuevos en Mi lista`);
 }
 if(LN){LN.addListener('localNotificationActionPerformed',a=>{const x=a?.notification?.extra;if(x&&x.url){const n=INBOX.find(y=>y.url===x.url&&+y.ep===+x.ep);if(n){n.read=true;saveInbox()}openDetail(x.url,x.ep?{openEps:true}:null)}}).catch?.(()=>{});
   LN.addListener('localNotificationReceived',a=>{const x=a?.extra;if(x&&x.url)addInbox({url:x.url,title:(a.body||'').split(' · ')[0],ep:+x.ep||0})}).catch?.(()=>{})}
@@ -2192,15 +2202,22 @@ async function checkLatest(force){
   store.set('nx_lseen',[...new Set([...keys,...seen])].slice(0,150));syncNotify();
   if(!news.length)return;
   news.slice().reverse().forEach(a=>addInbox({url:a.url,title:esTitle(a),image:a.image,ep:a.epNum}));
-  if(document.hidden){
-    if(news.length<=3)news.forEach(a=>notify('Nuevo episodio en Nexora',`${esTitle(a)} · Episodio ${a.epNum} ya disponible`,{url:a.url,ep:String(a.epNum)}));
-    else notify(`${news.length} episodios nuevos en Nexora`,news.slice(0,4).map(a=>`${esTitle(a)} · Ep. ${a.epNum}`).join('\n'),{})}
-  else toast(news.length===1?`Nuevo: ${esTitle(news[0])} · Ep. ${news[0].epNum}`:`${news.length} episodios nuevos · mira la campana 🔔`);
+  postEps(news.map(a=>({url:a.url,title:esTitle(a),image:a.image,ep:a.epNum})));
+  if(!document.hidden&&!HAS_NN)toast(news.length===1?`Nuevo: ${esTitle(news[0])} · Ep. ${news[0].epNum}`:`${news.length} episodios nuevos · mira la campana 🔔`);
 }
 setInterval(()=>{checkFavs();checkLatest()},10*60e3);
-if(App)App.addListener('appStateChange',st=>{if(st.isActive){checkFavs();checkLatest()}});
+async function takeNative(){if(!HAS_NN||!NXS.takeInbox)return;try{const r=await NXS.takeInbox();(r&&r.items||[]).forEach(n=>{if(n&&n.url)addInbox({url:n.url,title:n.title,image:n.image||'',ep:+n.ep||0})})}catch(e){}}
+if(App)App.addListener('appStateChange',st=>{if(st.isActive){takeNative();checkFavs();checkLatest()}});
+if(HAS_NN){setTimeout(takeNative,1500);
+  NXS.addListener('nxOpen',d=>setTimeout(()=>{if(!d)return;if(d.url){const n=INBOX.find(y=>y.url===d.url&&+y.ep===+d.ep);if(n){n.read=true;saveInbox()}openDetail(d.url,{openEps:true})}
+    else if(d.inbox){renderInbox();pushOv('inbox')}},1200)).catch?.(()=>{})}
 $('#s-ntf').onchange=e=>{cfg.notify=e.target.checked;saveCfg();syncNotify();if(cfg.notify)askNotify()};
-$('#s-ntest').onclick=async()=>{await askNotify();notify('Nuevo episodio en Nexora','Así te avisaremos cuando salga un capítulo nuevo de Mi lista',{});
+async function notifOff(){if(!HAS_NN||!NXS.notifState)return false;try{const r=await NXS.notifState();if(r&&r.enabled===false){
+  sheet(`<h3>Notificaciones apagadas</h3><p class="lg-why">El teléfono tiene bloqueadas las notificaciones de Animes Nexora Plus. Actívalas, incluida la categoría <b>Episodios nuevos</b>, para que lleguen a la barra de estado.</p><button class="btn pri" id="nf-open" style="width:100%;margin-top:14px">Abrir notificaciones de la app</button>`);
+  $('#nf-open').onclick=()=>{NXS.openNotifSettings().catch(()=>{});closeTop()};return true}}catch(e){}return false}
+$('#s-ntest').onclick=async()=>{await askNotify();if(await notifOff())return;
+  if(HAS_NN)NXS.postEpisodes({items:[{key:'test#'+Date.now(),test:true,title:'Nuevo episodio en Nexora',body:'Así te avisaremos cuando salga un capítulo nuevo'}]}).catch(()=>{});
+  else notify('Nuevo episodio en Nexora','Así te avisaremos cuando salga un capítulo nuevo de Mi lista',{});
   addInbox({url:'',title:'Notificación de prueba',ep:0,test:true})};
 /* Bandeja de notificaciones */
 let INBOX=store.get('nx_inbox',[]);
@@ -2229,7 +2246,8 @@ $('#s-nbg').onclick=()=>{
   $('#nb-bat').onclick=()=>call('openBattery','Búscalo en Ajustes del teléfono → Apps → Animes Nexora Plus → Batería');
   $('#nb-auto').onclick=()=>call('openAutostart','Búscalo en Ajustes → Apps → Permisos → Inicio automático');
   $('#nb-app').onclick=()=>call('openAppSettings','Búscalo en Ajustes del teléfono → Apps → Animes Nexora Plus');
-  $('#nb-test').onclick=async()=>{if(!LN)return toast('Las notificaciones solo funcionan en la app instalada');await askNotify();
+  $('#nb-test').onclick=async()=>{if(!LN)return toast('Las notificaciones solo funcionan en la app instalada');await askNotify();if(await notifOff())return;
+    if(HAS_NN&&NXS.testLater){NXS.testLater({sec:30}).catch(()=>{});toast('Listo: cierra la app y espera 30 segundos');return}
     try{await LN.schedule({notifications:[{id:Math.floor(Math.random()*1e6)+5000,title:'Prueba de Nexora',body:'¡Los avisos con la app cerrada funcionan! 🎉',schedule:{at:new Date(Date.now()+30000),allowWhileIdle:true},smallIcon:'ic_stat_nexora'}]});toast('Listo: cierra la app y espera 30 segundos')}catch(e){toast('No se pudo programar el aviso')}};
 };
 $('#s-nall').onchange=e=>{cfg.notifyAll=e.target.checked;saveCfg();syncNotify();if(cfg.notifyAll){askNotify();checkLatest(true)}};

@@ -1,22 +1,28 @@
 name: Compilar APK
 on:
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   diag:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          set +e
+          set +e; mkdir out; cd out
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
-          chk(){ code=$(curl -s -L -m 25 -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o p.html -w '%{http_code} %{url_effective}' "$1"); cf=$(grep -c -i 'just a moment\|cf-chl\|challenge-platform' p.html); echo "$1 -> $code bytes=$(wc -c < p.html) cf=$cf latino=$(grep -o -i 'latino' p.html | wc -l) onepiece=$(grep -o -i 'one-piece' p.html | wc -l)"; }
-          echo "#### fuente principal: One Piece"
-          for e in 1 500 1100; do curl -s -A "$UA" https://animeav1.com/media/one-piece/$e > av.html; echo "ep $e bytes $(wc -c < av.html) DUB=$(grep -o 'DUB:\[[^]]\{0,300\}' av.html | head -c 300) SUB=$(grep -o 'SUB:\[' av.html | wc -l)"; done
-          echo "#### monoschinos"
-          chk "https://monoschinos.st/buscar?q=one+piece"; grep -o 'href="https://monoschinos.st/anime/[^"]*"' p.html | sort -u | head
-          echo "#### candidatas"
-          for u in https://www.animelatinohd.com/ https://animelatinohd.com/ https://ww3.animeonline.ninja/ https://animeonline.ninja/ https://animefenix.tv/ https://www.animefenix.tv/ https://animeyt.es/ https://veranimes.net/ https://henaojara.com/ https://www3.animeflv.net/ https://animeflv.ac/ https://animeid.tv/ https://www.animeid.tv/ https://jkanime.net/ https://anitube.vip/ https://animesaturn.cx/ https://otakuanime.net/ https://animexyz.net/ https://serieslan.com/ https://zonaleros.com/; do chk "$u"; done
-          echo "#### busquedas one piece"
-          chk "https://www.animelatinohd.com/animes?search=one+piece"; grep -o 'href="[^"]*one-piece[^"]*"' p.html | sort -u | head -5
-          chk "https://ww3.animeonline.ninja/?s=one+piece"; grep -o 'href="[^"]*one-piece[^"]*"' p.html | sort -u | head -8
-          chk "https://animefenix.tv/animes?q=one+piece"; grep -o 'href="[^"]*one-piece[^"]*"' p.html | sort -u | head -8
-          chk "https://serieslan.com/b.php?q=one+piece"; grep -o 'href="[^"]*one-piece[^"]*"' p.html | sort -u | head -5
+          g(){ code=$(curl -s -L -m 30 -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o "$1" -w '%{http_code} %{url_effective}' "$2"); echo "$1 -> $code $(wc -c < "$1")"; }
+          g ninja-op.html https://ww4.animeonline.ninja/online/one-piece-070125/
+          g ninja-opn.html https://ww4.animeonline.ninja/online/one-piece-netflix-122823/
+          g ninja-home.html https://ww4.animeonline.ninja/
+          E=$(grep -o 'href="https://ww4.animeonline.ninja/episodio/[^"]*"' ninja-op.html | head -1 | sed 's/href="//;s/"//'); echo "ep=$E"
+          [ -n "$E" ] && g ninja-ep.html "$E"
+          E2=$(grep -o 'href="https://ww4.animeonline.ninja/episodio/[^"]*"' ninja-opn.html | head -1 | sed 's/href="//;s/"//'); echo "ep2=$E2"
+          [ -n "$E2" ] && g ninja-ep2.html "$E2"
+          g ver-home.html https://wwv.veranimes.net/
+          g ver-search.html "https://wwv.veranimes.net/buscar?q=one+piece"
+          g ver-search2.html "https://wwv.veranimes.net/?s=one+piece"
+          grep -o 'href="[^"]*one-piece[^"]*"' ver-home.html ver-search.html ver-search2.html | sort -u | head -20
+          A=$(grep -o 'href="[^"]*one-piece[^"]*"' ver-home.html ver-search.html ver-search2.html | head -1 | sed 's/.*href="//;s/"//'); echo "A=$A"
+          [ -n "$A" ] && g ver-a.html "$A"
+          cd .. && cd out && git init -q && git checkout -q -b diag-datos && git add -A && git -c user.name=diag -c user.email=diag@x commit -q -m datos
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" diag-datos

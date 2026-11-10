@@ -155,6 +155,12 @@ jobs:
           import com.getcapacitor.Plugin;
           import com.getcapacitor.PluginCall;
           import com.getcapacitor.PluginMethod;
+          import java.io.ByteArrayOutputStream;
+          import java.io.InputStream;
+          import java.io.OutputStream;
+          import java.net.HttpURLConnection;
+          import java.net.URL;
+          import java.util.Iterator;
           import com.getcapacitor.annotation.CapacitorPlugin;
 
           @CapacitorPlugin(name = "NexoraScreen")
@@ -260,6 +266,29 @@ jobs:
                   boolean ok = launch(i);
                   if (!ok) ok = appDetails();
                   done(call, ok);
+              }
+
+              /* POST de formulario hecho por Android (la fuente de Latino no acepta el formato del plugin web) */
+              @PluginMethod
+              public void httpPost(PluginCall call) {
+                  final String url = call.getString("url");
+                  final String body = call.getString("body", "");
+                  final JSObject hdr = call.getObject("headers", new JSObject());
+                  new Thread(() -> {
+                      try {
+                          HttpURLConnection h = (HttpURLConnection) new URL(url).openConnection();
+                          h.setRequestMethod("POST"); h.setDoOutput(true); h.setConnectTimeout(15000); h.setReadTimeout(25000);
+                          Iterator<String> it = hdr.keys();
+                          while (it.hasNext()) { String k = it.next(); h.setRequestProperty(k, hdr.getString(k)); }
+                          byte[] b = body.getBytes("UTF-8"); h.setFixedLengthStreamingMode(b.length);
+                          try (OutputStream o = h.getOutputStream()) { o.write(b); }
+                          int code = h.getResponseCode();
+                          InputStream in = code >= 400 ? h.getErrorStream() : h.getInputStream();
+                          String txt = "";
+                          if (in != null) { ByteArrayOutputStream bo = new ByteArrayOutputStream(); byte[] buf = new byte[8192]; int n; while ((n = in.read(buf)) > 0) bo.write(buf, 0, n); txt = bo.toString("UTF-8"); in.close(); }
+                          JSObject r = new JSObject(); r.put("status", code); r.put("data", txt); call.resolve(r);
+                      } catch (Exception e) { call.reject(String.valueOf(e.getMessage())); }
+                  }).start();
               }
 
               /* Prueba con la app cerrada: el aviso sale a los segundos indicados */

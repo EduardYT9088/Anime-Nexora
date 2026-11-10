@@ -1,21 +1,19 @@
 name: Compilar APK
 on:
   workflow_dispatch:
-permissions:
-  contents: write
 jobs:
   diag:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          set +e; mkdir out; cd out
-          UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
-          curl -s -L -m 30 -A "$UA" -o nj-s-op.html -w "%{http_code} %{url_effective}\n" "https://ww3.animeonline.ninja/?s=One+Piece"
-          curl -s -L -m 30 -A "$UA" -o nj-s-kus.html -w "%{http_code} %{url_effective}\n" "https://ww3.animeonline.ninja/?s=Kusuriya+no+Hitorigoto"
-          curl -s -L -m 30 -A "$UA" -o nj-ep1.html -w "%{http_code}\n" "https://ww4.animeonline.ninja/episodio/one-piece-cap-1/"
-          P=$(grep -o "data-post='[0-9]*'" nj-ep1.html | head -1 | grep -o '[0-9]*')
-          U=$(curl -s -A "$UA" -X POST -H 'X-Requested-With: XMLHttpRequest' --data "action=doo_player_ajax&post=$P&nume=1&type=tv" https://ww4.animeonline.ninja/wp-admin/admin-ajax.php | python3 -c "import sys,json;print(json.load(sys.stdin)['embed_url'])")
-          curl -s -A "$UA" -o nj-ms.html "$U"; echo "ms sin referer: $(grep -c go_to_player nj-ms.html)"
-          curl -s -A "$UA" -H "Referer: https://ww4.animeonline.ninja/" -o nj-ms2.html "$U"; echo "ms con referer: $(grep -c go_to_player nj-ms2.html)"
-          git init -q && git checkout -q -b diag-datos && git add -A && git -c user.name=diag -c user.email=diag@x commit -q -m datos
-          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" diag-datos
+          set +e
+          UA='Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
+          B=https://ww4.animeonline.ninja
+          echo "== GET admin-ajax"; curl -s -m 20 -A "$UA" -w ' HTTP %{http_code}' "$B/wp-admin/admin-ajax.php?action=doo_player_ajax&post=99996&nume=1&type=tv" | head -c 300; echo
+          echo "== POST sin X-Requested-With"; curl -s -m 20 -A "$UA" -X POST --data "action=doo_player_ajax&post=99996&nume=1&type=tv" -w ' HTTP %{http_code}' "$B/wp-admin/admin-ajax.php" | head -c 300; echo
+          echo "== POST content-type con charset"; curl -s -m 20 -A "$UA" -X POST -H 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8' --data "action=doo_player_ajax&post=99996&nume=1&type=tv" -w ' HTTP %{http_code}' "$B/wp-admin/admin-ajax.php" | head -c 300; echo
+          echo "== POST JSON (por si el telefono manda JSON)"; curl -s -m 20 -A "$UA" -X POST -H 'Content-Type: application/json' --data '{"action":"doo_player_ajax","post":"99996","nume":"1","type":"tv"}' -w ' HTTP %{http_code}' "$B/wp-admin/admin-ajax.php" | head -c 300; echo
+          echo "== busqueda con espacio %20"; curl -s -L -m 20 -A "$UA" -o s.html -w '%{http_code} %{url_effective} %{size_download}\n' "$B/?s=One%20Piece"; grep -c 'result-item' s.html
+          echo "== busqueda ww3"; curl -s -L -m 20 -A "$UA" -o s3.html -w '%{http_code} %{url_effective} %{size_download}\n' "https://ww3.animeonline.ninja/?s=One%20Piece"
+          echo "== cabeceras pagina"; curl -s -I -m 20 -A "$UA" "$B/online/one-piece-070125/" | grep -i "HTTP/\|content-type\|cf-\|server\|content-encoding"
+          echo "== tiempo pagina grande"; curl -s -m 60 -A "$UA" -o op.html -w '%{http_code} %{size_download} %{time_total}s\n' --compressed "$B/online/one-piece-070125/"

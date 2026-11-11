@@ -161,6 +161,7 @@ jobs:
           import java.net.HttpURLConnection;
           import java.net.URL;
           import java.util.Iterator;
+          import android.graphics.Bitmap;
           import android.os.Handler;
           import android.os.Looper;
           import android.webkit.CookieManager;
@@ -365,27 +366,35 @@ jobs:
                               hd.post(() -> { try { root.removeView(box); w.stopLoading(); w.destroy(); } catch (Exception e) { } });
                           };
                           bt.setOnClickListener(v -> finish.accept("ERR cancelado"));
+                          final Runnable hideBox = () -> {
+                              if (bar.getVisibility() != View.VISIBLE) return;
+                              bar.setVisibility(View.GONE); box.setElevation(0);
+                              try { root.removeView(box); root.addView(box, 0, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)); } catch (Exception e) { }
+                          };
                           check[0] = () -> {
                               if (done[0]) return;
-                              w.evaluateJavascript("JSON.stringify([document.title||'',document.documentElement?document.documentElement.outerHTML:''])", v -> {
+                              w.evaluateJavascript("JSON.stringify([document.title||'',document.documentElement?document.documentElement.outerHTML:'',document.readyState||''])", v -> {
                                   if (done[0]) return;
-                                  String title = "", html = "";
-                                  try { JSONArray a = new JSONArray(new JSONArray("[" + v + "]").getString(0)); title = a.getString(0); html = a.getString(1); } catch (Exception e) { }
+                                  String title = "", html = "", rs = "";
+                                  try { JSONArray a = new JSONArray(new JSONArray("[" + v + "]").getString(0)); title = a.getString(0); html = a.getString(1); rs = a.optString(2, ""); } catch (Exception e) { }
                                   page[0] = title; page[1] = html;
                                   String tl = title.toLowerCase();
-                                  boolean wait = tl.contains("just a moment") || tl.contains("un momento") || tl.contains("checking") || html.length() < 2000;
+                                  boolean chal = tl.contains("just a moment") || tl.contains("un momento") || tl.contains("checking") || html.length() < 2000;
+                                  /* la página grande aún se está descargando: esperar a que esté completa */
+                                  boolean loading = !chal && "loading".equals(rs);
+                                  boolean wait = chal || loading;
                                   long el = System.currentTimeMillis() - t0;
+                                  if (!chal) hideBox.run();
                                   if (wait) {
-                                      w.evaluateJavascript(clean, null);
-                                      if (el > quiet && bar.getVisibility() != View.VISIBLE) { bar.setVisibility(View.VISIBLE); box.bringToFront(); box.setElevation(px(60)); }
+                                      if (chal) w.evaluateJavascript(clean, null);
+                                      if (chal && el > quiet && bar.getVisibility() != View.VISIBLE) { bar.setVisibility(View.VISIBLE); box.bringToFront(); box.setElevation(px(60)); }
                                       hd.removeCallbacks(check[0]);
-                                      if (el < tmo) hd.postDelayed(check[0], 800); else finish.accept(null);
+                                      if (el < tmo) hd.postDelayed(check[0], loading ? 400 : 800); else finish.accept(null);
                                       return;
                                   }
                                   if (js == null) { finish.accept(null); return; }
                                   if (ran[0]) return;
                                   ran[0] = true;
-                                  if (bar.getVisibility() == View.VISIBLE) { root.removeView(box); root.addView(box, 0); bar.setVisibility(View.GONE); }
                                   w.evaluateJavascript(js, null);
                                   final long t1 = System.currentTimeMillis();
                                   poll[0] = () -> {
@@ -400,7 +409,9 @@ jobs:
                               });
                           };
                           w.setWebViewClient(new WebViewClient() {
-                              @Override public void onPageFinished(WebView v, String u) { hd.removeCallbacks(check[0]); hd.postDelayed(check[0], 500); }
+                              /* Cloudflare ya dejó pasar y carga la página real: se esconde al instante */
+                              @Override public void onPageStarted(WebView v, String u, Bitmap f) { hideBox.run(); }
+                              @Override public void onPageFinished(WebView v, String u) { hd.removeCallbacks(check[0]); hd.postDelayed(check[0], 300); }
                           });
                           hd.postDelayed(() -> { if (!done[0]) finish.accept(null); }, tmo + 35000);
                           w.loadUrl(url);

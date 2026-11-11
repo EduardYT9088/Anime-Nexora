@@ -1239,7 +1239,7 @@ async function postForm(url,data,headers={}){const h={'User-Agent':(NJW&&NJW.ua)
   if(NXS&&NXS.httpPost){let r;try{r=await NXS.httpPost({url,body,headers:h})}catch(e){throw new Error('La fuente de Latino no responde')}if(r.status>=400)throw new Error('La fuente de Latino respondió '+r.status);return r.data}
   if(NH){let r;try{r=await NH.request({url,method:'POST',headers:h,data:body,responseType:'text',connectTimeout:15000,readTimeout:25000})}catch(e){throw new Error('La fuente de Latino no responde')}return r.data}
   const r=await fetch(url,{method:'POST',body:new URLSearchParams(data)});return r.text()}
-let NJLAST='';const NJC=store.get('nx_njv',0)<3?{}:store.get('nx_njc',{});store.set('nx_njv',3);
+let NJLAST='';const NJC=store.get('nx_njv',0)<4?{}:store.get('nx_njc',{});store.set('nx_njv',4);
 function njSave(){const k=Object.keys(NJC);if(k.length>30)k.sort((a,b)=>NJC[a].t-NJC[b].t).slice(0,k.length-30).forEach(x=>delete NJC[x]);store.set('nx_njc',NJC)}
 /* lista de episodios de la página: {temporada: [enlaces en orden]} y la lista completa */
 function njEpisodes(html){const out={all:[],by:{}};
@@ -1469,7 +1469,7 @@ async function mostViewed(sigs){
     return out}catch(e){return[]}
 }
 /* ===== ¿Tiene Latino? Revisa los servidores del episodio y lo recuerda 7 días ===== */
-let DUB=store.get('nx_dub',{});if(store.get('nx_dubv',0)<2){DUB={};store.set('nx_dub',{});store.set('nx_dubv',2)}const dubQ=[];let dubBusy=0,dubSaveT;
+let DUB=store.get('nx_dub',{});if(store.get('nx_dubv',0)<3){DUB={};store.set('nx_dub',{});store.set('nx_dubv',3)}const dubQ=[];let dubBusy=0,dubSaveT;
 function langsOf(u){const v=DUB[u];if(!v)return null;const age=Date.now()-v.t;return age<(v.d?7:1)*864e5?v:null}
 function checkEp(u,front){return new Promise(res=>{const c=langsOf(u);if(c)return res(c);const job={u,res};front?dubQ.unshift(job):dubQ.push(job);pumpDub()})}
 function pumpDub(){while(dubBusy<(latMax||(cfg.lite?2:3))&&dubQ.length){const j=dubQ.shift();const c=langsOf(j.u);if(c){j.res(c);continue}dubBusy++;

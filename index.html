@@ -369,6 +369,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 .tbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px}
 .pill{display:flex;align-items:center;gap:2px;padding:4px;border-radius:16px;background:rgba(20,17,44,.62);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.1)}
 .pill button{display:flex;align-items:center;gap:5px;height:38px;padding:0 11px;border-radius:12px;font-size:12.5px;font-weight:800}
+#p-q span{white-space:nowrap}#p-q.hd span{color:var(--ac2)}
 .pill button:active{background:rgba(255,255,255,.1)}
 .pill button svg{width:19px;height:19px}
 .pill button.dim{opacity:.35}
@@ -738,6 +739,8 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
         <div class="set hide nx-fixed"><span class="sic"><svg class="i"><use href="#i-next"/></svg></span><div class="l"><b>Siguiente episodio automático</b><small>Al terminar, pasa al siguiente</small></div><label class="sw"><input type="checkbox" id="s-auto"><span></span></label></div>
         <div class="set"><span class="sic"><svg class="i"><use href="#i-skip"/></svg></span><div class="l"><b>Cuenta regresiva</b><small>Segundos antes de saltar</small></div>
           <select id="s-cd"><option>3</option><option>5</option><option>8</option><option>10</option><option>15</option></select></div>
+        <div class="set"><span class="sic"><svg class="i"><use href="#i-fit"/></svg></span><div class="l"><b>Calidad de video</b><small>Si el servidor tiene varias calidades</small></div>
+          <select id="s-q"><option value="auto">Automática</option><option value="max">Siempre la mejor</option><option value="low">Ahorrar datos (480p)</option></select></div>
         <div class="set"><span class="sic"><svg class="i"><use href="#i-mic"/></svg></span><div class="l"><b>Idioma preferido</b><small>Se usa si el episodio lo tiene</small></div>
           <select id="s-lang"><option value="dub">Latino</option><option value="sub">Subtitulado</option></select></div>
         <div class="set"><span class="sic"><svg class="i"><use href="#i-cc"/></svg></span><div class="l"><b>Preguntar idioma</b><small>Latino o Subtitulado la primera vez que ves un anime</small></div><label class="sw"><input type="checkbox" id="s-ask"><span></span></label></div>
@@ -923,6 +926,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
           <button id="p-prev" aria-label="Anterior"><svg class="i"><use href="#i-prev"/></svg></button>
           <button id="p-lang"><span id="p-langf">🇲🇽</span><span id="p-langb">LAT</span></button>
           <button id="p-speed"><span id="p-spd">1x</span></button>
+          <button id="p-q" aria-label="Calidad de video"><span id="p-qn">Auto</span></button>
           <button id="p-fit" aria-label="Ajustar"><svg class="i"><use href="#i-fit"/></svg></button>
           <button id="p-op"><svg class="i"><use href="#i-skip"/></svg><span>85s</span></button>
         </div>
@@ -952,7 +956,7 @@ const plug=n=>{try{return native?((cap.Plugins&&cap.Plugins[n])||cap.registerPlu
 const NXS=plug('NexoraScreen');
 const App=plug('App'), Orient=plug('ScreenOrientation'), SBar=plug('StatusBar'), LN=plug('LocalNotifications');
 
-let cfg=Object.assign({source:'direct',apiBase:'',apiKey:'nexora-plus-key',autoNext:true,notify:true,countdown:10,lang:'dub',rot:true,proxy:true,askLang:true,esTitles:true},store.get('nx_cfg',{}));
+let cfg=Object.assign({quality:'auto',source:'direct',apiBase:'',apiKey:'nexora-plus-key',autoNext:true,notify:true,countdown:10,lang:'dub',rot:true,proxy:true,askLang:true,esTitles:true},store.get('nx_cfg',{}));
 if(!cfg.v101){cfg.lang='dub';cfg.askLang=true;cfg.esTitles=true;cfg.v101=true;try{localStorage.setItem('nx_cfg',JSON.stringify(cfg))}catch(e){}}
 let favs=store.get('nx_fav',[]), hist=store.get('nx_hist',{});
 const cache=new Map();
@@ -2043,7 +2047,7 @@ function noDirect(tk){
 function resetMedia(){
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}
   V.pause();V.removeAttribute('src');V.load();F.src='about:blank';F.classList.add('hide');V.classList.remove('hide');P.mode='video';
-  $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op').forEach(x=>x.classList.remove('hide'));setSeek(0,0)
+  $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op,#p-q').forEach(x=>x.classList.remove('hide'));setSeek(0,0);paintQ()
 }
 async function attach(url,type,tk){
   await loadHls();if(tk!==P.tk)return;
@@ -2059,8 +2063,10 @@ async function attach(url,type,tk){
     const w=l.find(x=>!SRC.canResolve(x));if(w){toast('El video directo falló, usando reproductor web');P.idx=l.indexOf(w);useFrame(w,tk)}else playerError('No se pudo reproducir el video.')};
   V.onerror=()=>fail('video '+(V.error?'código '+V.error.code:'con error'));
   if(type==='hls'&&window.Hls&&Hls.isSupported()){
-    const h=new Hls({maxBufferLength:90,maxMaxBufferLength:150,maxBufferSize:120*1000*1000,backBufferLength:90,maxBufferHole:1,startFragPrefetch:true,enableWorker:true,fragLoadingMaxRetry:4,manifestLoadingMaxRetry:3});P.hls=h;h.loadSource(url);h.attachMedia(V);
-    h.on(Hls.Events.MANIFEST_PARSED,()=>{V.playbackRate=P.speed;V.play().catch(()=>{})});
+    /* abrEwmaDefaultEstimate: suponer buen internet al empezar (antes arrancaba en la calidad más baja) */
+    const h=new Hls({maxBufferLength:90,maxMaxBufferLength:150,maxBufferSize:120*1000*1000,backBufferLength:90,maxBufferHole:1,startFragPrefetch:true,enableWorker:true,fragLoadingMaxRetry:4,manifestLoadingMaxRetry:3,abrEwmaDefaultEstimate:3000000,testBandwidth:true});P.hls=h;h.loadSource(url);h.attachMedia(V);
+    h.on(Hls.Events.MANIFEST_PARSED,()=>{applyQ(h);V.playbackRate=P.speed;V.play().catch(()=>{})});
+    h.on(Hls.Events.LEVEL_SWITCHED,()=>paintQ());
     h.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal){if(d.type===Hls.ErrorTypes.NETWORK_ERROR&&!P._retry){P._retry=1;h.startLoad()}else{P._retry=0;fail('HLS '+(d.details||d.type))}}});
   }else{V.src=url;V.play().catch(()=>{})}
   updSrvName();
@@ -2071,7 +2077,7 @@ function useFrame(it,tk){
   if(isTV)return noDirect(tk);
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}V.pause();V.removeAttribute('src');V.classList.add('hide');
   P.mode='frame';F.classList.remove('hide');F.src=it.url;loader(false);
-  $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op').forEach(x=>x.classList.add('hide'));updSrvName();
+  $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op,#p-q').forEach(x=>x.classList.add('hide'));updSrvName();
   $('#ctl').classList.remove('off');clearTimeout(P.hideT);P.hideT=setTimeout(()=>$('#ctl').classList.add('off'),4000);
 }
 function updSrvName(){const l=P.servers[P.lang]||[];const it=l[P.idx];$('#p-srvn').textContent=it?(it.server||'Servidor'):'—'}
@@ -2160,6 +2166,32 @@ $('#p-rew').onclick=stop(()=>seekBy(-10));
 $('#p-fwd').onclick=stop(()=>seekBy(10));
 $('#p-op').onclick=stop(()=>{seekBy(85);toast('Intro saltada (+85 s)')});
 const SPEEDS=[1,1.25,1.5,2,0.75];
+/* ---------- Calidad de video ---------- */
+const qH=l=>l&&(l.height||(l.attrs&&+String(l.attrs.RESOLUTION||'').split('x')[1]))||0;
+const qName=h=>!h?'':h>=2000?'4K':h>=1000?'1080p':h>=700?'720p':h>=470?'480p':h+'p';
+function qLevels(h){return(h&&h.levels||[]).map((l,i)=>({i,h:qH(l),b:l.bitrate||0})).filter(x=>x.h).sort((a,b)=>b.h-a.h||b.b-a.b).filter((x,k,a)=>k===0||a[k-1].h!==x.h)}
+function applyQ(h){const L=qLevels(h);if(!L.length){paintQ();return}
+  const want=P.qPick!=null?P.qPick:cfg.quality;
+  if(want==='low'){const c=L.find(x=>x.h<=480)||L[L.length-1];h.autoLevelCapping=c.i;h.currentLevel=-1}
+  else if(want==='max'){h.autoLevelCapping=-1;h.currentLevel=L[0].i}
+  else if(typeof want==='number'){const c=L.find(x=>x.h<=want)||L[L.length-1];h.autoLevelCapping=-1;h.currentLevel=c.i}
+  else{h.autoLevelCapping=-1;h.currentLevel=-1}
+  paintQ()}
+function paintQ(){const b=$('#p-qn');if(!b)return;const h=P.hls;let t='';
+  if(h&&h.levels&&h.levels.length){const cur=h.levels[h.currentLevel>=0?h.currentLevel:h.loadLevel];const n=qName(qH(cur));const auto=h.autoLevelEnabled;t=(n||'HD')+(auto&&qLevels(h).length>1?' · Auto':'')}
+  else if(V.videoHeight)t=qName(V.videoHeight);
+  b.textContent=t||'Calidad';$('#p-q').classList.toggle('hd',/1080|4K/.test(t))}
+V.addEventListener('loadedmetadata',()=>paintQ());
+$('#p-q').onclick=e=>{e.stopPropagation();const h=P.hls,L=qLevels(h);
+  if(!L.length){const n=qName(V.videoHeight);
+    psheet(`<h3>Calidad de video</h3><p class="lg-why">Este servidor tiene una sola calidad${n?`: <b>${n}</b>`:''}. Si quieres otra, prueba otro servidor.</p><button class="btn pri" id="q-srv" style="width:100%;margin-top:12px">Ver servidores</button>`);
+    $('#q-srv').onclick=()=>{$('#psheet').classList.remove('on');$('#p-srv').click()};return}
+  const auto=h.autoLevelEnabled,cur=h.currentLevel;
+  const row=(v,t,sub,on)=>`<button class="opt ${on?'on':''}" data-q="${v}"><span>${t}<br><small>${sub}</small></span>${on?'<small>✓</small>':''}</button>`;
+  psheet(`<h3>Calidad de video</h3>`+row('auto','Automática','Se ajusta a tu internet',auto)+
+    L.map(x=>row(x.h,qName(x.h)+(x===L[0]?' · la mejor':''),x.b?(x.b/1e6).toFixed(1)+' Mbps':'',!auto&&h.levels[cur]&&qH(h.levels[cur])===x.h)).join(''));
+  $$('#psheet-box .opt').forEach(o=>o.onclick=()=>{const v=o.dataset.q;P.qPick=v==='auto'?'auto':+v;$('#psheet').classList.remove('on');applyQ(h);
+    toast(v==='auto'?'Calidad automática':'Calidad '+qName(+v))})};
 $('#p-speed').onclick=stop(()=>{P.speed=SPEEDS[(SPEEDS.indexOf(P.speed)+1)%SPEEDS.length];V.playbackRate=P.speed;$('#p-spd').textContent=String(P.speed)+'x'});
 $('#p-fit').onclick=stop(()=>{P.fit=P.fit==='contain'?'cover':'contain';V.style.objectFit=P.fit;toast(P.fit==='cover'?'Pantalla completa':'Ajustado')});
 $('#p-lang').onclick=stop(()=>{const o=P.lang==='sub'?'dub':'sub';
@@ -2229,12 +2261,13 @@ function paintSrc(){$('#api-fields').classList.toggle('hide',cfg.source!=='api')
 function paintSettings(){
   $('#s-src').value=cfg.source;paintSrc();
   $('#s-base').value=cfg.apiBase;$('#s-key').value=cfg.apiKey;$('#s-auto').checked=cfg.autoNext;$('#s-cd').value=cfg.countdown;
-  $('#s-lang').value=cfg.lang;$('#s-rot').checked=cfg.rot;$('#s-px').checked=cfg.proxy;$('#s-ask').checked=cfg.askLang;$('#s-es').checked=cfg.esTitles;
+  $('#s-lang').value=cfg.lang;if($('#s-q'))$('#s-q').value=cfg.quality||'auto';$('#s-rot').checked=cfg.rot;$('#s-px').checked=cfg.proxy;$('#s-ask').checked=cfg.askLang;$('#s-es').checked=cfg.esTitles;
 }
 $('#s-lic').onclick=()=>{sheet(`<h3>Licencia</h3><pre class="lic">${esc(LICENSE_TXT)}</pre><button class="btn pri lic-ok" id="lic-ok">Entendido</button>`);$('#lic-ok').onclick=()=>$('#sheet').classList.remove('on')};
 $('#s-lite').onchange=e=>{cfg.lite=e.target.checked;saveCfg();applyLite();toast(cfg.lite?'Modo rendimiento activado':'Efectos completos activados')};
 ['s-auto','s-rot','s-px','s-ask','s-es'].forEach(id=>$('#'+id).onchange=()=>{cfg.autoNext=$('#s-auto').checked;cfg.rot=$('#s-rot').checked;cfg.proxy=$('#s-px').checked;cfg.askLang=$('#s-ask').checked;cfg.esTitles=$('#s-es').checked;saveCfg()});
 $('#s-cd').onchange=e=>{cfg.countdown=+e.target.value;saveCfg()};
+$('#s-q').onchange=e=>{cfg.quality=e.target.value;saveCfg();P.qPick=null;toast(cfg.quality==='max'?'Los videos empezarán en la mejor calidad':cfg.quality==='low'?'Los videos usarán 480p o menos':'La calidad se ajustará a tu internet')};
 
 $('#s-lang').onchange=e=>{cfg.lang=e.target.value;saveCfg()};
 $('#s-src').onchange=e=>{cfg.source=e.target.value;saveCfg();paintSrc();exploreInit=false;$('#e-grid').innerHTML='';loadHome()};

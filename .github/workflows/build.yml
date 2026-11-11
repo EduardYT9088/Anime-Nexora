@@ -198,11 +198,12 @@ jobs:
                   if (i == null) return;
                   String u = i.getStringExtra("nx_url");
                   boolean inbox = i.getBooleanExtra("nx_inbox", false);
-                  if (u == null && !inbox) return;
+                  boolean dl = i.getBooleanExtra("nx_dl", false);
+                  if (u == null && !inbox && !dl) return;
                   JSObject d = new JSObject();
                   if (u != null) { d.put("url", u); d.put("ep", i.getIntExtra("nx_ep", 0)); }
-                  d.put("inbox", inbox);
-                  i.removeExtra("nx_url"); i.removeExtra("nx_inbox");
+                  d.put("inbox", inbox); d.put("dl", dl);
+                  i.removeExtra("nx_url"); i.removeExtra("nx_inbox"); i.removeExtra("nx_dl");
                   notifyListeners("nxOpen", d, true);
               }
 
@@ -509,6 +510,60 @@ jobs:
                   done(call, ok);
               }
 
+              /* ===== Descargas para ver sin internet ===== */
+              @PluginMethod
+              public void dlStart(PluginCall call) {
+                  try {
+                      JSObject it = call.getObject("item");
+                      if (it == null) { call.reject("sin datos"); return; }
+                      org.json.JSONObject o = new org.json.JSONObject(it.toString());
+                      String id = o.optString("id", "");
+                      if (id.isEmpty() || o.optString("url", "").isEmpty()) { call.reject("faltan datos"); return; }
+                      org.json.JSONObject old = NexoraDownload.get(getContext(), id);
+                      JSObject r = new JSObject();
+                      if (old != null && !"error".equals(old.optString("status"))) { r.put("ok", true); r.put("exists", true); call.resolve(r); return; }
+                      o.put("status", "queued"); o.put("added", System.currentTimeMillis());
+                      o.put("done", 0); o.put("total", 0); o.put("bytes", 0); o.remove("err");
+                      NexoraDownload.put(getContext(), o);
+                      NexoraDownload.enqueue(getContext(), id);
+                      r.put("ok", true); call.resolve(r);
+                  } catch (Exception e) { call.reject(String.valueOf(e.getMessage())); }
+              }
+
+              @PluginMethod
+              public void dlList(PluginCall call) {
+                  JSObject r = new JSObject();
+                  try {
+                      r.put("items", new JSArray(NexoraDownload.all(getContext()).toString()));
+                      java.io.File base = getContext().getExternalFilesDir(null);
+                      if (base == null) base = getContext().getFilesDir();
+                      r.put("free", base.getUsableSpace()); r.put("space", base.getTotalSpace());
+                  } catch (Exception e) { r.put("items", new JSArray()); }
+                  call.resolve(r);
+              }
+
+              /* Cancelar o borrar: se quita de la lista y se borran sus archivos (la descarga en curso se detiene sola) */
+              @PluginMethod
+              public void dlRemove(PluginCall call) {
+                  final String id = call.getString("id", "");
+                  if (id.isEmpty()) { done(call, false); return; }
+                  NexoraDownload.remove(getContext(), id);
+                  final Context c = getContext();
+                  new Thread(() -> { try { NexoraDownload.deleteDir(NexoraDownload.dirOf(c, id)); Thread.sleep(2500); NexoraDownload.deleteDir(NexoraDownload.dirOf(c, id)); } catch (Exception e) { } }).start();
+                  done(call, true);
+              }
+
+              @PluginMethod
+              public void dlRetry(PluginCall call) {
+                  String id = call.getString("id", "");
+                  org.json.JSONObject o = NexoraDownload.get(getContext(), id);
+                  if (o == null) { done(call, false); return; }
+                  try { o.put("status", "queued"); o.remove("err"); } catch (Exception e) { }
+                  NexoraDownload.put(getContext(), o);
+                  NexoraDownload.enqueue(getContext(), id);
+                  done(call, true);
+              }
+
               @PluginMethod
               public void openAppSettings(PluginCall call) { done(call, appDetails()); }
 
@@ -592,6 +647,13 @@ jobs:
           grep -q REQUEST_INSTALL_PACKAGES AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <application|' AndroidManifest.xml
           grep -q REQUEST_IGNORE_BATTERY_OPTIMIZATIONS AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>\n    <application|' AndroidManifest.xml
           grep -q POST_NOTIFICATIONS AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application|' AndroidManifest.xml
+          # Descargas: servicio en primer plano (WorkManager) para seguir bajando con la app cerrada
+          grep -q 'android.permission.FOREGROUND_SERVICE"' AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <application|' AndroidManifest.xml
+          grep -q FOREGROUND_SERVICE_DATA_SYNC AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>\n    <application|' AndroidManifest.xml
+          grep -q 'xmlns:tools' AndroidManifest.xml || sed -i '0,/<manifest /s|<manifest |<manifest xmlns:tools="http://schemas.android.com/tools" |' AndroidManifest.xml
+          grep -q 'xmlns:tools' AndroidManifest.xml || { echo "Falta xmlns:tools"; exit 1; }
+          sed -i 's|</application>|    <service android:name="androidx.work.impl.foreground.SystemForegroundService" android:foregroundServiceType="dataSync" tools:node="merge"/>\n    </application>|' AndroidManifest.xml
+          grep -q SystemForegroundService AndroidManifest.xml && echo "Descargas: servicio OK" || { echo "No se pudo declarar el servicio de descargas"; exit 1; }
           cat > $RES/drawable/nx_icon_mono.xml <<'EOF'
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
               android:width="108dp" android:height="108dp"
@@ -1154,6 +1216,323 @@ jobs:
           print('sonido listo', out)
           PY
           grep -q "package ${APP_ID};" $JDIR/NexoraCheck.java && echo "Revisor nativo OK" || { echo "No se pudo crear el revisor"; exit 1; }
+
+      - name: Descargas nativas (ver sin internet)
+        run: |
+          cd _build/android/app/src/main
+          JDIR=java/$(echo "$APP_ID" | tr . /)
+          mkdir -p $JDIR
+          cat > $JDIR/NexoraDownload.java <<'JAVA'
+          package __PKG__;
+
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.content.pm.ServiceInfo;
+          import android.os.Build;
+          import androidx.annotation.NonNull;
+          import androidx.core.app.NotificationCompat;
+          import androidx.core.app.NotificationManagerCompat;
+          import androidx.work.Constraints;
+          import androidx.work.Data;
+          import androidx.work.ExistingWorkPolicy;
+          import androidx.work.ForegroundInfo;
+          import androidx.work.NetworkType;
+          import androidx.work.OneTimeWorkRequest;
+          import androidx.work.WorkManager;
+          import androidx.work.Worker;
+          import androidx.work.WorkerParameters;
+          import java.io.ByteArrayOutputStream;
+          import java.io.File;
+          import java.io.FileOutputStream;
+          import java.io.InputStream;
+          import java.io.OutputStream;
+          import java.net.HttpURLConnection;
+          import java.net.URL;
+          import java.util.ArrayList;
+          import java.util.List;
+          import java.util.regex.Matcher;
+          import java.util.regex.Pattern;
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+
+          /**
+           * Descargas de episodios para ver sin internet (MP4 directo o HLS por partes).
+           * Corre con WorkManager en primer plano: sigue aunque salgas de la app y muestra el progreso en una notificación.
+           */
+          public class NexoraDownload extends Worker {
+              static final String PREFS = "nexora_dl", CH = "nexora_descargas";
+              static final String UA = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36";
+              static final Object LOCK = new Object();
+
+              public NexoraDownload(@NonNull Context c, @NonNull WorkerParameters p) { super(c, p); }
+
+              /* ---------- estado guardado ---------- */
+              static JSONArray all(Context c) {
+                  try { return new JSONArray(c.getSharedPreferences(PREFS, 0).getString("items", "[]")); } catch (Exception e) { return new JSONArray(); }
+              }
+              static void saveAll(Context c, JSONArray a) { c.getSharedPreferences(PREFS, 0).edit().putString("items", a.toString()).apply(); }
+              static JSONObject get(Context c, String id) {
+                  synchronized (LOCK) {
+                      JSONArray a = all(c);
+                      for (int i = 0; i < a.length(); i++) { JSONObject o = a.optJSONObject(i); if (o != null && id.equals(o.optString("id"))) return o; }
+                      return null;
+                  }
+              }
+              static void put(Context c, JSONObject it) {
+                  synchronized (LOCK) {
+                      JSONArray a = all(c), b = new JSONArray(); boolean done = false;
+                      for (int i = 0; i < a.length(); i++) {
+                          JSONObject o = a.optJSONObject(i); if (o == null) continue;
+                          if (it.optString("id").equals(o.optString("id"))) { b.put(it); done = true; } else b.put(o);
+                      }
+                      if (!done) b.put(it);
+                      saveAll(c, b);
+                  }
+              }
+              static void remove(Context c, String id) {
+                  synchronized (LOCK) {
+                      JSONArray a = all(c), b = new JSONArray();
+                      for (int i = 0; i < a.length(); i++) { JSONObject o = a.optJSONObject(i); if (o != null && !id.equals(o.optString("id"))) b.put(o); }
+                      saveAll(c, b);
+                  }
+              }
+              static void patch(Context c, String id, String k, Object v) {
+                  synchronized (LOCK) { JSONObject o = get(c, id); if (o == null) return; try { o.put(k, v); } catch (Exception e) { } put(c, o); }
+              }
+              static File dirOf(Context c, String id) {
+                  File base = c.getExternalFilesDir(null); if (base == null) base = c.getFilesDir();
+                  return new File(new File(base, "descargas"), id.replaceAll("[^A-Za-z0-9_-]", "_"));
+              }
+              static void deleteDir(File f) {
+                  if (f == null || !f.exists()) return;
+                  File[] l = f.listFiles(); if (l != null) for (File x : l) deleteDir(x);
+                  f.delete();
+              }
+
+              public static void enqueue(Context c, String id) {
+                  Constraints k = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
+                  OneTimeWorkRequest r = new OneTimeWorkRequest.Builder(NexoraDownload.class)
+                      .setInputData(new Data.Builder().putString("id", id).build()).setConstraints(k).addTag("dl_" + id).build();
+                  WorkManager.getInstance(c).enqueueUniqueWork("nexora_dl", ExistingWorkPolicy.APPEND_OR_REPLACE, r);
+              }
+
+              /* ---------- notificaciones ---------- */
+              static void channel(Context c) {
+                  NotificationManager nm = c.getSystemService(NotificationManager.class);
+                  if (nm == null || nm.getNotificationChannel(CH) != null) return;
+                  NotificationChannel ch = new NotificationChannel(CH, "Descargas", NotificationManager.IMPORTANCE_LOW);
+                  ch.setDescription("Progreso de los episodios que descargas");
+                  nm.createNotificationChannel(ch);
+              }
+              static PendingIntent openApp(Context c) {
+                  Intent i = new Intent(c, MainActivity.class);
+                  i.setAction("nexora.downloads"); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                  i.putExtra("nx_dl", true);
+                  return PendingIntent.getActivity(c, 7310, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+              }
+              ForegroundInfo info(String title, String text, int pct) {
+                  Context c = getApplicationContext(); channel(c);
+                  android.app.Notification n = new NotificationCompat.Builder(c, CH)
+                      .setSmallIcon(R.drawable.ic_stat_nexora).setColor(0xFF8B6BFF)
+                      .setContentTitle(title).setContentText(text).setOnlyAlertOnce(true).setOngoing(true)
+                      .setProgress(100, Math.max(0, pct), pct < 0).setContentIntent(openApp(c)).build();
+                  if (Build.VERSION.SDK_INT >= 29) return new ForegroundInfo(7311, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+                  return new ForegroundInfo(7311, n);
+              }
+              long lastNote = 0, lastChk = 0;
+              /* cancelar o borrar desde la app: se marca en el estado y aquí se detiene */
+              void checkStop(String id) throws Exception {
+                  if (isStopped()) throw new Exception("cancelado");
+                  long now = System.currentTimeMillis(); if (now - lastChk < 600) return; lastChk = now;
+                  JSONObject o = get(getApplicationContext(), id);
+                  if (o == null || "canceled".equals(o.optString("status"))) throw new Exception("cancelado");
+              }
+              void progress(JSONObject it, long done, long total, long bytes) throws Exception {
+                  if (isStopped()) throw new Exception("cancelado");
+                  Context c = getApplicationContext();
+                  synchronized (LOCK) {
+                      JSONObject o = get(c, it.optString("id"));
+                      if (o == null || "canceled".equals(o.optString("status"))) throw new Exception("cancelado");
+                      it.put("done", done); it.put("total", total); it.put("bytes", bytes); it.put("status", "downloading");
+                      put(c, it);
+                  }
+                  long now = System.currentTimeMillis();
+                  if (now - lastNote > 900) {
+                      lastNote = now; int pct = total > 0 ? (int) (done * 100 / total) : -1;
+                      try { setForegroundAsync(info(it.optString("title"), it.optString("sub") + (pct >= 0 ? " · " + pct + "%" : ""), pct)); } catch (Exception e) { }
+                  }
+              }
+              @android.annotation.SuppressLint("MissingPermission")
+              void doneNote(JSONObject it, boolean ok, String err) {
+                  Context c = getApplicationContext(); channel(c);
+                  try {
+                      NotificationManagerCompat nm = NotificationManagerCompat.from(c);
+                      if (!nm.areNotificationsEnabled()) return;
+                      nm.notify(it.optString("id").hashCode() & 0x7fffffff, new NotificationCompat.Builder(c, CH)
+                          .setSmallIcon(R.drawable.ic_stat_nexora).setColor(0xFF8B6BFF)
+                          .setContentTitle(ok ? "Descarga lista" : "La descarga falló")
+                          .setContentText(it.optString("title") + " · " + it.optString("sub") + (ok ? "" : " · " + err))
+                          .setAutoCancel(true).setContentIntent(openApp(c)).build());
+                  } catch (Exception e) { }
+              }
+
+              /* ---------- red ---------- */
+              HttpURLConnection open(String u, JSONObject it, long from) throws Exception {
+                  HttpURLConnection h = (HttpURLConnection) new URL(u).openConnection();
+                  h.setRequestProperty("User-Agent", it.optString("ua", UA));
+                  String ref = it.optString("referer", ""); if (!ref.isEmpty()) h.setRequestProperty("Referer", ref);
+                  if (from > 0) h.setRequestProperty("Range", "bytes=" + from + "-");
+                  h.setConnectTimeout(20000); h.setReadTimeout(30000); h.setInstanceFollowRedirects(true);
+                  return h;
+              }
+              String text(String u, JSONObject it) throws Exception {
+                  HttpURLConnection h = open(u, it, 0);
+                  int code = h.getResponseCode(); if (code >= 400) throw new Exception("el servidor respondió " + code);
+                  try (InputStream in = h.getInputStream()) {
+                      ByteArrayOutputStream o = new ByteArrayOutputStream(); byte[] b = new byte[16384]; int n;
+                      while ((n = in.read(b)) > 0) o.write(b, 0, n);
+                      return o.toString("UTF-8");
+                  } finally { h.disconnect(); }
+              }
+              long fetch(String u, File f, JSONObject it) throws Exception {
+                  File tmp = new File(f.getPath() + ".part");
+                  HttpURLConnection h = open(u, it, 0);
+                  int code = h.getResponseCode(); if (code >= 400) throw new Exception("el servidor respondió " + code);
+                  long n = 0;
+                  try (InputStream in = h.getInputStream(); OutputStream out = new FileOutputStream(tmp)) {
+                      byte[] b = new byte[65536]; int r;
+                      while ((r = in.read(b)) > 0) { checkStop(it.optString("id")); out.write(b, 0, r); n += r; }
+                  } finally { h.disconnect(); }
+                  if (!tmp.renameTo(f)) throw new Exception("no se pudo guardar");
+                  return n;
+              }
+              static String abs(String base, String u) throws Exception { return new URL(new URL(base), u.trim()).toString(); }
+
+              /* ---------- MP4 (con reanudación) ---------- */
+              String mp4(JSONObject it, File dir) throws Exception {
+                  File f = new File(dir, "video.mp4"), part = new File(dir, "video.mp4.part");
+                  long have = part.exists() ? part.length() : 0;
+                  HttpURLConnection h = open(it.optString("url"), it, have);
+                  int code = h.getResponseCode();
+                  if (code >= 400) { h.disconnect(); throw new Exception("el servidor respondió " + code); }
+                  boolean append = code == 206 && have > 0; if (!append) have = 0;
+                  long len = h.getContentLengthLong(), total = len > 0 ? len + have : 0, done = have;
+                  try (InputStream in = h.getInputStream(); OutputStream out = new FileOutputStream(part, append)) {
+                      byte[] b = new byte[65536]; int r; long t = 0;
+                      while ((r = in.read(b)) > 0) {
+                          checkStop(it.optString("id"));
+                          out.write(b, 0, r); done += r;
+                          long now = System.currentTimeMillis(); if (now - t > 700) { t = now; progress(it, done, total, done); }
+                      }
+                  } finally { h.disconnect(); }
+                  if (total > 0 && done < total) throw new Exception("la descarga se cortó");
+                  if (!part.renameTo(f)) throw new Exception("no se pudo guardar");
+                  it.put("bytes", f.length());
+                  return f.getAbsolutePath();
+              }
+
+              /* ---------- HLS: se baja cada parte y se arma una lista local ---------- */
+              String hls(JSONObject it, File dir) throws Exception {
+                  String url = it.optString("url"), txt = text(url, it);
+                  if (txt.contains("#EXT-X-STREAM-INF")) {
+                      int maxH = it.optInt("maxH", 720); String best = null, low = null; int bestH = -1, lowH = 99999;
+                      String[] L = txt.split("\n");
+                      for (int i = 0; i < L.length; i++) {
+                          String l = L[i].trim(); if (!l.startsWith("#EXT-X-STREAM-INF")) continue;
+                          int h = 0; Matcher m = Pattern.compile("RESOLUTION=\\d+x(\\d+)").matcher(l); if (m.find()) h = Integer.parseInt(m.group(1));
+                          String u = null; for (int j = i + 1; j < L.length; j++) { String x = L[j].trim(); if (!x.isEmpty() && !x.startsWith("#")) { u = x; break; } }
+                          if (u == null) continue;
+                          if (h <= maxH && h > bestH) { bestH = h; best = u; }
+                          if (h < lowH) { lowH = h; low = u; }
+                      }
+                      String pick = best != null ? best : low; if (pick == null) throw new Exception("lista de video sin calidades");
+                      url = abs(url, pick); txt = text(url, it);
+                      if (bestH > 0 || lowH < 99999) it.put("q", (best != null ? bestH : lowH) + "p");
+                  }
+                  List<String> out = new ArrayList<>(); List<String[]> segs = new ArrayList<>(); int n = 0, k = 0;
+                  Pattern uri = Pattern.compile("URI=\"([^\"]+)\"");
+                  for (String raw : txt.split("\n")) {
+                      String l = raw.trim(); if (l.isEmpty()) continue;
+                      if (l.startsWith("#EXT-X-KEY") || l.startsWith("#EXT-X-MAP")) {
+                          Matcher m = uri.matcher(l);
+                          if (m.find() && !m.group(1).startsWith("data:")) {
+                              String name = (l.startsWith("#EXT-X-KEY") ? "key" : "init") + (k++) + ".bin";
+                              segs.add(new String[]{name, abs(url, m.group(1))});
+                              l = l.substring(0, m.start(1)) + name + l.substring(m.end(1));
+                          }
+                          out.add(l);
+                      } else if (l.startsWith("#")) out.add(l);
+                      else { n++; String name = String.format(java.util.Locale.ROOT, "s%05d.ts", n); segs.add(new String[]{name, abs(url, l)}); out.add(name); }
+                  }
+                  if (n == 0) throw new Exception("la lista de video está vacía");
+                  if (!out.contains("#EXT-X-ENDLIST")) out.add("#EXT-X-ENDLIST");
+                  long bytes = 0; int done = 0;
+                  for (String[] s : segs) {
+                      checkStop(it.optString("id"));
+                      File f = new File(dir, s[0]);
+                      if (!(f.exists() && f.length() > 0)) {
+                          Exception last = null;
+                          for (int t = 0; t < 3; t++) { try { fetch(s[1], f, it); last = null; break; } catch (Exception e) { last = e; if ("cancelado".equals(e.getMessage())) throw e; Thread.sleep(1500); } }
+                          if (last != null) throw last;
+                      }
+                      bytes += f.length(); done++;
+                      progress(it, done, segs.size(), bytes);
+                  }
+                  File pl = new File(dir, "local.m3u8");
+                  try (OutputStream o = new FileOutputStream(pl)) { o.write(String.join("\n", out).getBytes("UTF-8")); }
+                  it.put("bytes", bytes);
+                  return pl.getAbsolutePath();
+              }
+
+              @NonNull
+              @Override
+              public Result doWork() {
+                  Context c = getApplicationContext();
+                  String id = getInputData().getString("id");
+                  JSONObject it = id == null ? null : get(c, id);
+                  if (it == null || "done".equals(it.optString("status"))) return Result.success();
+                  if ("canceled".equals(it.optString("status"))) { deleteDir(dirOf(c, id)); remove(c, id); return Result.success(); }
+                  try { setForegroundAsync(info(it.optString("title"), it.optString("sub") + " · preparando…", -1)); } catch (Exception e) { }
+                  File dir = dirOf(c, id); dir.mkdirs();
+                  try {
+                      it.put("status", "downloading"); it.remove("err"); put(c, it);
+                      /* si la fuente falla se prueban las copias del mismo servidor */
+                      String path = null; Exception last = null;
+                      JSONArray alts = it.optJSONArray("alts");
+                      for (int a = 0; path == null; a++) {
+                          try { path = "hls".equals(it.optString("kind")) ? hls(it, dir) : mp4(it, dir); }
+                          catch (Exception e) {
+                              if ("cancelado".equals(e.getMessage()) || alts == null || a >= alts.length()) throw e;
+                              last = e; String nu = alts.optString(a, "");
+                              if (nu.isEmpty()) throw e;
+                              deleteDir(dir); dir.mkdirs();
+                              it.put("url", nu); it.put("kind", nu.matches("(?i).*(\\.m3u8|/hls|master).*") ? "hls" : "mp4");
+                          }
+                      }
+                      JSONObject now = get(c, id);
+                      if (now == null || "canceled".equals(now.optString("status"))) { deleteDir(dir); if (now != null) remove(c, id); return Result.success(); }
+                      it.put("status", "done"); it.put("path", path); it.put("finished", System.currentTimeMillis()); it.put("done", it.optLong("total", 1));
+                      put(c, it); doneNote(it, true, "");
+                      return Result.success();
+                  } catch (Exception e) {
+                      /* nunca se devuelve "failure": así las demás descargas en cola siguen */
+                      JSONObject now = get(c, id);
+                      if (now == null || "canceled".equals(now.optString("status"))) { deleteDir(dir); if (now != null) remove(c, id); return Result.success(); }
+                      if (isStopped()) return Result.retry();
+                      String msg = String.valueOf(e.getMessage());
+                      try { it.put("err", msg); it.put("status", "error"); } catch (Exception x) { }
+                      put(c, it); doneNote(it, false, msg);
+                      return Result.success();
+                  }
+              }
+          }
+          JAVA
+          sed -i "s/__PKG__/${APP_ID}/" $JDIR/NexoraDownload.java
+          grep -q "package ${APP_ID};" $JDIR/NexoraDownload.java && echo "Descargas OK" || { echo "No se pudo crear el descargador"; exit 1; }
 
       - name: Firma fija del APK (para poder actualizar sin desinstalar)
         env:

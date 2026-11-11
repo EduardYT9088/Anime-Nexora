@@ -1730,7 +1730,8 @@ function renderContinue(){
 /* ================= BUSCAR ================= */
 let qT,qSeq=0;
 $('#q').addEventListener('input',e=>{clearTimeout(qT);qT=setTimeout(()=>runSearch(e.target.value),550)});
-$('#q').addEventListener('keydown',e=>{if(e.key==='Enter'){e.target.blur();clearTimeout(qT);runSearch(e.target.value)}});
+$('#q').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();e.stopPropagation();e.target.blur();clearTimeout(qT);runSearch(e.target.value);
+  if(KBD){let n=0;const t=setInterval(()=>{const c=$('#s-res .card');if(c||++n>40){clearInterval(t);if(c&&document.activeElement!==$('#q'))c.focus({preventScroll:true})}},250)}}});
 async function runSearch(v){
   v=v.trim();const out=$('#s-res');
   if(v.length<2){out.innerHTML=empty('¿Qué quieres ver hoy?','Escribe el nombre de una serie para buscarla en todos los proveedores.');return}
@@ -2553,17 +2554,20 @@ function moveFocus(dir){
   if(!best.pin)el.scrollIntoView({block:vert?'center':'nearest',inline:'nearest',behavior:cfg.lite?'auto':'smooth'});
 }
 /* vigilante: si lo seleccionado desaparece, se vuelve a seleccionar algo visible */
+const isTextEl=el=>!!(el&&el.matches&&el.matches('input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]),textarea,[contenteditable=true]'));
 let lastFoc=null;document.addEventListener('focusin',e=>{const r=e.target.getBoundingClientRect&&e.target.getBoundingClientRect();if(r&&r.width)lastFoc={x:r.left+r.width/2,y:r.top+r.height/2,l:layer()}});
 setInterval(()=>{if(!KBD||document.hidden)return;const a=document.activeElement;const l=layer();
   if(!a||a===document.body||!document.contains(a)||!l.contains(a)||!shown(a)){if(stack[stack.length-1]==='player'&&$('#ctl').classList.contains('off'))return;
-    if(lastFoc&&lastFoc.l===l){let best=null,bd=1e9;l.querySelectorAll(FOC).forEach(el=>{if(!shown(el))return;const r=el.getBoundingClientRect();if(r.bottom<0||r.top>innerHeight)return;
+    if(lastFoc&&lastFoc.l===l){let best=null,bd=1e9;l.querySelectorAll(FOC).forEach(el=>{if(!shown(el)||isTextEl(el))return;const r=el.getBoundingClientRect();if(r.bottom<0||r.top>innerHeight)return;
       const d=Math.hypot(r.left+r.width/2-lastFoc.x,r.top+r.height/2-lastFoc.y);if(d<bd){bd=d;best=el}});if(best){best.focus({preventScroll:true});return}}
     focusFirst(l)}},1500);
 const DIRS={ArrowUp:'u',ArrowDown:'d',ArrowLeft:'l',ArrowRight:'r'};
 document.addEventListener('pointerdown',()=>{if(!isTV){KBD=false;document.documentElement.classList.remove('kbd')}},true);
 document.addEventListener('keydown',e=>{
   const k=e.key,dir=DIRS[k];
-  if(!KBD&&(dir||k==='Enter'||k==='Tab')){KBD=true;document.documentElement.classList.add('kbd')}
+  /* el Enter / «Buscar» del teclado del celular NO activa el modo control remoto */
+  const typing=isTextEl(e.target);
+  if(!KBD&&!(typing&&!isTV)&&(dir||k==='Enter'||k==='Tab')){KBD=true;document.documentElement.classList.add('kbd')}
   const inPlayer=stack[stack.length-1]==='player'&&!$('#psheet').classList.contains('on');
   /* teclas multimedia del control */
   if(inPlayer&&P.mode==='video'){

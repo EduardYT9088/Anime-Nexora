@@ -322,14 +322,16 @@ jobs:
                           box.setOrientation(LinearLayout.VERTICAL); box.setBackgroundColor(0xFF0B0A1A);
                           final LinearLayout bar = new LinearLayout(getContext());
                           bar.setOrientation(LinearLayout.HORIZONTAL); bar.setGravity(Gravity.CENTER_VERTICAL);
-                          bar.setPadding(px(16), px(36), px(12), px(10)); bar.setVisibility(View.GONE);
+                          bar.setPadding(px(20), px(40), px(14), px(14)); bar.setVisibility(View.GONE); bar.setBackgroundColor(0xFF14112E);
                           final TextView tv = new TextView(getContext());
-                          tv.setText("Verificación de seguridad de la fuente de Latino. Si aparece una casilla, tócala.");
-                          tv.setTextColor(0xFFFFFFFF); tv.setTextSize(14);
+                          tv.setText("Verificación rápida\nToca la casilla de abajo para ver en Latino");
+                          tv.setTextColor(0xFFFFFFFF); tv.setTextSize(15); tv.setLineSpacing(px(2), 1f);
                           bar.addView(tv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-                          final Button bt = new Button(getContext()); bt.setText("Cancelar");
+                          final Button bt = new Button(getContext()); bt.setText("Cancelar"); bt.setAllCaps(false);
+                          bt.setTextColor(0xFFFFFFFF); bt.setBackgroundColor(0x33FFFFFF);
                           bar.addView(bt, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
                           final WebView w = new WebView(getContext());
+                          w.setBackgroundColor(0xFF0B0A1A);
                           final WebSettings st = w.getSettings();
                           st.setJavaScriptEnabled(true); st.setDomStorageEnabled(true);
                           CookieManager.getInstance().setAcceptCookie(true);
@@ -340,6 +342,13 @@ jobs:
                           final Handler hd = new Handler(Looper.getMainLooper());
                           final boolean[] done = {false};
                           final boolean[] ran = {false};
+                          /* deja solo la casilla de verificación sobre el fondo de la app (oculta textos, logo y pie de página) */
+                          final String clean = "(function(){try{var b=document.body;if(!b)return;if(!document.getElementById('nxcf')){var s=document.createElement('style');s.id='nxcf';"
+                              + "s.textContent='html,body{background:#0b0a1a!important;margin:0!important}body{min-height:100vh!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important}"
+                              + "img,footer,.footer,h1,h2,.h1,.h2,#challenge-body-text,.core-msg{display:none!important}.main-wrapper,.main-content{margin:0 auto!important;padding:0!important;display:flex!important;flex-direction:column!important;align-items:center!important}';"
+                              + "(document.head||document.documentElement).appendChild(s)}var a=b.querySelectorAll('*');for(var i=0;i<a.length;i++){var e=a[i],t=e.tagName;"
+                              + "if(t==='IFRAME'||t==='SCRIPT'||t==='STYLE'||t==='INPUT')continue;if(e.querySelector('iframe'))continue;"
+                              + "for(var n=e.firstChild;n;n=n.nextSibling){if(n.nodeType===3&&n.nodeValue.trim()){e.style.setProperty('display','none','important');break}}}}catch(x){}})()";
                           final long t0 = System.currentTimeMillis();
                           final String[] page = {"", ""};
                           final Runnable[] check = new Runnable[1];
@@ -367,6 +376,7 @@ jobs:
                                   boolean wait = tl.contains("just a moment") || tl.contains("un momento") || tl.contains("checking") || html.length() < 2000;
                                   long el = System.currentTimeMillis() - t0;
                                   if (wait) {
+                                      w.evaluateJavascript(clean, null);
                                       if (el > quiet && bar.getVisibility() != View.VISIBLE) { bar.setVisibility(View.VISIBLE); box.bringToFront(); box.setElevation(px(60)); }
                                       hd.removeCallbacks(check[0]);
                                       if (el < tmo) hd.postDelayed(check[0], 800); else finish.accept(null);

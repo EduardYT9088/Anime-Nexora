@@ -2239,7 +2239,10 @@ function noDirect(tk){
   $('#pe-retry').onclick=()=>{$('#ploader .spin').style.display='';loadEpisode()};
   if(alt)$('#pe-alt').onclick=()=>{$('#ploader .spin').style.display='';P.lang=o;playLang(++P.tk)};
   if(KBD)setTimeout(()=>($('#pe-alt')||$('#pe-retry')).focus(),450)}
-function resetMedia(){
+/* mientras se usa el reproductor web, la app no deja que la página abra publicidad ni el navegador */
+let NAVB=false;function navBlock(on){if(NAVB===on)return;NAVB=on;try{if(NXS&&NXS.navBlock)NXS.navBlock({on}).catch(()=>{})}catch(e){}}
+if(NXS&&NXS.addListener)try{NXS.addListener('nxBlocked',()=>toast('Se bloqueó una ventana de publicidad del servidor')).catch?.(()=>{})}catch(e){}
+function resetMedia(){navBlock(false);
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}
   V.pause();V.removeAttribute('src');V.load();F.src='about:blank';F.classList.add('hide');V.classList.remove('hide');P.mode='video';
   $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op,#p-q').forEach(x=>x.classList.remove('hide'));setSeek(0,0);$('#p-seek').style.setProperty('--b','0%');paintQ()
@@ -2247,7 +2250,7 @@ function resetMedia(){
 async function attach(url,type,tk){
   await loadHls();if(tk!==P.tk)return;
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}
-  P.mode='video';F.classList.add('hide');V.classList.remove('hide');V.style.objectFit=P.fit;
+  P.mode='video';navBlock(false);F.classList.add('hide');V.classList.remove('hide');V.style.objectFit=P.fit;
   let failed=false;
   const fail=why=>{if(tk!==P.tk||failed)return;failed=true;if(P.mode!=='video')return;
     if(P.isLocal){P.isLocal=false;V.onerror=null;if(P.off)return playerError('No se pudo abrir el archivo descargado. Bórralo y descárgalo otra vez.');P.noLocal=P.ep.url;toast('La descarga no abrió, se usa internet');loadEpisode();return}
@@ -2279,7 +2282,7 @@ function useFrame(it,tk){
   /* en TV el reproductor web no se maneja con el control y muestra publicidad: no se usa */
   if(isTV)return noDirect(tk);
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}V.pause();V.removeAttribute('src');V.classList.add('hide');
-  P.mode='frame';F.classList.remove('hide');F.src=it.url;loader(false);
+  P.mode='frame';navBlock(true);F.classList.remove('hide');F.src=it.url;loader(false);
   $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op,#p-q').forEach(x=>x.classList.add('hide'));updSrvName();
   $('#ctl').classList.remove('off');clearTimeout(P.hideT);P.hideT=setTimeout(()=>$('#ctl').classList.add('off'),4000);
 }
@@ -2811,7 +2814,7 @@ async function dlConfirm(o){
     $('#dc-no').onclick=close;
     $('#dc-go').onclick=()=>{if($('#dc-go').disabled)return;close();if(q!==+cfg.dlq){cfg.dlq=q;if($('#s-dlq'))$('#s-dlq').value=String(q)}
       if(!ask){cfg.dlAsk=false;if($('#s-dlask'))$('#s-dlask').checked=false;toast('No se volverá a preguntar · puedes cambiarlo en Ajustes')}saveCfg();
-      dlEnqueue(o.eps,lang,{inter:o.inter})}};
+      const n=dlEnqueue(o.eps,lang,{inter:o.inter});if(n&&!inP)setTimeout(openDownloads,350)}};
   const focusOn=sel=>{if(KBD)setTimeout(()=>{const el=$(sel);if(el)el.focus({preventScroll:true})},30)};
   if(inP){$(box).innerHTML='';psheet('')}else sheet('');
   paint();if(KBD)setTimeout(()=>{const g=$('#dc-go');(g&&!g.disabled?g:$('#dc-no')).focus({preventScroll:true})},140)}
@@ -2837,7 +2840,8 @@ async function dlPrepare(it){
   if(!list.length){const o=lang==='sub'?'dub':'sub',l2=(s[o]||[]).filter(x=>SRC.canResolve(x));if(l2.length){lang=o;list=l2}}
   if(!list.length)throw new Error((s.sub||[]).length||(s.dub||[]).length?'Solo tiene reproductor web, no se puede descargar':'Sin servidores disponibles ahora');
   const r=await SRC.resolve(list.map(x=>x.url));if(!r||!r.streamUrl)throw new Error('No se encontró el video');
-  await NXS.dlStart({item:{id:it.id,url:r.streamUrl,alts:(r.alts||[]).slice(0,4),kind:r.mediaType==='hls'?'hls':'mp4',title:it.title,orig:it.orig,
+  let ref='';try{ref=r.resolvedFrom?new URL(r.resolvedFrom).origin+'/':''}catch(e){}
+  await NXS.dlStart({item:{id:it.id,url:r.streamUrl,ua:navigator.userAgent,referer:ref,alts:(r.alts||[]).slice(0,4),kind:r.mediaType==='hls'?'hls':'mp4',title:it.title,orig:it.orig,
     sub:`Episodio ${it.ep} · ${LNAME[lang]}`,ep:it.ep,lang,anime:it.anime,image:it.image,epUrl:it.epUrl,maxH:+cfg.dlq||720}})}
 function dlRemove(id){
   const q=DLQ.find(x=>x.id===id);if(q){DLQ=DLQ.filter(x=>x!==q);saveDLQ();renderDl();paintDlBadge();toast('Descarga quitada');return}

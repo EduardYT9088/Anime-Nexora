@@ -1223,14 +1223,16 @@ let NJB='https://ww4.animeonline.ninja';
 /* si la página bloquea la conexión directa (Cloudflare), se abre en un navegador invisible dentro de la app */
 let NJW=null;
 const CFBLK=h=>String(h||'').length<30000&&/just a moment|un momento|cf-chl|challenge-platform|attention required/i.test(h);
-let cfToast=0,NJWEB=false;
+let NJWEB=false,NJINT=0;
+/* NJINT>0: tú pediste el Latino (puede mostrarse la casilla). Si no, todo pasa en silencio y sin interrumpir */
+async function inter(fn){NJINT++;try{return await fn()}finally{NJINT--}}
 async function getCF(url,headers,js){let why='';
   if(!js){try{const hh=NJW&&NJW.cookie?{...(headers||{}),Cookie:NJW.cookie,'User-Agent':NJW.ua}:headers;const r=await get(url,hh);if(!CFBLK(r.data))return r;why='verificación'}
     catch(e){if(!/40[1-9]|429|50[0-9]/.test(e.message))throw e;why=(e.message.match(/\d{3}/)||['bloqueo'])[0]}}
   if(!NXS||!NXS.webGet)throw new Error('Bloqueado por Cloudflare ('+why+')');
   if(/animeonline\.ninja/i.test(url))NJWEB=true;
-  if(Date.now()-cfToast>20000){cfToast=Date.now();toast('Verificando la fuente de Latino…')}
-  const w=await NXS.webGet({url,timeout:90000,quiet:8000,...(js?{js}:{})});
+  const it=NJINT>0;
+  const w=await NXS.webGet({url,timeout:it?90000:25000,quiet:it?8000:9999999,...(js?{js}:{})});
   if(!w||!w.data||/just a moment|un momento|attention required|access denied|error 10\d\d/i.test(w.title||''))
     throw new Error(w&&/cancel/.test(w.result||'')?'Verificación cancelada':'No se pudo pasar la verificación de Cloudflare ('+((w&&w.title)||'sin respuesta')+')');
   NJW={ua:w.ua,cookie:w.cookie||''};return{data:w.data,url:w.url||url,via:'navegador',result:w.result}}
@@ -1890,7 +1892,7 @@ function paintLangTiles(av){LAV=av;const ep=LP;
   if(KBD&&$('#langdlg').classList.contains('on')){const t=$('#l-opts .lrow.on');if(t&&!t.contains(document.activeElement))setTimeout(()=>t.focus({preventScroll:true}),30)}}
 /* busca el Latino de este episodio sin salir de la ventana */
 async function latInline(ep){if(LBUSY)return;LBUSY=true;paintLangTiles(LAV);
-  let dub=[],err='';try{dub=await njDub(ep)}catch(e){err=e.message||''}
+  let dub=[],err='';try{dub=await inter(()=>njDub(ep))}catch(e){err=e.message||''}
   LBUSY=false;if(LP!==ep)return;
   if(dub.length){NJS[ep.url]={t:Date.now(),dub};DUB[ep.url]={s:LAV&&LAV.sub?1:0,d:1,t:Date.now()};store.set('nx_dub',DUB);if(D.avail)D.avail.dub=true;if(!LTOUCH||D.lang==='dub')LSEL='dub';paintLangTiles({...LAV,dub:true});njPrefetch(ep)}
   else{LNF[ep.url]=/cancel/i.test(err)?'Verificación cancelada':err&&/cloudflare|verific/i.test(err)?'No se pudo pasar la verificación':'Este episodio no tiene Latino';paintLangTiles(LAV)}}
@@ -1903,7 +1905,7 @@ async function askLang(ep){
   paintLangTiles(av);$('#langdlg').classList.add('on');
   if(KBD)setTimeout(()=>{const t=$('#l-opts .lrow.on')||$('#l-go');if(t)t.focus({preventScroll:true})},160);
   if(!av){
-    try{const s2=await epFull(ep.url);av={sub:!!(s2.sub||[]).length,dub:!!(s2.dub||[]).length};
+    try{const s2=await inter(()=>epFull(ep.url));av={sub:!!(s2.sub||[]).length,dub:!!(s2.dub||[]).length};
       DUB[ep.url]={s:av.sub?1:0,d:av.dub?1:0,t:Date.now()};store.set('nx_dub',DUB)}
     catch(e){av={sub:true,dub:true}}
     if(my!==LQ||LP!==ep)return;paintLangTiles(av)}
@@ -1917,7 +1919,8 @@ const closeLang=()=>$('#langdlg').classList.remove('on');
 function latAsk(ep){sheet(`<h3>Latino no encontrado</h3><p class="lg-why">El episodio ${esc(ep.number)} no tiene Latino en la fuente principal. La app puede buscarlo en la fuente de Latino y mostrarte cada paso.</p>
   <div style="display:grid;gap:10px;margin-top:14px"><button class="btn pri" id="lt-go" style="width:100%">Buscar Latino y revisar</button><button class="btn" id="lt-no" style="width:100%;background:var(--s2)">Cancelar</button></div>`);
   $('#lt-go').onclick=()=>latTest(ep);$('#lt-no').onclick=()=>$('#sheet').classList.remove('on')}
-async function latTest(ep){const rows=[];const d=D.data||{};
+const latTest=ep=>inter(()=>latTest0(ep));
+async function latTest0(ep){const rows=[];const d=D.data||{};
   const paint=()=>sheet(`<h3>Revisión del Latino</h3><p class="lg-why" style="margin-bottom:10px">${esc(esTitle(d))} · Episodio ${esc(ep.number)} · v__APP_VERSION__</p>`+rows.map(r=>`<div class="opt"><span>${r.n}<br><small style="word-break:break-all">${esc(r.d)}</small></span><small style="color:${r.ok===null?'var(--mu)':r.ok?'var(--ac2)':'var(--bad)'}">${r.ok===null?'…':r.ok?'OK':'Falló'}</small></div>`).join('')+(rows.length&&rows.every(r=>r.ok!==null)?`<p class="lg-note" style="margin-top:12px">Si algo falló, toma captura de esta pantalla.</p><button class="btn pri" id="lt-ok" style="width:100%;margin-top:10px">Listo</button>`:''));
   const fin=()=>{paint();const b=$('#lt-ok');if(b)b.onclick=()=>$('#sheet').classList.remove('on')};
   const step=async(n,fn)=>{const r={n,d:'Probando…',ok:null};rows.push(r);paint();try{const v=await fn();r.ok=true;r.d=v.msg;paint();return v}catch(e){r.ok=false;r.d=(e&&e.message)||String(e);paint();return null}};
@@ -2006,7 +2009,7 @@ function paintLang(){$('#p-langn').textContent=FLAG[P.lang]+' '+LNAME[P.lang];$(
 async function loadEpisode(){
   const tk=++P.tk;P.diag=[];P.endShown=false;P.endCancel=false;loadSkips(tk);resetMedia();paintLang();loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
   try{
-    const s=await epFull(P.ep.url);if(tk!==P.tk)return;
+    const s=await inter(()=>epFull(P.ep.url));if(tk!==P.tk)return;
     P.servers={sub:s.sub||[],dub:s.dub||[]};DUB[P.ep.url]={s:P.servers.sub.length?1:0,d:P.servers.dub.length?1:0,t:Date.now()};store.set('nx_dub',DUB);
     if(!P.servers[P.lang].length){const o=P.lang==='sub'?'dub':'sub';if(P.servers[o].length){toast(`No hay ${LNAME[P.lang]} en este episodio, se usa ${LNAME[o]}`);P.lang=o}}
     await playLang(tk);

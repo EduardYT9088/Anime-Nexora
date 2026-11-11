@@ -18,7 +18,7 @@ env:
   APP_VERSION: "1.0.4-monedas"   # <- cambia aquí la versión del APK
   # Anuncios con premio (AdMob). Este es el ID de PRUEBA oficial de Google: no paga, pero no arriesga tu cuenta.
   # Cuando tengas tu app en AdMob, pega aquí tu "ID de la app" (ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY)
-  ADMOB_APP_ID: "ca-app-pub-3940256099942544~3347511713"
+  ADMOB_APP_ID: "ca-app-pub-2878080994007295~4711777253"
   # Comentarios (Supabase): pega aquí la "Project URL" y la clave pública ("anon" o "publishable")
   NX_SB_URL: "https://lvnuolgcqttvlkvgagde.supabase.co"
   NX_SB_KEY: "sb_publishable_vvj-N9C2rbS-_rXPtxOHtg_iRBDuPaq"

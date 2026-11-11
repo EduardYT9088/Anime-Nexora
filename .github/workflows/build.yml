@@ -162,6 +162,7 @@ jobs:
           import java.net.URL;
           import java.util.Iterator;
           import android.graphics.Bitmap;
+          import android.view.KeyEvent;
           import android.os.Handler;
           import android.os.Looper;
           import android.webkit.CookieManager;
@@ -366,6 +367,18 @@ jobs:
                               hd.post(() -> { try { root.removeView(box); w.stopLoading(); w.destroy(); } catch (Exception e) { } });
                           };
                           bt.setOnClickListener(v -> finish.accept("ERR cancelado"));
+                          /* TV: flechas = moverse entre elementos (Tab), OK = marcar la casilla (Espacio), Atrás = cancelar */
+                          w.setOnKeyListener((v, code, ev) -> {
+                              if (bar.getVisibility() != View.VISIBLE) return false;
+                              if (code == KeyEvent.KEYCODE_BACK) { if (ev.getAction() == KeyEvent.ACTION_UP) finish.accept("ERR cancelado"); return true; }
+                              int map = -1; boolean shift = false;
+                              if (code == KeyEvent.KEYCODE_DPAD_DOWN || code == KeyEvent.KEYCODE_DPAD_RIGHT) map = KeyEvent.KEYCODE_TAB;
+                              else if (code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_LEFT) { map = KeyEvent.KEYCODE_TAB; shift = true; }
+                              else if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_NUMPAD_ENTER) map = KeyEvent.KEYCODE_SPACE;
+                              if (map < 0) return false;
+                              v.dispatchKeyEvent(new KeyEvent(ev.getDownTime(), ev.getEventTime(), ev.getAction(), map, ev.getRepeatCount(), shift ? KeyEvent.META_SHIFT_ON : 0));
+                              return true;
+                          });
                           final Runnable hideBox = () -> {
                               if (bar.getVisibility() != View.VISIBLE) return;
                               bar.setVisibility(View.GONE); box.setElevation(0);
@@ -387,7 +400,12 @@ jobs:
                                   if (!chal) hideBox.run();
                                   if (wait) {
                                       if (chal) w.evaluateJavascript(clean, null);
-                                      if (chal && el > quiet && bar.getVisibility() != View.VISIBLE) { bar.setVisibility(View.VISIBLE); box.bringToFront(); box.setElevation(px(60)); }
+                                      if (chal && el > quiet && bar.getVisibility() != View.VISIBLE) {
+                                          bar.setVisibility(View.VISIBLE); box.bringToFront(); box.setElevation(px(60));
+                                          /* control remoto: el foco va a la casilla */
+                                          w.setFocusable(true); w.setFocusableInTouchMode(true); w.requestFocus();
+                                          w.evaluateJavascript("(function(){try{var f=document.querySelector('iframe');if(f)f.focus()}catch(e){}})()", null);
+                                      }
                                       hd.removeCallbacks(check[0]);
                                       if (el < tmo) hd.postDelayed(check[0], loading ? 400 : 800); else finish.accept(null);
                                       return;

@@ -303,7 +303,9 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 #lockui{position:absolute;inset:0;z-index:7;display:none}
 #lockui.on{display:block}
 #p-unlock{position:absolute;right:22px;top:16px;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.45)}
-#lockmsg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:9px 14px;border-radius:10px;background:rgba(0,0,0,.6);font-size:12.5px;font-weight:700;display:none;align-items:center;gap:6px}
+#lockmsg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:11px 16px;border-radius:12px;background:rgba(0,0,0,.66);font-size:13.5px;font-weight:700;display:none;align-items:center;gap:7px;overflow:hidden;pointer-events:none;white-space:nowrap}
+#lockbar{position:absolute;left:0;bottom:0;height:3px;width:0;background:var(--ac2);transition:none}
+#lockmsg.hold #lockbar{width:100%;transition:width .85s linear}
 #ploader{position:absolute;inset:0;display:none;flex-direction:column;gap:14px;align-items:center;justify-content:center;background:rgba(0,0,0,.55);text-align:center;padding:30px;font-size:13.5px;font-weight:700;color:#e9e7ff;z-index:3}
 #ploader.on{display:flex}
 .spin{width:40px;height:40px;border-radius:50%;border:3px solid rgba(255,255,255,.15);border-top-color:var(--ac2);animation:rot .8s linear infinite}
@@ -934,7 +936,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
       </div>
     </div>
   </div>
-  <div id="lockui"><button id="p-unlock" aria-label="Desbloquear"><svg class="i"><use href="#i-lock"/></svg></button><div id="lockmsg"><svg class="i" style="width:16px;height:16px"><use href="#i-lock"/></svg>Mantén presionado para desbloquear</div></div>
+  <div id="lockui"><button id="p-unlock" aria-label="Desbloquear"><svg class="i"><use href="#i-lock"/></svg></button><div id="lockmsg"><svg class="i" style="width:16px;height:16px"><use href="#i-lock"/></svg><span id="lockt">Mantén presionada la pantalla para desbloquear</span><i id="lockbar"></i></div></div>
   <button id="skipop" class="skipop" aria-label="Saltar intro"><svg class="i"><use href="#i-next"/></svg>Saltar intro</button>
   <div id="next"><p>Siguiente episodio en <b id="n-sec">8</b> s</p>
     <div class="btnrow"><button class="btn sec" id="n-cancel">Cancelar</button><button class="btn pri" id="n-go">Ir ahora</button></div></div>
@@ -2204,12 +2206,17 @@ sk.addEventListener('change',()=>{V.currentTime=sk.value/1000*(V.duration||0);dr
 $('#p-back').onclick=e=>{e.stopPropagation();closeTop()};
 /* bloqueo de pantalla */
 function setLock(on){P.locked=on;P.okN=0;$('#lockui').classList.toggle('on',on);if(on){try{document.activeElement&&document.activeElement.blur()}catch(e){}$('#ctl').classList.add('off');flashLock()}else{showCtl(true);if(KBD)setTimeout(()=>{const b=$('#p-pp');if(b)b.focus()},60)}}
-let lockT;function flashLock(){const m=$('#lockmsg'),b=$('#p-unlock');if(m.lastChild&&m.lastChild.nodeType===3)m.lastChild.textContent=KBD?'Pulsa OK 3 veces para desbloquear':'Mantén presionado para desbloquear';m.style.display='flex';b.style.opacity=1;clearTimeout(lockT);lockT=setTimeout(()=>{m.style.display='none';b.style.opacity=.35},2200)}
+let lockT;function flashLock(){const m=$('#lockmsg'),b=$('#p-unlock');$('#lockt').textContent=KBD?'Pulsa OK 3 veces para desbloquear':'Mantén presionada la pantalla para desbloquear';m.style.display='flex';b.style.opacity=1;clearTimeout(lockT);lockT=setTimeout(()=>{m.style.display='none';b.style.opacity=.35},2200)}
 $('#p-lock').onclick=e=>{e.stopPropagation();setLock(true)};
 $('#lockui').addEventListener('click',e=>{e.stopPropagation();flashLock()});
-let holdT;const ub=$('#p-unlock');
-['pointerdown'].forEach(ev=>ub.addEventListener(ev,e=>{e.stopPropagation();clearTimeout(holdT);holdT=setTimeout(()=>{setLock(false);toast('Pantalla desbloqueada')},800)}));
-['pointerup','pointerleave','pointercancel'].forEach(ev=>ub.addEventListener(ev,()=>clearTimeout(holdT)));
+/* desbloquear: mantener presionada CUALQUIER parte de la pantalla (antes solo el candado pequeño de la esquina) */
+let holdT,holdXY=null;const lu=$('#lockui');
+const holdEnd=()=>{clearTimeout(holdT);holdXY=null;$('#lockmsg').classList.remove('hold')};
+lu.addEventListener('pointerdown',e=>{e.stopPropagation();holdEnd();holdXY=[e.clientX,e.clientY];flashLock();clearTimeout(lockT);
+  const m=$('#lockmsg');void m.offsetWidth;m.classList.add('hold');
+  holdT=setTimeout(()=>{holdEnd();setLock(false);toast('Pantalla desbloqueada')},850)});
+lu.addEventListener('pointermove',e=>{if(holdXY&&Math.hypot(e.clientX-holdXY[0],e.clientY-holdXY[1])>28)holdEnd()});
+['pointerup','pointercancel','pointerleave'].forEach(ev=>lu.addEventListener(ev,()=>{if(holdXY){holdEnd();lockT=setTimeout(()=>{$('#lockmsg').style.display='none';$('#p-unlock').style.opacity=.35},1800)}}));
 /* mostrar/ocultar controles + doble toque */
 function showCtl(force){if(P.locked)return;const c=$('#ctl');c.classList.remove('off');clearTimeout(P.hideT);if(P.mode==='video'&&!V.paused||force)P.hideT=setTimeout(()=>c.classList.add('off'),3500)}
 let lastTap=0;

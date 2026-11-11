@@ -595,6 +595,22 @@ jobs:
                   done(call, true);
               }
 
+              /* Reproductor web: bloquea las ventanas de publicidad que abren las páginas de los servidores */
+              private volatile boolean blockNav = false;
+              private long lastBlockNote = 0;
+              @PluginMethod
+              public void navBlock(PluginCall call) { blockNav = Boolean.TRUE.equals(call.getBoolean("on", false)); done(call, true); }
+              @Override
+              public Boolean shouldOverrideLoad(Uri url) {
+                  if (!blockNav || url == null) return null;
+                  String h = url.getHost(), sc = url.getScheme();
+                  if (h != null && (h.equals("localhost") || h.equals("127.0.0.1"))) return null;
+                  if (sc != null && (sc.equals("data") || sc.equals("blob") || sc.equals("about") || sc.equals("javascript"))) return null;
+                  long now = System.currentTimeMillis();
+                  if (now - lastBlockNote > 4000) { lastBlockNote = now; JSObject d = new JSObject(); d.put("url", String.valueOf(url)); notifyListeners("nxBlocked", d, false); }
+                  return Boolean.TRUE;
+              }
+
               @PluginMethod
               public void openAppSettings(PluginCall call) { done(call, appDetails()); }
 

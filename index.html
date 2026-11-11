@@ -2277,7 +2277,10 @@ function noDirect(tk){
   $('#pe-retry').onclick=()=>{$('#ploader .spin').style.display='';loadEpisode()};
   if(alt)$('#pe-alt').onclick=()=>{$('#ploader .spin').style.display='';P.lang=o;playLang(++P.tk)};
   if(KBD)setTimeout(()=>($('#pe-alt')||$('#pe-retry')).focus(),450)}
-function resetMedia(){
+/* mientras se usa el reproductor web, la app no deja que la página abra publicidad ni el navegador */
+let NAVB=false;function navBlock(on){if(NAVB===on)return;NAVB=on;try{if(NXS&&NXS.navBlock)NXS.navBlock({on}).catch(()=>{})}catch(e){}}
+if(NXS&&NXS.addListener)try{NXS.addListener('nxBlocked',()=>toast('Se bloqueó una ventana de publicidad del servidor')).catch?.(()=>{})}catch(e){}
+function resetMedia(){navBlock(false);
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}
   V.pause();V.removeAttribute('src');V.load();F.src='about:blank';F.classList.add('hide');V.classList.remove('hide');P.mode='video';
   $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op,#p-q').forEach(x=>x.classList.remove('hide'));setSeek(0,0);$('#p-seek').style.setProperty('--b','0%');paintQ()
@@ -2285,7 +2288,7 @@ function resetMedia(){
 async function attach(url,type,tk){
   await loadHls();if(tk!==P.tk)return;
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}
-  P.mode='video';F.classList.add('hide');V.classList.remove('hide');V.style.objectFit=P.fit;
+  P.mode='video';navBlock(false);F.classList.add('hide');V.classList.remove('hide');V.style.objectFit=P.fit;
   let failed=false;
   const fail=why=>{if(tk!==P.tk||failed)return;failed=true;if(P.mode!=='video')return;
     if(P.isLocal){P.isLocal=false;V.onerror=null;if(P.off)return playerError('No se pudo abrir el archivo descargado. Bórralo y descárgalo otra vez.');P.noLocal=P.ep.url;toast('La descarga no abrió, se usa internet');loadEpisode();return}
@@ -2317,7 +2320,7 @@ function useFrame(it,tk){
   /* en TV el reproductor web no se maneja con el control y muestra publicidad: no se usa */
   if(isTV)return noDirect(tk);
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}V.pause();V.removeAttribute('src');V.classList.add('hide');
-  P.mode='frame';F.classList.remove('hide');F.src=it.url;loader(false);
+  P.mode='frame';navBlock(true);F.classList.remove('hide');F.src=it.url;loader(false);
   $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op,#p-q').forEach(x=>x.classList.add('hide'));updSrvName();
   $('#ctl').classList.remove('off');clearTimeout(P.hideT);P.hideT=setTimeout(()=>$('#ctl').classList.add('off'),4000);
 }

@@ -703,6 +703,7 @@ jobs:
                       Constraints k = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
                       PeriodicWorkRequest r = new PeriodicWorkRequest.Builder(NexoraCheck.class, 15, TimeUnit.MINUTES).setConstraints(k).build();
                       WorkManager.getInstance(c).enqueueUniquePeriodicWork("nexora_check", ExistingPeriodicWorkPolicy.KEEP, r);
+                      try { WorkManager.getInstance(c).cancelUniqueWork("com.nexora.animesplus.check"); WorkManager.getInstance(c).cancelAllWorkByTag("com.nexora.animesplus.check"); } catch (Exception e2) { }
                   } catch (Exception e) { }
                   fast(c, 1, true);
               }

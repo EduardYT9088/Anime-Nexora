@@ -1249,10 +1249,10 @@ function njEpisodes(html){const out={all:[],by:{}};
     if(!m||m[2].includes('.')||!/-cap-\d+\/?$/.test(url))return;const se=+m[1];(out.by[se]=out.by[se]||[])[+m[2]-1]=url;out.all.push(url)});
   return out}
 /* busca el mismo anime en la fuente de Latino y decide qué episodio corresponde a cada número */
-async function njFind(d,count){
-  const c=NJC[D.url];if(c&&Date.now()-c.t<(c.eps?2*864e5:20*60e3))return c.eps?c:null;
-  const base=D.frBase||baseTitle(d.title||'');const want=[d.title,d.esTitle,...(d.alt||[]),base].filter(Boolean).map(skel).filter(x=>x.length>=2);
-  const save=v=>{NJC[D.url]={t:Date.now(),...v};njSave();return v.eps?NJC[D.url]:null};
+async function njFind(d,count,key=D.url,fb=D.frBase){
+  const c=NJC[key];if(c&&Date.now()-c.t<(c.eps?2*864e5:20*60e3))return c.eps?c:null;
+  const base=fb||baseTitle(d.title||'');const want=[d.title,d.esTitle,...(d.alt||[]),base].filter(Boolean).map(skel).filter(x=>x.length>=2);
+  const save=v=>{NJC[key]={t:Date.now(),...v};njSave();return v.eps?NJC[key]:null};
   const{data,url}=await getCF(`${NJB}/?s=${encodeURIComponent(base)}`);NJB=new URL(url).origin;
   const res=[...parseDoc(data).querySelectorAll('.result-item')].map(r=>{const a=r.querySelector('.title a');return a?{title:a.textContent.trim(),url:a.getAttribute('href')}:null}).filter(r=>r&&/\/online\//.test(r.url));
   const pick=res.find(r=>skel(r.title)===skel(d.title))||res.find(r=>want.includes(skel(r.title)));
@@ -1285,8 +1285,8 @@ async function njServers(epUrl){let list=null,base='';
       parseDoc(ms).querySelectorAll('.OD_LAT li,[class*="OD_LAT"] li').forEach(li=>{const m=(li.getAttribute('onclick')||'').match(/go_to_player\(\s*['"]([^'"]+)['"]/);if(!m||dub.some(x=>x.url===m[1]))return;
         dub.push({server:(li.querySelector('span')?.textContent||'').trim()||hostOf(m[1]),url:m[1]})})}catch(e){}}
   return dub}
-async function njDub(ep){if(!D.data||!D.eps.length)return[];const f=await njFind(D.data,D.eps.length);if(!f)return[];
-  const i=D.eps.findIndex(e=>e.url===ep.url);const n=+ep.number;const u=(f.eps[n-1])||(i>=0?f.eps[i]:null);return u?njServers(u):[]}
+async function njDub(ep){if(!D.data||!D.eps.length)return[];const eps=D.eps;const f=await njFind(D.data,eps.length,D.url,D.frBase);if(!f)return[];
+  const i=eps.findIndex(e=>e.url===ep.url);const n=+ep.number;const u=(f.eps[n-1])||(i>=0?f.eps[i]:null);return u?njServers(u):[]}
 /* servidores de un episodio del anime abierto: los de la fuente + el Latino de respaldo si hace falta */
 const NJS={};let NJPRE=null;
 /* busca el Latino del siguiente episodio mientras ves este, para que salga al instante */
@@ -1377,7 +1377,7 @@ const SRC={
     const al=await alP;
     await Promise.all(al.map(t=>one(t).then(r=>{push(r,t,true);emit()}).catch(e=>{err=err||e})));
     const out=[...top,...rest];
-    if(out.length<4&&!useApi()){const ex=await Promise.race([backupSearch(al[0]||q).catch(()=>[]),sleep(9000).then(()=>[])]);const sk=out.map(a=>skel(a.title));
+    if(out.length<4&&!useApi()){const ex=await Promise.race([backupSearch(q).then(r=>r.length||!al[0]?r:backupSearch(al[0])).catch(()=>[]),sleep(9000).then(()=>[])]);const sk=out.map(a=>skel(a.title));
       ex.forEach(b=>{const k=skel(b.title);if(sk.some(x=>sameSk(x,k)))return;sk.push(k);out.push(b)})}
     if(!out.length&&err)throw err;return out},
   async info(url){if(useApi()){const j=await api('info',{url});return j.data||{}}return provFor(url).info(url)},
@@ -1901,6 +1901,7 @@ async function askLang(ep){
   $('#l-mini').innerHTML=imgTag(d,'ok');$('#l-title').innerHTML=ttSpan(d);$('#l-ep').textContent='EPISODIO '+ep.number;
   const c=langsOf(ep.url);let av=c?{sub:!!c.s,dub:!!c.d}:null;
   paintLangTiles(av);$('#langdlg').classList.add('on');
+  if(KBD)setTimeout(()=>{const t=$('#l-opts .lrow.on')||$('#l-go');if(t)t.focus({preventScroll:true})},160);
   if(!av){
     try{const s2=await epFull(ep.url);av={sub:!!(s2.sub||[]).length,dub:!!(s2.dub||[]).length};
       DUB[ep.url]={s:av.sub?1:0,d:av.dub?1:0,t:Date.now()};store.set('nx_dub',DUB)}
@@ -1961,6 +1962,7 @@ function closeTop(){
   if(id==='player'&&stack.includes('epv'))renderEpisodes();
   if(id==='player'||id==='epv'){paintCont()}
   if(id==='detail'){renderContinue();if(tab==='lib')renderLib()}
+  if(KBD)setTimeout(()=>{const a=document.activeElement,l=layer();if(!a||a===document.body||!l.contains(a)||!shown(a))focusFirst(l)},80);
   return true
 }
 if(App)App.addListener('backButton',()=>{

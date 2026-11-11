@@ -2807,7 +2807,7 @@ function paintLdl(){const b=$('#l-dl');if(!b||!LP)return;const d=dlDone(LP.url,L
   $('#l-dltx').textContent=d?'Ya descargado · se verá sin internet':on?'Descargando… · ver descargas':'Descargar este episodio'}
 /* ================= MONEDAS (prueba): descargar cuesta monedas, se ganan viendo anuncios ================= */
 /* unit: ID del bloque de anuncios bonificados de AdMob. Este es el de PRUEBA de Google (no paga). */
-const ECO={cost:2,reward:2,welcome:4,daily:20,unit:'ca-app-pub-3940256099942544/5224354917'};
+const ECO={cost:2,reward:6,welcome:4,daily:20,unit:'ca-app-pub-3940256099942544/5224354917'};
 let COINS=store.get('nx_coins',null);if(COINS===null){COINS=ECO.welcome;store.set('nx_coins',COINS)}
 const ecoOn=()=>!isTV; /* en TV no hay anuncios: las descargas no cuestan */
 function setCoins(n){COINS=Math.max(0,Math.floor(n));store.set('nx_coins',COINS);paintCoins()}

@@ -1223,11 +1223,12 @@ let NJB='https://ww4.animeonline.ninja';
 /* si la página bloquea la conexión directa (Cloudflare), se abre en un navegador invisible dentro de la app */
 let NJW=null;
 const CFBLK=h=>String(h||'').length<30000&&/just a moment|un momento|cf-chl|challenge-platform|attention required/i.test(h);
-let cfToast=0;
+let cfToast=0,NJWEB=false;
 async function getCF(url,headers,js){let why='';
   if(!js){try{const hh=NJW&&NJW.cookie?{...(headers||{}),Cookie:NJW.cookie,'User-Agent':NJW.ua}:headers;const r=await get(url,hh);if(!CFBLK(r.data))return r;why='verificación'}
     catch(e){if(!/40[1-9]|429|50[0-9]/.test(e.message))throw e;why=(e.message.match(/\d{3}/)||['bloqueo'])[0]}}
   if(!NXS||!NXS.webGet)throw new Error('Bloqueado por Cloudflare ('+why+')');
+  if(/animeonline\.ninja/i.test(url))NJWEB=true;
   if(Date.now()-cfToast>20000){cfToast=Date.now();toast('Verificando la fuente de Latino…')}
   const w=await NXS.webGet({url,timeout:90000,quiet:8000,...(js?{js}:{})});
   if(!w||!w.data||/just a moment|un momento|attention required|access denied|error 10\d\d/i.test(w.title||''))
@@ -1270,7 +1271,14 @@ async function njEmbeds(epUrl,pg){const base=new URL(pg.url||epUrl).origin;const
     const js="window.__nxr=null;Promise.all("+JSON.stringify(opts.map(o=>[o[1],o[2],o[3]]))+".map(function(o){return fetch('/wp-admin/admin-ajax.php',{method:'POST',credentials:'include',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:'action=doo_player_ajax&post='+o[1]+'&nume='+o[2]+'&type='+o[0]}).then(function(r){return r.text()}).catch(function(){return ''})})).then(function(a){window.__nxr=JSON.stringify(a)})";
     const w=await getCF(epUrl,null,js);let arr=[];try{arr=JSON.parse(w.result||'[]')}catch(e){}out=arr.map(emb)}
   return{list:opts.map((o,i)=>({title:o[4],url:out[i]||''})),via}}
-async function njServers(epUrl){const pg=await getCF(epUrl);const base=new URL(pg.url||epUrl).origin;const dub=[];const{list}=await njEmbeds(epUrl,pg);
+/* en el navegador interno: lee las opciones de video y pide los reproductores desde la misma página */
+const NJJS="window.__nxr=null;(function(){var L=[].slice.call(document.querySelectorAll('li.dooplay_player_option,li[data-post][data-nume]')).slice(0,4);Promise.all(L.map(function(li){var q=li.querySelector('.title');var tt=q?q.textContent.trim():'';return fetch('/wp-admin/admin-ajax.php',{method:'POST',credentials:'include',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:'action=doo_player_ajax&post='+li.getAttribute('data-post')+'&nume='+li.getAttribute('data-nume')+'&type='+(li.getAttribute('data-type')||'tv')}).then(function(r){return r.text()}).then(function(t){return[tt,t]}).catch(function(){return[tt,'']})})).then(function(a){window.__nxr=JSON.stringify(a)})})()";
+async function njServers(epUrl){let list=null,base='';
+  const emb=t=>{try{const j=typeof t==='string'?JSON.parse(t):t;return(j&&j.embed_url)||''}catch(e){return''}};
+  if(!NJWEB){try{const pg=await getCF(epUrl);base=new URL(pg.url||epUrl).origin;if(!NJWEB){const r=await njEmbeds(epUrl,pg);list=r.list}}catch(e){if(!NJWEB)throw e}}
+  if(!list||!list.some(x=>x.url)){const w=await getCF(epUrl,null,NJJS);base=new URL(w.url||epUrl).origin;let arr=[];try{arr=JSON.parse(w.result||'[]')}catch(e){}
+    list=(Array.isArray(arr)?arr:[]).map(x=>({title:(x&&x[0])||'',url:emb(x&&x[1])}))}
+  const dub=[];
   for(const o of list){const e=o.url;if(!e)continue;
     if(/latino/i.test(o.title)&&!/multi/i.test(o.title)){dub.push({server:hostOf(e),url:e});continue}
     try{const ms=(await getCF(e,{Referer:base+'/'})).data;
@@ -1280,10 +1288,14 @@ async function njServers(epUrl){const pg=await getCF(epUrl);const base=new URL(p
 async function njDub(ep){if(!D.data||!D.eps.length)return[];const f=await njFind(D.data,D.eps.length);if(!f)return[];
   const i=D.eps.findIndex(e=>e.url===ep.url);const n=+ep.number;const u=(f.eps[n-1])||(i>=0?f.eps[i]:null);return u?njServers(u):[]}
 /* servidores de un episodio del anime abierto: los de la fuente + el Latino de respaldo si hace falta */
-const NJS={};
+const NJS={};let NJPRE=null;
+/* busca el Latino del siguiente episodio mientras ves este, para que salga al instante */
+function njPrefetch(ep){if(!ep||!D.eps)return;const i=D.eps.findIndex(e=>e.url===ep.url);const nx=D.eps.find(e=>+e.number===+ep.number+1)||(i>=0?D.eps[i+1]:null);
+  if(!nx||NJS[nx.url]||NJPRE===nx.url)return;const u=D.url;NJPRE=nx.url;
+  setTimeout(async()=>{try{if(D.url!==u)return;const d=await njDub(nx);if(d.length){NJS[nx.url]={t:Date.now(),dub:d};DUB[nx.url]={s:1,d:1,t:Date.now()};store.set('nx_dub',DUB)}}catch(e){}finally{if(NJPRE===nx.url)NJPRE=null}},2500)}
 async function epFull(url){const s=await SRC.episode(url);if((s.dub||[]).length||!D.data||isBk(D.url)||useApi())return s;
   const k=NJS[url];if(k&&Date.now()-k.t<15*60e3)return{sub:s.sub||[],dub:k.dub};
-  const ep=D.eps.find(e=>e.url===url);if(!ep)return s;try{const d=await njDub(ep);if(d.length){NJS[url]={t:Date.now(),dub:d};return{sub:s.sub||[],dub:d}}}catch(e){}return s}
+  const ep=D.eps.find(e=>e.url===url);if(!ep)return s;try{const d=await njDub(ep);if(d.length){NJS[url]={t:Date.now(),dub:d};njPrefetch(ep);return{sub:s.sub||[],dub:d}}}catch(e){}return s}
 const PROV={animeav1:AVP,animeflv:FLVP,tioanime:TIOP,monoschinos:MCP};
 const provFor=url=>/animeflv/i.test(url)?FLVP:/tioanime/i.test(url)?TIOP:/monoschinos/i.test(url)?MCP:AVP;
 
@@ -1857,7 +1869,7 @@ $('#e-view').onclick=e=>{const b=e.target.closest('[data-v]');if(!b)return;store
 $('#e-back').onclick=()=>closeTop();
 
 /* ================= ¿CÓMO QUIERES VERLO? ================= */
-let LP=null,LSEL='dub',LAV=null,LBUSY=false;const LNF={};
+let LP=null,LSEL='dub',LAV=null,LBUSY=false,LTOUCH=false;const LNF={};
 let LQ=0;
 const LT={dub:['mic','Latino','Doblado al español'],sub:['cc','Subtitulado','Japonés con subtítulos']};
 const canLat=()=>!!(D.data&&!isBk(D.url)&&!useApi());
@@ -1880,12 +1892,12 @@ function paintLangTiles(av){LAV=av;const ep=LP;
 async function latInline(ep){if(LBUSY)return;LBUSY=true;paintLangTiles(LAV);
   let dub=[],err='';try{dub=await njDub(ep)}catch(e){err=e.message||''}
   LBUSY=false;if(LP!==ep)return;
-  if(dub.length){NJS[ep.url]={t:Date.now(),dub};DUB[ep.url]={s:LAV&&LAV.sub?1:0,d:1,t:Date.now()};store.set('nx_dub',DUB);if(D.avail)D.avail.dub=true;LSEL='dub';paintLangTiles({...LAV,dub:true});toast('¡Latino encontrado!')}
+  if(dub.length){NJS[ep.url]={t:Date.now(),dub};DUB[ep.url]={s:LAV&&LAV.sub?1:0,d:1,t:Date.now()};store.set('nx_dub',DUB);if(D.avail)D.avail.dub=true;if(!LTOUCH||D.lang==='dub')LSEL='dub';paintLangTiles({...LAV,dub:true});njPrefetch(ep)}
   else{LNF[ep.url]=/cancel/i.test(err)?'Verificación cancelada':err&&/cloudflare|verific/i.test(err)?'No se pudo pasar la verificación':'Este episodio no tiene Latino';paintLangTiles(LAV)}}
 async function askLang(ep){
   const saved=store.get('nx_alang',{})[D.url];
   if(!cfg.askLang||saved){startPlay(ep,saved||D.lang);return}
-  LP=ep;LBUSY=false;const d=D.data||{title:''};const my=++LQ;
+  LP=ep;LBUSY=false;LTOUCH=false;const d=D.data||{title:''};const my=++LQ;
   $('#l-mini').innerHTML=imgTag(d,'ok');$('#l-title').innerHTML=ttSpan(d);$('#l-ep').textContent='EPISODIO '+ep.number;
   const c=langsOf(ep.url);let av=c?{sub:!!c.s,dub:!!c.d}:null;
   paintLangTiles(av);$('#langdlg').classList.add('on');
@@ -1894,6 +1906,10 @@ async function askLang(ep){
       DUB[ep.url]={s:av.sub?1:0,d:av.dub?1:0,t:Date.now()};store.set('nx_dub',DUB)}
     catch(e){av={sub:true,dub:true}}
     if(my!==LQ||LP!==ep)return;paintLangTiles(av)}
+  /* ya sabemos que este anime tiene Latino en la fuente de respaldo: buscarlo sin que toques nada */
+  if(c&&av&&!av.dub&&canLat()&&!LNF[ep.url]&&(NJS[ep.url]||(NJC[D.url]&&NJC[D.url].eps))){
+    if(NJS[ep.url]){paintLangTiles({...av,dub:true});return}
+    latInline(ep)}
 }
 const closeLang=()=>$('#langdlg').classList.remove('on');
 /* Revisión paso a paso del Latino de respaldo (para saber en qué falla en cada teléfono) */
@@ -1928,7 +1944,7 @@ $('#l-opts').onclick=e=>{const b=e.target.closest('.tile');if(!b)return;
   if(b.classList.contains('wait')||LBUSY)return;
   if(b.classList.contains('dis')&&b.dataset.l==='dub'&&LP&&canLat()){const ep=LP;if(LNF[ep.url]){closeLang();latTest(ep)}else latInline(ep);return}
   if(b.classList.contains('dis'))return toast(b.dataset.l==='dub'&&D.avail&&D.avail.dub?'El doblaje Latino todavía no llega a este episodio; mira los episodios con la etiqueta LAT':(b.dataset.l==='dub'?'Latino':'Subtitulado')+' no está disponible en este episodio');
-  LSEL=b.dataset.l;$$('#l-opts .tile').forEach(x=>x.classList.toggle('on',x===b));$('#l-gotx').textContent=LSEL==='dub'?'Reproducir en Latino':'Reproducir subtitulado'};
+  LSEL=b.dataset.l;LTOUCH=true;$$('#l-opts .tile').forEach(x=>x.classList.toggle('on',x===b));$('#l-gotx').textContent=LSEL==='dub'?'Reproducir en Latino':'Reproducir subtitulado'};
 $('#l-remrow').addEventListener('keydown',e=>{if(e.target.id!=='l-remrow')return;if(e.key==='Enter'||e.key===' '||e.key==='NumpadEnter'){e.preventDefault();e.stopPropagation();const c=$('#l-rem');c.checked=!c.checked;toast(c.checked?'Se recordará el idioma para este anime':'No se recordará el idioma')}});
 $('#l-go').onclick=()=>{if($('#l-go').disabled)return;D.lang=LSEL;if($('#l-rem').checked){const m=store.get('nx_alang',{});m[D.url]=LSEL;store.set('nx_alang',m)}closeLang();startPlay(LP,LSEL)};
 $('#l-close').onclick=closeLang;

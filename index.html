@@ -2826,7 +2826,7 @@ function paintLdl(){const b=$('#l-dl');if(!b||!LP)return;const d=dlDone(LP.url,L
 /* unit: ID del bloque de anuncios bonificados de AdMob (cuenta de Eduard, bloque "Monedas") */
 const ECO={cost:2,reward:6,welcome:4,daily:20,unit:'ca-app-pub-2878080994007295/5557955069',
   /* mientras AdMob no tenga anuncios reales para la app nueva, se muestra uno de PRUEBA de Google (solo en esta versión de prueba) */
-  testFallback:true,testUnit:'ca-app-pub-3940256099942544/5224354917'};
+  testFallback:false,testUnit:'ca-app-pub-3940256099942544/5224354917'};
 let COINS=store.get('nx_coins',null);if(COINS===null){COINS=ECO.welcome;store.set('nx_coins',COINS)}
 const ecoOn=()=>!isTV; /* en TV no hay anuncios: las descargas no cuestan */
 function setCoins(n){COINS=Math.max(0,Math.floor(n));store.set('nx_coins',COINS);paintCoins()}

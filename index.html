@@ -1089,7 +1089,7 @@ const cache=new Map();
 /* índice de títulos que ya pasaron por la app (inicio, explorar, búsquedas): permite encontrar "OnePiece", "naruto shipuden", "frieren" al instante */
 const TIX=new Map((store.get('nx_tix',[])||[]).filter(x=>x&&x.url&&x.title).map(x=>[x.url,x]));let tixT=null;
 function tixAdd(a){if(!a||!a.url||!a.title||!/^https?:/.test(a.url))return;const o=TIX.get(a.url);
-  const v={url:a.url,title:a.title,image:a.image||o?.image||'',type:a.type||o?.type||'',year:a.year||o?.year||'',esTitle:a.esTitle||o?.esTitle||'',alt:(a.alt||o?.alt||[]).slice(0,4)};
+  const v={url:a.url,title:a.title,image:a.image||o?.image||'',type:a.type||o?.type||'',year:a.year||o?.year||'',esTitle:a.esTitle||o?.esTitle||'',alt:[...new Set([...(o?.alt||[]),...(a.alt||[])])].slice(-6)};
   TIX.delete(a.url);TIX.set(a.url,v);if(TIX.size>900)TIX.delete(TIX.keys().next().value);
   clearTimeout(tixT);tixT=setTimeout(()=>{try{store.set('nx_tix',[...TIX.values()])}catch(e){}},2500)}
 {const _set=cache.set.bind(cache);cache.set=(k,v)=>{try{tixAdd(v)}catch(e){}return _set(k,v)}}
@@ -1524,8 +1524,11 @@ const SRC={
     const one=t=>useApi()?api('search',{q:t}).then(j=>j.data?.results||[]):AVP.search(t);
     const top=[],rest=[],seen=new Set();let err=null;
     const push=(list,t,isAlias)=>{const n=normQ(t);(list||[]).forEach(a=>{if(seen.has(a.url))return;seen.add(a.url);
-      const hit=isAlias?sameTitle(baseTitle(a.title),t):(normQ(a.title).includes(n)||(a.alt||[]).some(x=>normQ(x).includes(n)));(hit?top:rest).push(a)})};
-    const emit=()=>{if(onPart)onPart([...top,...rest])};
+      const hit=isAlias?sameTitle(baseTitle(a.title),t):(normQ(a.title).includes(n)||(a.alt||[]).some(x=>normQ(x).includes(n)));(hit?top:rest).push(a);
+      /* aprende: "Solo Leveling" es "Ore dake Level Up na Ken" → la próxima vez sale al instante */
+      if(hit&&isAlias&&!noAlias&&q.trim().length>=3)try{tixAdd({...a,alt:[q.trim()]})}catch(e){}})};
+    /* mientras se buscan los nombres reales, solo se muestran coincidencias seguras (nada de "Futari Solo Camp" primero) */
+    let pending=true;const emit=()=>{if(!onPart)return;if(pending){if(top.length)onPart([...top])}else onPart([...top,...rest])};
     /* 1) al instante: títulos que la app ya conoce, aunque estén mal escritos o sin espacios */
     const loc=noAlias?[]:localSearch(q);if(loc.length){loc.forEach(a=>{seen.add(a.url);top.push(a)});emit()}
     /* 2) variantes: "OnePiece" → "One Piece", "one-piece" → "one piece", y el título conocido más parecido */
@@ -1538,6 +1541,7 @@ const SRC={
     await vP;
     const al=(await alP).filter(t=>!vs.some(x=>normQ(x)===normQ(t)));
     await Promise.all(al.map(t=>one(t).then(r=>{push(r,t,true);emit()}).catch(e=>{err=err||e})));
+    pending=false;
     const out=[...top,...rest];
     if(out.length<4&&bkP){const alt0=vs[0]||al[0];const ex=await Promise.race([bkP.then(r=>r.length||!alt0?r:backupSearch(alt0)).catch(()=>[]),sleep(7000).then(()=>[])]);const sk=out.map(a=>skel(a.title));
       ex.forEach(b=>{const k=skel(b.title);if(sk.some(x=>sameSk(x,k)))return;sk.push(k);out.push(b)})}

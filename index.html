@@ -735,6 +735,29 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 .dkc .bt .btn{flex:1}.dkc .bt .no{flex:.7;background:var(--s2);border:1px solid var(--line)}
 .dkc .bt .btn:disabled{opacity:.45;filter:grayscale(.6)}
 #psheet .dkc .hd .mini{width:46px;height:64px}
+
+/* ===== Monedas (prueba) ===== */
+.coinchip{display:flex;align-items:center;gap:6px;height:38px;padding:0 12px 0 8px;border-radius:99px;background:linear-gradient(135deg,rgba(255,196,61,.2),rgba(255,140,40,.1));border:1px solid rgba(255,196,61,.45);font-weight:800;font-size:14px;color:#ffd66b;flex:none;font-variant-numeric:tabular-nums}
+.coinchip svg{width:20px;height:20px;color:#ffc53d}
+.tv .coinchip,.tv .ecoonly{display:none!important}
+.dkc .sp.coin .ic{background:rgba(255,196,61,.16);color:#ffc53d}
+.dkc .sp.coin b em{font-style:normal;color:#ffd66b}
+.dkc .sp.coin.lack{border-color:rgba(255,196,61,.5);background:linear-gradient(135deg,rgba(255,196,61,.12),var(--s2))}
+.dkc .sp .adb{flex:none;height:38px;padding:0 12px;border-radius:12px;background:linear-gradient(135deg,#ffc53d,#ff8a28);color:#2a1600;font-weight:800;font-size:12.5px;display:flex;align-items:center;gap:6px}
+.dkc .sp .adb svg{width:14px;height:14px}
+.wal{text-align:center;padding:4px 2px 2px}
+.wal .big{width:96px;height:96px;margin:6px auto 12px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 30%,#ffe9a3,#ffc53d 45%,#e08a12);box-shadow:0 14px 40px rgba(255,170,40,.35),inset 0 -6px 12px rgba(150,70,0,.35)}
+.wal .big svg{width:52px;height:52px;color:#7a3f00}
+.wal .n{font-size:40px;font-weight:800;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+.wal .n small{display:block;font-size:12.5px;font-weight:700;color:var(--mu);letter-spacing:0;margin-top:6px}
+.wal .need{margin:14px auto 0;padding:10px 14px;border-radius:14px;background:rgba(255,196,61,.1);border:1px solid rgba(255,196,61,.35);color:#ffd66b;font-weight:700;font-size:13px;max-width:320px}
+.wal .rules{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0 4px;text-align:left}
+.wal .rules div{padding:12px;border-radius:14px;background:var(--s2);border:1px solid var(--line)}
+.wal .rules b{display:block;font-size:18px;color:#ffd66b}.wal .rules span{font-size:11.5px;color:var(--mu);font-weight:600}
+.wal .go{width:100%;margin-top:14px;height:52px;border-radius:16px;background:linear-gradient(135deg,#ffc53d,#ff8a28);color:#2a1600;font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 10px 28px rgba(255,150,40,.35)}
+.wal .go:disabled{opacity:.5}
+.wal .go svg{width:18px;height:18px}
+.wal .day{font-size:12px;color:var(--mu);font-weight:600;margin-top:10px}
 .offl #p-lang,.offl #p-dl{display:none}
 .tv .dlr .x,.tv .dla button,.tv .dlgph .op{width:48px;height:48px}
 </style>
@@ -777,6 +800,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/></symbol>
   <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M12 6.8l1.5 3.2 3.4.4-2.5 2.3.7 3.4-3.1-1.8-3.1 1.8.7-3.4-2.5-2.3 3.4-.4z"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M10 11v6M14 11v6M6.5 7l.8 11.2A2 2 0 0 0 9.3 20h5.4a2 2 0 0 0 2-1.8L17.5 7M9.5 7V4.5h5V7"/></symbol>
   <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14"/></symbol>
   <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l2.2 5.6L20 11l-5.8 2.4L12 19l-2.2-5.6L4 11l5.8-2.4z" fill="currentColor" stroke="none"/></symbol>
@@ -1008,7 +1032,7 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 <!-- DESCARGAS -->
 <div class="ov" id="dlv">
   <div class="eph"><div class="ephr"><button class="ibtn" id="dl-back" aria-label="Volver"><svg class="i"><use href="#i-back"/></svg></button>
-    <div class="ept"><b>Descargas</b><small id="dl-sub"></small></div></div></div>
+    <div class="ept"><b>Descargas</b><small id="dl-sub"></small></div><button class="coinchip" id="dl-coins" aria-label="Mis monedas"><svg class="i"><use href="#i-coin"/></svg><b class="coinv">0</b></button></div></div>
   <div class="epwrap"><div id="dl-list"></div></div>
 </div>
 
@@ -2781,6 +2805,37 @@ function paintDlBadge(){const n=dlActive();$('#dlbdg').textContent=n?(n>9?'9+':n
 function paintEpDl(){$$('#ep-grid .epr').forEach(b=>b.classList.toggle('dld',!!dlDone(b.dataset.eu)))}
 function paintLdl(){const b=$('#l-dl');if(!b||!LP)return;const d=dlDone(LP.url,LSEL),on=!d&&dlBusy(LP.url,LSEL);b.classList.toggle('ok',!!d);
   $('#l-dltx').textContent=d?'Ya descargado · se verá sin internet':on?'Descargando… · ver descargas':'Descargar este episodio'}
+/* ================= MONEDAS (prueba): descargar cuesta monedas, se ganan viendo anuncios ================= */
+/* unit: ID del bloque de anuncios bonificados de AdMob. Este es el de PRUEBA de Google (no paga). */
+const ECO={cost:2,reward:2,welcome:4,daily:20,unit:'ca-app-pub-3940256099942544/5224354917'};
+let COINS=store.get('nx_coins',null);if(COINS===null){COINS=ECO.welcome;store.set('nx_coins',COINS)}
+const ecoOn=()=>!isTV; /* en TV no hay anuncios: las descargas no cuestan */
+function setCoins(n){COINS=Math.max(0,Math.floor(n));store.set('nx_coins',COINS);paintCoins()}
+function paintCoins(){$$('.coinv').forEach(x=>x.textContent=COINS)}
+const adDay=()=>{const d=new Date().toDateString(),a=store.get('nx_adday',{});return a.d===d?a.n:0};
+const adDayAdd=()=>store.set('nx_adday',{d:new Date().toDateString(),n:adDay()+1});
+let ADBUSY=false;
+async function watchAd(){if(ADBUSY)return false;
+  if(!NXS||!NXS.adReward){toast('Los anuncios funcionan en la app instalada');return false}
+  if(adDay()>=ECO.daily){toast(`Ya viste ${ECO.daily} anuncios hoy · vuelve mañana`);return false}
+  ADBUSY=true;toast('Cargando anuncio…');
+  try{const r=await NXS.adReward({unit:ECO.unit});
+    if(r&&r.earned){adDayAdd();setCoins(COINS+ECO.reward);toast(`+${ECO.reward} monedas · ahora tienes ${COINS}`);return true}
+    toast(r&&r.ok?'Mira el anuncio hasta el final para ganar las monedas':'No hay anuncios disponibles ahora · intenta en un momento');return false}
+  catch(e){toast('No se pudo cargar el anuncio');return false}finally{ADBUSY=false}}
+function openWallet(need){if(!ecoOn())return;
+  const paint=()=>{const left=ECO.daily-adDay();
+    sheet(`<div class="wal"><div class="big"><svg class="i"><use href="#i-coin"/></svg></div>
+      <div class="n">${COINS}<small>MONEDAS NEXORA</small></div>
+      ${need>0&&COINS<need?`<div class="need">Te faltan ${need-COINS} moneda${need-COINS>1?'s':''} para esta descarga</div>`:''}
+      <div class="rules"><div><b>${ECO.cost}</b><span>monedas cuesta descargar 1 episodio</span></div><div><b>+${ECO.reward}</b><span>monedas por cada anuncio que veas</span></div></div>
+      <button class="go" id="wl-ad" ${left<=0?'disabled':''}><svg class="i"><use href="#i-play"/></svg>${left>0?`Ver anuncio · +${ECO.reward} monedas`:'Vuelve mañana por más anuncios'}</button>
+      <div class="day">Hoy viste ${adDay()} de ${ECO.daily} anuncios · ver o borrar descargas ya hechas no cuesta</div></div>`);
+    $('#wl-ad').onclick=async()=>{if(await watchAd()){paint();if(need>0&&COINS>=need)setTimeout(()=>{$('#sheet').classList.remove('on');toast('¡Listo! Ya puedes descargar')},700)}};
+    if(KBD)setTimeout(()=>$('#wl-ad').focus(),120)};
+  paint()}
+$('#dl-coins').onclick=()=>openWallet(0);
+setTimeout(paintCoins,0);
 /* Confirmar antes de descargar: anime, episodio(s), idioma, calidad y espacio */
 const DLQS={480:1.5e8,720:3e8,1080:6e8};
 async function dlConfirm(o){
@@ -2802,29 +2857,35 @@ async function dlConfirm(o){
       <div class="lb">CALIDAD</div>
       <div class="sg" id="dc-q">${[480,720,1080].map(v=>`<button data-q="${v}" class="${v===q?'on':''}">${v}p<small>${v===480?'Ahorra espacio':v===720?'Recomendada':'Máxima'}</small></button>`).join('')}</div>
       <div class="sp ${low?'bad':''}"><span class="ic"><svg class="i"><use href="#i-${low?'x':'dl'}"/></svg></span><div><b>${low?'No hay espacio suficiente':'Ocupará unos '+fsz(size)}</b><span>${low?`Necesitas ~${fsz(size)} y quedan ${fsz(DLFREE)} libres`:DLFREE?`Te quedan ${fsz(DLFREE)} libres en el teléfono`:'El tamaño final depende del episodio'}</span></div></div>
+      ${ecoOn()?(()=>{const cost=o.eps.length*ECO.cost,lack=cost-COINS;return`<div class="sp coin ${lack>0?'lack':''}"><span class="ic"><svg class="i"><use href="#i-coin"/></svg></span><div><b>Cuesta <em>${cost} moneda${cost>1?'s':''}</em></b><span>Tienes ${COINS}${lack>0?` · te faltan ${lack}`:` · te quedarán ${COINS-cost}`}</span></div>${lack>0?`<button class="adb" id="dc-ad"><svg class="i"><use href="#i-play"/></svg>Ver anuncio +${ECO.reward}</button>`:''}</div>`})():''}
       <p class="note">${many?'Se descargan uno tras otro y siguen aunque cierres la app.':'Sigue descargando aunque salgas de la app.'} Si el servidor no tiene esa calidad, se usa la más cercana.</p>
       <button class="ask ${ask?'':'on'}" id="dc-ask"><i></i>No volver a preguntar (se cambia en Ajustes)</button>
-      <div class="bt"><button class="btn no" id="dc-no">Cancelar</button><button class="btn pri" id="dc-go" ${low?'disabled':''}><svg class="i"><use href="#i-dl"/></svg>${many?'Descargar '+o.eps.length:'Descargar'}</button></div></div>`;
+      <div class="bt"><button class="btn no" id="dc-no">Cancelar</button><button class="btn pri" id="dc-go" ${low||(ecoOn()&&o.eps.length*ECO.cost>COINS)?'disabled':''}><svg class="i"><use href="#i-dl"/></svg>${many?'Descargar '+o.eps.length:'Descargar'}</button></div></div>`;
     $('#dc-l').onclick=e=>{const b=e.target.closest('[data-l]');if(!b)return;if(!langs.includes(b.dataset.l))return toast(LNAME[b.dataset.l]+' no está disponible '+(many?'para estos episodios':'en este episodio'));lang=b.dataset.l;paint();focusOn('#dc-l [data-l='+lang+']')};
     $('#dc-q').onclick=e=>{const b=e.target.closest('[data-q]');if(!b)return;q=+b.dataset.q;paint();focusOn('#dc-q [data-q="'+q+'"]')};
     $('#dc-ask').onclick=()=>{ask=!ask;$('#dc-ask').classList.toggle('on',!ask)};
+    if($('#dc-ad'))$('#dc-ad').onclick=async()=>{if(await watchAd()){paint();focusOn(COINS>=o.eps.length*ECO.cost?'#dc-go':'#dc-ad')}};
     $('#dc-no').onclick=close;
     $('#dc-go').onclick=()=>{if($('#dc-go').disabled)return;close();if(q!==+cfg.dlq){cfg.dlq=q;if($('#s-dlq'))$('#s-dlq').value=String(q)}
       if(!ask){cfg.dlAsk=false;if($('#s-dlask'))$('#s-dlask').checked=false;toast('No se volverá a preguntar · puedes cambiarlo en Ajustes')}saveCfg();
       dlEnqueue(o.eps,lang,{inter:o.inter})}};
   const focusOn=sel=>{if(KBD)setTimeout(()=>{const el=$(sel);if(el)el.focus({preventScroll:true})},30)};
   if(inP){$(box).innerHTML='';psheet('')}else sheet('');
-  paint();if(KBD)setTimeout(()=>{const g=$('#dc-go');(g&&!g.disabled?g:$('#dc-no')).focus({preventScroll:true})},140)}
+  paint();if(KBD)setTimeout(()=>{const g=$('#dc-go');(g&&!g.disabled?g:($('#dc-ad')||$('#dc-no'))).focus({preventScroll:true})},140)}
 function dlNeedApp(){sheet(`<h3>Descargas</h3><p class="lg-why">Las descargas funcionan en la app instalada en tu teléfono o TV, versión 1.0.4 o más nueva.</p><button class="btn pri" id="dln-ok" style="width:100%;margin-top:14px">Entendido</button>`);$('#dln-ok').onclick=()=>$('#sheet').classList.remove('on')}
 /* agrega episodios del anime abierto; el enlace del video se busca aquí y el archivo lo baja el teléfono */
 function dlEnqueue(eps,lang,opt){opt=opt||{};if(!HAS_DL){dlNeedApp();return 0}
   const d=D.data||{};const show=esTitle(d)||d.title||'';let n=0,had=0;
-  for(const ep of eps){if(!ep||!ep.url)continue;const id=dlId(ep.url,lang);
-    if(dlDone(ep.url,lang)||dlBusy(ep.url,lang)){had++;continue}
+  const add=eps.filter(ep=>ep&&ep.url&&!(dlDone(ep.url,lang)||dlBusy(ep.url,lang)));had=eps.length-add.length;
+  /* monedas: cada episodio cuesta ECO.cost; si no alcanza, se abre la billetera para ver anuncios */
+  const price=ecoOn()?ECO.cost:0,cost=add.length*price;
+  if(cost>COINS){openWallet(cost);return 0}
+  if(cost)setCoins(COINS-cost);
+  for(const ep of add){const id=dlId(ep.url,lang);
     DLQ=DLQ.filter(x=>x.id!==id);
-    DLQ.push({id,epUrl:ep.url,ep:ep.number,lang,anime:D.url,title:show,orig:d.title||show,image:d.image||'',status:'prep',added:Date.now(),it:!!opt.inter});n++}
+    DLQ.push({id,epUrl:ep.url,ep:ep.number,lang,anime:D.url,title:show,orig:d.title||show,image:d.image||'',status:'prep',added:Date.now(),it:!!opt.inter,paid:price});n++}
   saveDLQ();paintDlBadge();if(stack.includes('dlv'))renderDl();
-  toast(n===1?'Descargando · lo verás en Descargas':n?`${n} episodios agregados a Descargas`:had?'Ya está en Descargas':'Nada para descargar');
+  toast((n===1?'Descargando · lo verás en Descargas':n?`${n} episodios agregados a Descargas`:had?'Ya está en Descargas':'Nada para descargar')+(cost?` · −${cost} monedas`:''));
   dlPump();dlLoop();return n}
 async function dlPump(){if(DLRUN||!HAS_DL)return;DLRUN=true;
   try{for(;;){const it=DLQ.find(x=>x.status==='prep');if(!it)break;
@@ -2838,11 +2899,13 @@ async function dlPrepare(it){
   if(!list.length)throw new Error((s.sub||[]).length||(s.dub||[]).length?'Solo tiene reproductor web, no se puede descargar':'Sin servidores disponibles ahora');
   const r=await SRC.resolve(list.map(x=>x.url));if(!r||!r.streamUrl)throw new Error('No se encontró el video');
   await NXS.dlStart({item:{id:it.id,url:r.streamUrl,alts:(r.alts||[]).slice(0,4),kind:r.mediaType==='hls'?'hls':'mp4',title:it.title,orig:it.orig,
-    sub:`Episodio ${it.ep} · ${LNAME[lang]}`,ep:it.ep,lang,anime:it.anime,image:it.image,epUrl:it.epUrl,maxH:+cfg.dlq||720}})}
+    sub:`Episodio ${it.ep} · ${LNAME[lang]}`,ep:it.ep,lang,anime:it.anime,image:it.image,epUrl:it.epUrl,maxH:+cfg.dlq||720,paid:it.paid||0}})}
 function dlRemove(id){
-  const q=DLQ.find(x=>x.id===id);if(q){DLQ=DLQ.filter(x=>x!==q);saveDLQ();renderDl();paintDlBadge();toast('Descarga quitada');return}
+  const q=DLQ.find(x=>x.id===id);if(q){DLQ=DLQ.filter(x=>x!==q);saveDLQ();renderDl();paintDlBadge();if(q.paid){setCoins(COINS+q.paid);toast(`Descarga quitada · se devolvieron ${q.paid} monedas`)}else toast('Descarga quitada');return}
   const it=DLS.find(x=>x.id===id);if(!it)return;
-  const go=async()=>{try{await NXS.dlRemove({id})}catch(e){}DLS=DLS.filter(x=>x.id!==id);dlRefresh.dn=-1;renderDl();paintDlBadge();paintEpDl();toast(it.status==='done'?'Descarga borrada':'Descarga cancelada')};
+  const go=async()=>{try{await NXS.dlRemove({id})}catch(e){}DLS=DLS.filter(x=>x.id!==id);dlRefresh.dn=-1;renderDl();paintDlBadge();paintEpDl();
+    const back=it.status!=='done'&&+it.paid>0?+it.paid:0;if(back)setCoins(COINS+back);
+    toast(it.status==='done'?'Descarga borrada':back?`Descarga cancelada · se devolvieron ${back} monedas`:'Descarga cancelada')};
   if(it.status!=='done')return go();
   sheet(`<h3>¿Borrar esta descarga?</h3><p class="lg-why">${esc(it.title)} · Episodio ${esc(it.ep)} · ${LNAME[it.lang]||''}. Se liberan ${fsz(it.bytes)} del teléfono.</p><div class="btnrow" style="margin-top:16px"><button class="btn" id="dr-no" style="flex:1;background:var(--s2)">Cancelar</button><button class="btn" id="dr-yes" style="flex:1;background:var(--bad);color:#fff">Borrar</button></div>`);
   $('#dr-no').onclick=()=>{$('#sheet').classList.remove('on');dlFocusBack()};$('#dr-yes').onclick=()=>{$('#sheet').classList.remove('on');go().then(dlFocusBack)};if(KBD)setTimeout(()=>$('#dr-no').focus(),120)}
@@ -2851,7 +2914,7 @@ function dlFocusBack(){if(KBD)setTimeout(()=>{const a=document.activeElement;if(
 function dlRetry(id){const q=DLQ.find(x=>x.id===id);
   if(q){q.status='prep';q.err='';saveDLQ();renderDl();dlPump();return}
   const it=DLS.find(x=>x.id===id);if(!it)return;
-  DLQ.push({id,epUrl:it.epUrl,ep:it.ep,lang:it.lang,anime:it.anime,title:it.title,orig:it.orig||it.title,image:it.image,status:'prep',added:it.added||Date.now(),it:true});
+  DLQ.push({id,epUrl:it.epUrl,ep:it.ep,lang:it.lang,anime:it.anime,title:it.title,orig:it.orig||it.title,image:it.image,status:'prep',added:it.added||Date.now(),it:true,paid:+it.paid||0});
   DLS=DLS.filter(x=>x.id!==id);saveDLQ();renderDl();paintDlBadge();dlPump()}
 function playDownload(it){
   const same=DLS.filter(x=>x.status==='done'&&x.anime===it.anime&&x.lang===it.lang).sort((a,b)=>(+a.ep||0)-(+b.ep||0));

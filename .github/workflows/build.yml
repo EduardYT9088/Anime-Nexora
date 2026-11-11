@@ -15,7 +15,10 @@ permissions:
 
 env:
   APP_NAME: "Animes Nexora Plus"
-  APP_VERSION: "1.0.4"   # <- cambia aquí la versión del APK
+  APP_VERSION: "1.0.4-monedas"   # <- cambia aquí la versión del APK
+  # Anuncios con premio (AdMob). Este es el ID de PRUEBA oficial de Google: no paga, pero no arriesga tu cuenta.
+  # Cuando tengas tu app en AdMob, pega aquí tu "ID de la app" (ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY)
+  ADMOB_APP_ID: "ca-app-pub-3940256099942544~3347511713"
   # Comentarios (Supabase): pega aquí la "Project URL" y la clave pública ("anon" o "publishable")
   NX_SB_URL: "https://lvnuolgcqttvlkvgagde.supabase.co"
   NX_SB_KEY: "sb_publishable_vvj-N9C2rbS-_rXPtxOHtg_iRBDuPaq"
@@ -510,6 +513,34 @@ jobs:
                   done(call, ok);
               }
 
+              /* ===== Anuncios con premio: dan monedas para descargar ===== */
+              private boolean adsInit = false;
+              @PluginMethod
+              public void adReward(final PluginCall call) {
+                  final String unit = call.getString("unit", "ca-app-pub-3940256099942544/5224354917");
+                  getActivity().runOnUiThread(() -> {
+                      try {
+                          if (!adsInit) { com.google.android.gms.ads.MobileAds.initialize(getContext()); adsInit = true; }
+                          com.google.android.gms.ads.rewarded.RewardedAd.load(getActivity(), unit, new com.google.android.gms.ads.AdRequest.Builder().build(),
+                              new com.google.android.gms.ads.rewarded.RewardedAdLoadCallback() {
+                                  @Override
+                                  public void onAdLoaded(com.google.android.gms.ads.rewarded.RewardedAd ad) {
+                                      final boolean[] earned = { false };
+                                      ad.setFullScreenContentCallback(new com.google.android.gms.ads.FullScreenContentCallback() {
+                                          @Override
+                                          public void onAdDismissedFullScreenContent() { JSObject r = new JSObject(); r.put("ok", true); r.put("earned", earned[0]); call.resolve(r); }
+                                          @Override
+                                          public void onAdFailedToShowFullScreenContent(com.google.android.gms.ads.AdError e) { JSObject r = new JSObject(); r.put("ok", false); r.put("err", e.getMessage()); call.resolve(r); }
+                                      });
+                                      ad.show(getActivity(), item -> { earned[0] = true; });
+                                  }
+                                  @Override
+                                  public void onAdFailedToLoad(com.google.android.gms.ads.LoadAdError e) { JSObject r = new JSObject(); r.put("ok", false); r.put("err", e.getMessage()); r.put("code", e.getCode()); call.resolve(r); }
+                              });
+                      } catch (Exception e) { JSObject r = new JSObject(); r.put("ok", false); r.put("err", String.valueOf(e.getMessage())); call.resolve(r); }
+                  });
+              }
+
               /* ===== Descargas para ver sin internet ===== */
               @PluginMethod
               public void dlStart(PluginCall call) {
@@ -654,6 +685,9 @@ jobs:
           grep -q 'xmlns:tools' AndroidManifest.xml || { echo "Falta xmlns:tools"; exit 1; }
           sed -i 's|</application>|    <service android:name="androidx.work.impl.foreground.SystemForegroundService" android:foregroundServiceType="dataSync" tools:node="merge"/>\n    </application>|' AndroidManifest.xml
           grep -q SystemForegroundService AndroidManifest.xml && echo "Descargas: servicio OK" || { echo "No se pudo declarar el servicio de descargas"; exit 1; }
+          # Anuncios con premio (AdMob): sin este dato la app se cierra al abrir
+          sed -i "s|</application>|    <meta-data android:name=\"com.google.android.gms.ads.APPLICATION_ID\" android:value=\"${ADMOB_APP_ID}\"/>\n    </application>|" AndroidManifest.xml
+          grep -q "gms.ads.APPLICATION_ID" AndroidManifest.xml && echo "AdMob OK" || { echo "Falta el ID de AdMob"; exit 1; }
           cat > $RES/drawable/nx_icon_mono.xml <<'EOF'
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
               android:width="108dp" android:height="108dp"
@@ -690,7 +724,8 @@ jobs:
           cd ../../
           sed -i 's/minSdkVersion = 2[0-9]/minSdkVersion = 26/' ../variables.gradle
           # WorkManager: revisor nativo de episodios nuevos con la app cerrada
-          sed -i 's/^dependencies {/dependencies {\n    implementation "androidx.work:work-runtime:2.9.1"/' build.gradle
+          sed -i 's/^dependencies {/dependencies {\n    implementation "androidx.work:work-runtime:2.9.1"\n    implementation "com.google.android.gms:play-services-ads:23.6.0"/' build.gradle
+          grep -q "play-services-ads" build.gradle && echo "Anuncios OK" || { echo "No se pudo agregar anuncios"; exit 1; }
           grep -q "work-runtime" build.gradle && echo "WorkManager OK" || { echo "No se pudo agregar WorkManager"; exit 1; }
           sed -i "s/versionCode 1$/versionCode ${GITHUB_RUN_NUMBER}/" build.gradle
           sed -i "s/versionName \"1.0\"/versionName \"${APP_VERSION}\"/" build.gradle

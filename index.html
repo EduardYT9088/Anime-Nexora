@@ -2821,7 +2821,9 @@ function paintLdl(){const b=$('#l-dl');if(!b||!LP)return;const d=dlDone(LP.url,L
   $('#l-dltx').textContent=d?'Ya descargado · se verá sin internet':on?'Descargando… · ver descargas':'Descargar este episodio'}
 /* ================= MONEDAS (prueba): descargar cuesta monedas, se ganan viendo anuncios ================= */
 /* unit: ID del bloque de anuncios bonificados de AdMob (cuenta de Eduard, bloque "Monedas") */
-const ECO={cost:2,reward:6,welcome:4,daily:20,unit:'ca-app-pub-2878080994007295/5557955069'};
+const ECO={cost:2,reward:6,welcome:4,daily:20,unit:'ca-app-pub-2878080994007295/5557955069',
+  /* mientras AdMob no tenga anuncios reales para la app nueva, se muestra uno de PRUEBA de Google (solo en esta versión de prueba) */
+  testFallback:true,testUnit:'ca-app-pub-3940256099942544/5224354917'};
 let COINS=store.get('nx_coins',null);if(COINS===null){COINS=ECO.welcome;store.set('nx_coins',COINS)}
 const ecoOn=()=>!isTV; /* en TV no hay anuncios: las descargas no cuestan */
 function setCoins(n){COINS=Math.max(0,Math.floor(n));store.set('nx_coins',COINS);paintCoins()}
@@ -2834,7 +2836,8 @@ async function watchAd(){if(ADBUSY)return false;
   if(!NXS||!NXS.adReward){toast('Los anuncios funcionan en la app instalada');return false}
   if(adDay()>=ECO.daily){toast(`Ya viste ${ECO.daily} anuncios hoy · vuelve mañana`);return false}
   ADBUSY=true;toast('Cargando anuncio…');
-  try{const r=await NXS.adReward({unit:ECO.unit});
+  try{let r=await NXS.adReward({unit:ECO.unit});
+    if(!(r&&r.ok)&&ECO.testFallback){toast('Aún no hay anuncios reales · mostrando uno de prueba');r=await NXS.adReward({unit:ECO.testUnit})}
     if(r&&r.earned){adDayAdd();setCoins(COINS+ECO.reward);toast(`+${ECO.reward} monedas · ahora tienes ${COINS}`);return true}
     toast(r&&r.ok?'Mira el anuncio hasta el final para ganar las monedas':'No hay anuncios disponibles ahora · intenta en un momento');return false}
   catch(e){toast('No se pudo cargar el anuncio');return false}finally{ADBUSY=false}}
@@ -2850,14 +2853,6 @@ function openWallet(need){if(!ecoOn())return;
     if(KBD)setTimeout(()=>$('#wl-ad').focus(),120)};
   paint()}
 $('#dl-coins').onclick=()=>openWallet(0);
-/* DIAGNÓSTICO TEMPORAL (solo versión de prueba de monedas): muestra qué recibe la app al tocar dentro de una ventana y cualquier error */
-{const dbg=$('#nxdbg')||(()=>{const d=document.createElement('div');d.id='nxdbg';d.style.cssText='position:fixed;left:8px;right:8px;top:calc(var(--top,0px) + 6px);z-index:9999;background:#ff0;color:#000;font:700 12px/1.35 monospace;padding:6px 8px;border-radius:8px;white-space:pre-wrap;word-break:break-all;pointer-events:none;display:none';document.body.appendChild(d);return d})();
-  let dbT=null;const say=t=>{dbg.textContent=t;dbg.style.display='block';clearTimeout(dbT);dbT=setTimeout(()=>dbg.style.display='none',6000)};
-  const desc=el=>{if(!el||!el.tagName)return String(el);const c=el.closest&&el.closest('[id]');return el.tagName.toLowerCase()+(el.id?'#'+el.id:'')+(el.className&&typeof el.className==='string'?'.'+el.className.trim().split(/\s+/).slice(0,2).join('.'):'')+(c&&c!==el?' en #'+c.id:'')};
-  const open=()=>$('#sheet').classList.contains('on')||$('#psheet').classList.contains('on');
-  ['pointerdown','click'].forEach(ev=>document.addEventListener(ev,e=>{if(open())say(`${ev==='click'?'CLIC':'toque'}: ${desc(e.target)}  (${Math.round(e.clientX||0)},${Math.round(e.clientY||0)})`)},true));
-  addEventListener('error',e=>say('ERROR: '+(e.message||e.error)+' · línea '+(e.lineno||'?')));
-  addEventListener('unhandledrejection',e=>say('ERROR async: '+((e.reason&&e.reason.message)||e.reason)));}
 $('#s-ad').onclick=()=>watchAd().then(paintCoins);$('#s-dls').onclick=openDownloads;
 setTimeout(paintCoins,0);
 /* Confirmar antes de descargar: anime, episodio(s), idioma, calidad y espacio */

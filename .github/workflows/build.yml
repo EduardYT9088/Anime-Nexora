@@ -11,21 +11,12 @@ jobs:
           set +e; mkdir out; cd out
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
           g(){ code=$(curl -s -L -m 30 -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o "$1" -w '%{http_code}' "$2"); echo "$1 $code $(wc -c < "$1") $2" | tee -a index.txt; }
-          g av-home.html https://animeav1.com/
-          g av-cat.html "https://animeav1.com/catalogo?search=frieren"
-          g av-cat2.html "https://animeav1.com/catalogo?order=latest_released"
-          g av-op.html https://animeav1.com/media/one-piece
-          g av-op1.html https://animeav1.com/media/one-piece/1
-          g av-kus.html https://animeav1.com/media/kusuriya-no-hitorigoto-2nd-season
-          g av-sl1.html https://animeav1.com/media/ore-dake-level-up-na-ken/1
-          g tio-home.html https://tioanime.com/
-          g tio-s.html "https://tioanime.com/directorio?q=one%20piece"
-          g mc-home.html https://monoschinos2.com/
-          g mc-s.html "https://monoschinos.st/buscar?q=one%20piece"
-          g aniskip.json "https://api.aniskip.com/v2/skip-times/52299/1?types[]=op&types[]=ed&types[]=mixed-op&types[]=mixed-ed&episodeLength=0"
-          curl -s -m 20 -X POST -H 'Content-Type: application/json' --data '{"query":"query($s:String){Page(perPage:6){media(search:$s,type:ANIME){title{romaji english}synonyms}}}","variables":{"s":"One Pice"}}' https://graphql.anilist.co > anilist.json; echo "anilist $(wc -c < anilist.json)" | tee -a index.txt
-          curl -s -m 20 -o sb.json -w "supabase %{http_code}\n" "https://lvnuolgcqttvlkvgagde.supabase.co/rest/v1/comments?select=id&limit=1" -H "apikey: sb_publishable_vvj-N9C2rbS-_rXPtxOHtg_iRBDuPaq" | tee -a index.txt
-          curl -s -m 20 -o sb2.json -w "supabase rpc delete %{http_code}\n" -X POST "https://lvnuolgcqttvlkvgagde.supabase.co/rest/v1/rpc/delete_comment" -H "apikey: sb_publishable_vvj-N9C2rbS-_rXPtxOHtg_iRBDuPaq" -H 'Content-Type: application/json' --data '{"cid":0}' | tee -a index.txt; cat sb2.json; echo
-          curl -s -m 20 -o rel.json -w "release %{http_code}\n" https://api.github.com/repos/EduardYT9088/Anime-Nexora/releases/latest | tee -a index.txt
+          g av-s1.html "https://animeav1.com/catalogo?search=sword%20art%20online"
+          g av-s2.html "https://animeav1.com/catalogo?search=sword"
+          g av-s3.html "https://animeav1.com/catalogo?q=sword%20art%20online"
+          g av-s4.html "https://animeav1.com/catalogo?search=sword%20art"
+          g tio-s.html "https://tioanime.com/directorio?q=sword%20art%20online"
+          g mc-s.html "https://monoschinos.st/buscar?q=sword%20art%20online"
+          curl -s -m 20 -X POST -H 'Content-Type: application/json' --data '{"query":"query($s:String){Page(perPage:6){media(search:$s,type:ANIME){title{romaji english}synonyms}}}","variables":{"s":"World Star Online"}}' https://graphql.anilist.co > anilist.json; echo "anilist $(wc -c < anilist.json)" | tee -a index.txt
           git init -q && git checkout -q -b diag-datos && git add -A && git -c user.name=diag -c user.email=diag@x commit -q -m datos
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" diag-datos

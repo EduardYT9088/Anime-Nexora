@@ -1086,6 +1086,28 @@ let cfg=Object.assign({dlq:720,dlAsk:true,quality:'auto',source:'direct',apiBase
 if(!cfg.v101){cfg.lang='dub';cfg.askLang=true;cfg.esTitles=true;cfg.v101=true;try{localStorage.setItem('nx_cfg',JSON.stringify(cfg))}catch(e){}}
 let favs=store.get('nx_fav',[]), hist=store.get('nx_hist',{});
 const cache=new Map();
+/* índice de títulos que ya pasaron por la app (inicio, explorar, búsquedas): permite encontrar "OnePiece", "naruto shipuden", "frieren" al instante */
+const TIX=new Map((store.get('nx_tix',[])||[]).filter(x=>x&&x.url&&x.title).map(x=>[x.url,x]));let tixT=null;
+function tixAdd(a){if(!a||!a.url||!a.title||!/^https?:/.test(a.url))return;const o=TIX.get(a.url);
+  const v={url:a.url,title:a.title,image:a.image||o?.image||'',type:a.type||o?.type||'',year:a.year||o?.year||'',esTitle:a.esTitle||o?.esTitle||'',alt:(a.alt||o?.alt||[]).slice(0,4)};
+  TIX.delete(a.url);TIX.set(a.url,v);if(TIX.size>900)TIX.delete(TIX.keys().next().value);
+  clearTimeout(tixT);tixT=setTimeout(()=>{try{store.set('nx_tix',[...TIX.values()])}catch(e){}},2500)}
+{const _set=cache.set.bind(cache);cache.set=(k,v)=>{try{tixAdd(v)}catch(e){}return _set(k,v)}}
+const cmp=s=>normQ(s).replace(/[^a-z0-9]/g,'');
+/* distancia de edición corta (para errores de escritura), se corta pronto si ya es grande */
+function edits(a,b,max){if(Math.abs(a.length-b.length)>max)return max+1;let prev=Array.from({length:b.length+1},(_,i)=>i);
+  for(let i=1;i<=a.length;i++){const cur=[i];let lo=i;for(let j=1;j<=b.length;j++){cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));if(cur[j]<lo)lo=cur[j]}if(lo>max)return max+1;prev=cur}return prev[b.length]}
+function localSearch(q){const cq=cmp(q);if(cq.length<3)return[];const tol=cq.length>=6?2:cq.length>=4?1:0;const out=[];
+  for(const a of TIX.values()){let best=99;
+    for(const t of [a.title,a.esTitle,...(a.alt||[])]){if(!t)continue;const c=cmp(t),cb=cmp(baseTitle(t));
+      if(c===cq||cb===cq){best=0;break}
+      if(c.startsWith(cq)||cb.startsWith(cq))best=Math.min(best,1);else if(cq.length>=4&&c.includes(cq))best=Math.min(best,2);
+      else if(tol){let d=Math.min(edits(cq,cb,tol),edits(cq,c.slice(0,cq.length),tol));
+        /* también desde cada palabra: "frirem" → "sousou no FRIEREN" */
+        if(d>tol){const w=normQ(t).split(/[^a-z0-9]+/).filter(Boolean);for(let i=1;i<w.length&&d>tol;i++){const tl=w.slice(i).join('');if(tl.length<cq.length-tol)break;d=Math.min(d,edits(cq,tl.slice(0,cq.length),tol),edits(cq,tl.slice(0,cq.length+1),tol))}}
+        if(d<=tol)best=Math.min(best,2+d+(d>tol?0:0))}}
+    if(best<99)out.push({a,best})}
+  return out.sort((x,y)=>x.best-y.best||x.a.title.length-y.a.title.length).slice(0,12).map(x=>x.a)}
 const saveCfg=()=>store.set('nx_cfg',cfg);
 /* siempre: siguiente episodio automático, horizontal al reproducir y fuente directa */
 cfg.autoNext=true;cfg.rot=true;cfg.source='direct';cfg.proxy=false;
@@ -1486,7 +1508,7 @@ async function aliases(q){
     .then(j=>(j.data?.Page?.media||[]).forEach(m=>{if(m.title?.romaji)out.push(m.title.romaji)})).catch(()=>{});
   const jk=get('https://api.jikan.moe/v4/anime?limit=5&q='+encodeURIComponent(q),{'Accept':'application/json'})
     .then(({data})=>{const j=typeof data==='string'?JSON.parse(data):data;(j.data||[]).forEach(a=>{if(a.title)out.push(a.title)})}).catch(()=>{});
-  await Promise.race([Promise.allSettled([al,jk]),sleep(9000)]);
+  await Promise.race([Promise.allSettled([al,jk]),sleep(5000)]);
   return[...new Set(out.map(baseTitle))].filter(t=>normQ(t)!==normQ(q)).slice(0,3)
 }
 function baseTitle(t){let b=String(t).split(/:| - | – /)[0];
@@ -1504,12 +1526,20 @@ const SRC={
     const push=(list,t,isAlias)=>{const n=normQ(t);(list||[]).forEach(a=>{if(seen.has(a.url))return;seen.add(a.url);
       const hit=isAlias?sameTitle(baseTitle(a.title),t):(normQ(a.title).includes(n)||(a.alt||[]).some(x=>normQ(x).includes(n)));(hit?top:rest).push(a)})};
     const emit=()=>{if(onPart)onPart([...top,...rest])};
+    /* 1) al instante: títulos que la app ya conoce, aunque estén mal escritos o sin espacios */
+    const loc=noAlias?[]:localSearch(q);if(loc.length){loc.forEach(a=>{seen.add(a.url);top.push(a)});emit()}
+    /* 2) variantes: "OnePiece" → "One Piece", "one-piece" → "one piece", y el título conocido más parecido */
+    const vs=[];const add=t=>{t=String(t||'').trim();if(t.length>=2&&normQ(t)!==normQ(q)&&!vs.some(x=>normQ(x)===normQ(t)))vs.push(t)};
+    add(q.replace(/([a-z])([A-Z])/g,'$1 $2').replace(/([a-zA-Z])(\d)/g,'$1 $2'));add(q.replace(/[-_.]+/g,' '));if(loc[0]&&!noAlias)add(baseTitle(loc[0].title));
     const alP=noAlias?Promise.resolve([]):aliases(q).catch(()=>[]);
+    const bkP=useApi()?null:backupSearch(q).catch(()=>[]);
+    const vP=Promise.all(vs.slice(0,2).map(t=>one(t).then(r=>{push(r,t,true);emit()}).catch(()=>{})));
     try{push(await one(q),q,false)}catch(e){err=e}emit();
-    const al=await alP;
+    await vP;
+    const al=(await alP).filter(t=>!vs.some(x=>normQ(x)===normQ(t)));
     await Promise.all(al.map(t=>one(t).then(r=>{push(r,t,true);emit()}).catch(e=>{err=err||e})));
     const out=[...top,...rest];
-    if(out.length<4&&!useApi()){const ex=await Promise.race([backupSearch(q).then(r=>r.length||!al[0]?r:backupSearch(al[0])).catch(()=>[]),sleep(9000).then(()=>[])]);const sk=out.map(a=>skel(a.title));
+    if(out.length<4&&bkP){const alt0=vs[0]||al[0];const ex=await Promise.race([bkP.then(r=>r.length||!alt0?r:backupSearch(alt0)).catch(()=>[]),sleep(7000).then(()=>[])]);const sk=out.map(a=>skel(a.title));
       ex.forEach(b=>{const k=skel(b.title);if(sk.some(x=>sameSk(x,k)))return;sk.push(k);out.push(b)})}
     if(!out.length&&err)throw err;return out},
   async info(url){if(useApi()){const j=await api('info',{url});return j.data||{}}return provFor(url).info(url)},
@@ -2187,7 +2217,7 @@ function noDirect(tk){
 function resetMedia(){
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}
   V.pause();V.removeAttribute('src');V.load();F.src='about:blank';F.classList.add('hide');V.classList.remove('hide');P.mode='video';
-  $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op,#p-q').forEach(x=>x.classList.remove('hide'));setSeek(0,0);paintQ()
+  $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op,#p-q').forEach(x=>x.classList.remove('hide'));setSeek(0,0);$('#p-seek').style.setProperty('--b','0%');paintQ()
 }
 async function attach(url,type,tk){
   await loadHls();if(tk!==P.tk)return;
@@ -2204,9 +2234,16 @@ async function attach(url,type,tk){
     const w=l.find(x=>!SRC.canResolve(x));if(w){toast('El video directo falló, usando reproductor web');P.idx=l.indexOf(w);useFrame(w,tk)}else playerError('No se pudo reproducir el video.')};
   V.onerror=()=>fail('video '+(V.error?'código '+V.error.code:'con error'));
   if(type==='hls'&&window.Hls&&Hls.isSupported()){
-    /* abrEwmaDefaultEstimate: suponer buen internet al empezar (antes arrancaba en la calidad más baja) */
-    const h=new Hls({maxBufferLength:90,maxMaxBufferLength:150,maxBufferSize:120*1000*1000,backBufferLength:90,maxBufferHole:1,startFragPrefetch:true,enableWorker:true,fragLoadingMaxRetry:4,manifestLoadingMaxRetry:3,abrEwmaDefaultEstimate:3000000,testBandwidth:true});P.hls=h;h.loadSource(url);h.attachMedia(V);
-    h.on(Hls.Events.MANIFEST_PARSED,()=>{applyQ(h);V.playbackRate=P.speed;V.play().catch(()=>{})});
+    /* empieza con la calidad que aguanta TU internet (velocidad medida en los videos anteriores), no siempre alta ni siempre baja */
+    const bw0=Math.min(6e6,Math.max(4e5,+store.get('nx_bw',0)||9e5));
+    const h=new Hls({maxBufferLength:90,maxMaxBufferLength:150,maxBufferSize:120*1000*1000,backBufferLength:90,maxBufferHole:1,startFragPrefetch:true,enableWorker:true,fragLoadingMaxRetry:4,manifestLoadingMaxRetry:3,abrEwmaDefaultEstimate:bw0,testBandwidth:true});P.hls=h;h.loadSource(url);h.attachMedia(V);
+    let bwT=0;h.on(Hls.Events.FRAG_LOADED,()=>{const now=Date.now();if(now-bwT<8000)return;bwT=now;const b=h.bandwidthEstimate;if(b>0&&isFinite(b))store.set('nx_bw',Math.round(b))});
+    h.on(Hls.Events.MANIFEST_PARSED,()=>{applyQ(h);V.playbackRate=P.speed;V.play().catch(()=>{});
+      /* si a los 6 s todavía no arranca en automático, baja a la calidad más ligera para empezar ya (luego vuelve a subir sola) */
+      const want=P.qPick!=null?P.qPick:cfg.quality;
+      if((want==='auto'||want==='low')&&h.levels&&h.levels.length>1)setTimeout(()=>{if(tk!==P.tk||P.hls!==h||V.currentTime>0.2||V.readyState>=3)return;
+        const L=qLevels(h);const lo=L[L.length-1];if(!lo||h.loadLevel===lo.i)return;store.set('nx_bw',4e5);h.currentLevel=lo.i;
+        V.addEventListener('playing',()=>{if(P.hls===h&&(P.qPick==null||P.qPick==='auto'))h.nextLevel=-1},{once:true})},6000)});
     h.on(Hls.Events.LEVEL_SWITCHED,()=>paintQ());
     h.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal){if(d.type===Hls.ErrorTypes.NETWORK_ERROR&&!P._retry){P._retry=1;h.startLoad()}else{P._retry=0;fail('HLS '+(d.details||d.type))}}});
   }else{V.src=url;V.play().catch(()=>{})}

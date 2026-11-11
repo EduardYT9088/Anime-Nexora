@@ -740,6 +740,16 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
 .coinchip{display:flex;align-items:center;gap:6px;height:38px;padding:0 12px 0 8px;border-radius:99px;background:linear-gradient(135deg,rgba(255,196,61,.2),rgba(255,140,40,.1));border:1px solid rgba(255,196,61,.45);font-weight:800;font-size:14px;color:#ffd66b;flex:none;font-variant-numeric:tabular-nums}
 .coinchip svg{width:20px;height:20px;color:#ffc53d}
 .tv .coinchip,.tv .ecoonly{display:none!important}
+.ecocard{margin:0 16px 18px;padding:16px;border-radius:20px;background:linear-gradient(135deg,rgba(255,196,61,.16),rgba(255,138,40,.06) 60%,var(--s1));border:1px solid rgba(255,196,61,.35)}
+.ec-top{display:flex;align-items:center;gap:14px}
+.ec-ic{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;flex:none;background:radial-gradient(circle at 35% 30%,#ffe9a3,#ffc53d 45%,#e08a12);box-shadow:0 8px 22px rgba(255,170,40,.3)}
+.ec-ic svg{width:28px;height:28px;color:#7a3f00}
+.ec-tx{flex:1;min-width:0}.ec-tx b{display:block;font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}.ec-tx b .coinv{color:#ffd66b}
+.ec-tx small{display:block;font-size:12px;color:var(--mu);font-weight:600;margin-top:3px;line-height:1.4}
+.ec-go{width:100%;margin-top:14px;height:48px;border-radius:15px;background:linear-gradient(135deg,#ffc53d,#ff8a28);color:#2a1600;font-weight:800;font-size:14.5px;display:flex;align-items:center;justify-content:center;gap:9px;box-shadow:0 8px 22px rgba(255,150,40,.3)}
+.ec-go svg{width:16px;height:16px}.ec-go:disabled{opacity:.5}
+.ec-dl{width:100%;margin-top:8px;height:42px;border-radius:14px;background:var(--s2);border:1px solid var(--line);font-weight:700;font-size:13.5px;display:flex;align-items:center;justify-content:center;gap:8px}
+.ec-dl svg{width:16px;height:16px}
 .dkc .sp.coin .ic{background:rgba(255,196,61,.16);color:#ffc53d}
 .dkc .sp.coin b em{font-style:normal;color:#ffd66b}
 .dkc .sp.coin.lack{border-color:rgba(255,196,61,.5);background:linear-gradient(135deg,rgba(255,196,61,.12),var(--s2))}
@@ -872,6 +882,10 @@ input[type=range].seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;
     </div>
     <div class="scol">
       <div class="group">
+        <h4 class="ecoonly">MONEDAS</h4>
+        <div class="ecocard ecoonly"><div class="ec-top"><span class="ec-ic"><svg class="i"><use href="#i-coin"/></svg></span><div class="ec-tx"><b><span class="coinv">0</span> monedas</b><small id="s-ecod">Descargar un episodio cuesta 2</small></div></div>
+          <button class="ec-go" id="s-ad"><svg class="i"><use href="#i-play"/></svg><span id="s-adtx">Ver anuncio · +6 monedas</span></button>
+          <button class="ec-dl" id="s-dls"><svg class="i"><use href="#i-dl"/></svg>Ver mis descargas</button></div>
         <h4>REPRODUCTOR</h4>
         <div class="set hide nx-fixed"><span class="sic"><svg class="i"><use href="#i-next"/></svg></span><div class="l"><b>Siguiente episodio automático</b><small>Al terminar, pasa al siguiente</small></div><label class="sw"><input type="checkbox" id="s-auto"><span></span></label></div>
         <div class="set"><span class="sic"><svg class="i"><use href="#i-skip"/></svg></span><div class="l"><b>Cuenta regresiva</b><small>Segundos antes de saltar</small></div>
@@ -2811,7 +2825,8 @@ const ECO={cost:2,reward:6,welcome:4,daily:20,unit:'ca-app-pub-2878080994007295/
 let COINS=store.get('nx_coins',null);if(COINS===null){COINS=ECO.welcome;store.set('nx_coins',COINS)}
 const ecoOn=()=>!isTV; /* en TV no hay anuncios: las descargas no cuestan */
 function setCoins(n){COINS=Math.max(0,Math.floor(n));store.set('nx_coins',COINS);paintCoins()}
-function paintCoins(){$$('.coinv').forEach(x=>x.textContent=COINS)}
+function paintCoins(){$$('.coinv').forEach(x=>x.textContent=COINS);const d=$('#s-ecod');if(!d)return;const n=adDay(),left=ECO.daily-n;
+  d.textContent=`Descargar un episodio cuesta ${ECO.cost} · hoy viste ${n} de ${ECO.daily} anuncios`;$('#s-adtx').textContent=left>0?`Ver anuncio · +${ECO.reward} monedas`:'Vuelve mañana por más anuncios';$('#s-ad').disabled=left<=0}
 const adDay=()=>{const d=new Date().toDateString(),a=store.get('nx_adday',{});return a.d===d?a.n:0};
 const adDayAdd=()=>store.set('nx_adday',{d:new Date().toDateString(),n:adDay()+1});
 let ADBUSY=false;
@@ -2835,6 +2850,7 @@ function openWallet(need){if(!ecoOn())return;
     if(KBD)setTimeout(()=>$('#wl-ad').focus(),120)};
   paint()}
 $('#dl-coins').onclick=()=>openWallet(0);
+$('#s-ad').onclick=()=>watchAd().then(paintCoins);$('#s-dls').onclick=openDownloads;
 setTimeout(paintCoins,0);
 /* Confirmar antes de descargar: anime, episodio(s), idioma, calidad y espacio */
 const DLQS={480:1.5e8,720:3e8,1080:6e8};
@@ -2868,7 +2884,7 @@ async function dlConfirm(o){
     $('#dc-no').onclick=close;
     $('#dc-go').onclick=()=>{if($('#dc-go').disabled)return;close();if(q!==+cfg.dlq){cfg.dlq=q;if($('#s-dlq'))$('#s-dlq').value=String(q)}
       if(!ask){cfg.dlAsk=false;if($('#s-dlask'))$('#s-dlask').checked=false;toast('No se volverá a preguntar · puedes cambiarlo en Ajustes')}saveCfg();
-      dlEnqueue(o.eps,lang,{inter:o.inter})}};
+      const n=dlEnqueue(o.eps,lang,{inter:o.inter});if(n&&!inP)setTimeout(openDownloads,350)}};
   const focusOn=sel=>{if(KBD)setTimeout(()=>{const el=$(sel);if(el)el.focus({preventScroll:true})},30)};
   if(inP){$(box).innerHTML='';psheet('')}else sheet('');
   paint();if(KBD)setTimeout(()=>{const g=$('#dc-go');(g&&!g.disabled?g:($('#dc-ad')||$('#dc-no'))).focus({preventScroll:true})},140)}
@@ -2898,7 +2914,8 @@ async function dlPrepare(it){
   if(!list.length){const o=lang==='sub'?'dub':'sub',l2=(s[o]||[]).filter(x=>SRC.canResolve(x));if(l2.length){lang=o;list=l2}}
   if(!list.length)throw new Error((s.sub||[]).length||(s.dub||[]).length?'Solo tiene reproductor web, no se puede descargar':'Sin servidores disponibles ahora');
   const r=await SRC.resolve(list.map(x=>x.url));if(!r||!r.streamUrl)throw new Error('No se encontró el video');
-  await NXS.dlStart({item:{id:it.id,url:r.streamUrl,alts:(r.alts||[]).slice(0,4),kind:r.mediaType==='hls'?'hls':'mp4',title:it.title,orig:it.orig,
+  let ref='';try{ref=r.resolvedFrom?new URL(r.resolvedFrom).origin+'/':''}catch(e){}
+  await NXS.dlStart({item:{id:it.id,url:r.streamUrl,ua:navigator.userAgent,referer:ref,alts:(r.alts||[]).slice(0,4),kind:r.mediaType==='hls'?'hls':'mp4',title:it.title,orig:it.orig,
     sub:`Episodio ${it.ep} · ${LNAME[lang]}`,ep:it.ep,lang,anime:it.anime,image:it.image,epUrl:it.epUrl,maxH:+cfg.dlq||720,paid:it.paid||0}})}
 function dlRemove(id){
   const q=DLQ.find(x=>x.id===id);if(q){DLQ=DLQ.filter(x=>x!==q);saveDLQ();renderDl();paintDlBadge();if(q.paid){setCoins(COINS+q.paid);toast(`Descarga quitada · se devolvieron ${q.paid} monedas`)}else toast('Descarga quitada');return}

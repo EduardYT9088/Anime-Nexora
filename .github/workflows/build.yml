@@ -1541,6 +1541,9 @@ jobs:
                       for (int a = 0; path == null; a++) {
                           try { path = "hls".equals(it.optString("kind")) ? hls(it, dir) : mp4(it, dir); }
                           catch (Exception e) {
+                              String em = String.valueOf(e.getMessage());
+                              /* si el servidor rechaza por el Referer, se intenta otra vez sin él */
+                              if ((em.contains("403") || em.contains("401")) && !it.optString("referer", "").isEmpty()) { it.put("referer", ""); a--; continue; }
                               if ("cancelado".equals(e.getMessage()) || alts == null || a >= alts.length()) throw e;
                               last = e; String nu = alts.optString(a, "");
                               if (nu.isEmpty()) throw e;

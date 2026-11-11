@@ -1559,8 +1559,8 @@ const SRC={
       if(terms.length>=2){const ws=[...terms].sort((a,b)=>b.length-a.length).slice(0,3);
         const got=(await Promise.all(ws.map(w=>Promise.race([one(w).catch(()=>[]),sleep(8000).then(()=>[])])))).flat();
         const need=terms.length>=3?2:2,sc=[];const sk2=new Set();
-        got.forEach(a=>{if(seen.has(a.url)||sk2.has(a.url))return;sk2.add(a.url);const c=normQ([a.title,a.esTitle,...(a.alt||[])].join(' '));const n=terms.filter(t=>c.includes(t)).length;if(n>=Math.min(need,terms.length))sc.push({a,n})});
-        sc.sort((x,y)=>y.n-x.n||x.a.title.length-y.a.title.length).slice(0,24).forEach(({a,n})=>{seen.add(a.url);(n===terms.length?top:rest).push(a)})}}
+        got.forEach(a=>{if(seen.has(a.url)||sk2.has(a.url))return;sk2.add(a.url);const c=normQ([a.title,a.esTitle,...(a.alt||[])].join(' '));const n=terms.filter(t=>c.includes(t)).length;if(n>=1)sc.push({a,n})});
+        sc.sort((x,y)=>y.n-x.n||x.a.title.length-y.a.title.length).slice(0,30).forEach(({a,n})=>{seen.add(a.url);(n===terms.length?top:rest).push(a)})}}
     pending=false;
     const out=[...top,...rest];
     if(out.length<4&&bkP){const alt0=vs[0]||al[0];const ex=await Promise.race([bkP.then(r=>r.length||!alt0?r:backupSearch(alt0)).catch(()=>[]),sleep(7000).then(()=>[])]);const sk=out.map(a=>skel(a.title));

@@ -2958,19 +2958,37 @@ $('#ib-clear').onclick=()=>{INBOX=[];saveInbox();renderInbox()};
 $('#ib-list').onclick=e=>{const b=e.target.closest('[data-k]');if(!b)return;const n=INBOX[+b.dataset.k];n.read=true;saveInbox();renderInbox();if(n.url)openDetail(n.url,{openEps:true})};
 paintBell();
 $('#s-ntf').checked=cfg.notify;$('#s-nall').checked=cfg.notifyAll!==false;
-$('#s-nbg').onclick=()=>{
-  sheet(`<h3>Avisos con la app cerrada</h3><p class="lg-why">Android, sobre todo en Xiaomi, Redmi, POCO, Samsung y Huawei, apaga las apps cerradas para ahorrar batería. Así la app no puede revisar los estrenos.</p>
-    <p class="lg-why"><b>1.</b> Batería → <b>Sin restricciones</b><br><b>2.</b> <b>Inicio automático</b> → activado (Xiaomi / Redmi / POCO)<br><b>3.</b> Notificaciones → todas activadas, también en la pantalla de bloqueo</p>
-    <div style="display:grid;gap:10px;margin-top:16px"><button class="btn pri" id="nb-bat" style="width:100%">Abrir ajustes de batería</button><button class="btn" id="nb-auto" style="width:100%;background:var(--s2)">Abrir inicio automático</button><button class="btn" id="nb-app" style="width:100%;background:var(--s2)">Abrir ajustes de la app</button><button class="btn" id="nb-test" style="width:100%;background:var(--s2)">Probar: aviso en 30 segundos</button></div>
-    <p class="lg-note" style="margin-top:12px">Para probar: toca "Probar", cierra la app y espera. Si no llega, falta alguno de los permisos de arriba.</p>`);
+/* Asistente de avisos con la app cerrada: pasos según la marca del teléfono y estado real de cada permiso */
+async function bgGuide(auto){
+  let st={};try{if(NXS&&NXS.notifState)st=await NXS.notifState()}catch(e){}
+  const b=String(st.brand||'').toLowerCase(),tr=/infinix|tecno|itel|transsion/.test(b),mi=/xiaomi|redmi|poco/.test(b),sam=/samsung/.test(b);
+  const ok=v=>v===true?'<b style="color:#4ade80">✓ listo</b>':v===false?'<b style="color:#ff8aa0">✗ falta</b>':'';
+  const lr=+st.lastRun||0,lrTx=lr?ago(lr):'nunca';
+  const steps=tr?`<b>1.</b> <b>Inicio automático</b> → activa <b>Animes Nexora Plus</b> (en Infinix / Tecno está en Phone Master o Ajustes → Apps).<br><b>2.</b> <b>Batería</b> → <b>Sin restricciones</b> / permitir actividad en segundo plano ${ok(st.battery)}<br><b>3.</b> Abre <b>Recientes</b>, mantén presionada la tarjeta de Animes Nexora (o deslízala hacia abajo) y toca el <b>candado 🔒</b>. Así «Limpiar todo» no la cierra.<br><b>4.</b> Notificaciones activadas ${ok(st.enabled)}`
+    :mi?`<b>1.</b> Batería → <b>Sin restricciones</b> ${ok(st.battery)}<br><b>2.</b> <b>Inicio automático</b> → activado<br><b>3.</b> En Recientes, pon el <b>candado 🔒</b> a la app<br><b>4.</b> Notificaciones activadas ${ok(st.enabled)}`
+    :sam?`<b>1.</b> Batería → <b>Sin restricciones</b> ${ok(st.battery)}<br><b>2.</b> Ajustes → Batería → Límites de uso en segundo plano → quita la app de «Apps en suspensión»<br><b>3.</b> Notificaciones activadas ${ok(st.enabled)}`
+    :`<b>1.</b> Batería → <b>Sin restricciones</b> ${ok(st.battery)}<br><b>2.</b> <b>Inicio automático</b> → activado (si tu teléfono lo tiene)<br><b>3.</b> En Recientes, pon el <b>candado 🔒</b> a la app<br><b>4.</b> Notificaciones activadas ${ok(st.enabled)}`;
+  sheet(`<h3>${auto?'Tu teléfono está cerrando la app':'Avisos con la app cerrada'}</h3><p class="lg-why">${auto?`Mientras la app estuvo cerrada no pudo revisar estrenos (última revisión: ${lrTx}). `:''}${tr?'Los Infinix / Tecno':'Muchos teléfonos'} apagan las apps cerradas para ahorrar batería y por eso los avisos llegan solo al abrirla. Haz esto una sola vez:</p>
+    <p class="lg-why">${steps}</p>
+    <div style="display:grid;gap:10px;margin-top:16px"><button class="btn pri" id="nb-auto" style="width:100%">Abrir inicio automático</button><button class="btn" id="nb-bat" style="width:100%;background:var(--s2)">Abrir ajustes de batería</button><button class="btn" id="nb-app" style="width:100%;background:var(--s2)">Abrir ajustes de la app</button><button class="btn" id="nb-test" style="width:100%;background:var(--s2)">Probar aviso en 30 s</button></div>
+    <p class="lg-note" style="margin-top:12px">Última revisión en segundo plano: ${lrTx}. Para probar: toca «Probar», cierra la app y espera.</p>`);
   const call=(m,fb)=>{if(NXS&&NXS[m])NXS[m]().then(r=>{if(r&&r.ok===false)toast(fb)}).catch(()=>toast(fb));else toast(fb)};
-  $('#nb-bat').onclick=()=>call('openBattery','Búscalo en Ajustes del teléfono → Apps → Animes Nexora Plus → Batería');
+$('#nb-bat').onclick=()=>call('openBattery','Búscalo en Ajustes del teléfono → Apps → Animes Nexora Plus → Batería');
   $('#nb-auto').onclick=()=>call('openAutostart','Búscalo en Ajustes → Apps → Permisos → Inicio automático');
   $('#nb-app').onclick=()=>call('openAppSettings','Búscalo en Ajustes del teléfono → Apps → Animes Nexora Plus');
   $('#nb-test').onclick=async()=>{if(!LN)return toast('Las notificaciones solo funcionan en la app instalada');await askNotify();if(await notifOff())return;
     if(HAS_NN&&NXS.testLater){NXS.testLater({sec:30}).catch(()=>{});toast('Listo: cierra la app y espera 30 segundos');return}
     try{await LN.schedule({notifications:[{id:Math.floor(Math.random()*1e6)+5000,title:'Prueba de Nexora',body:'¡Los avisos con la app cerrada funcionan! 🎉',schedule:{at:new Date(Date.now()+30000),allowWhileIdle:true},smallIcon:'ic_stat_nexora'}]});toast('Listo: cierra la app y espera 30 segundos')}catch(e){toast('No se pudo programar el aviso')}};
 };
+$('#s-nbg').onclick=()=>bgGuide(false);
+/* Detecta si el teléfono apaga la app: si estuvo cerrada más de 70 min y el revisor no corrió ni una vez, se muestra el asistente (máx. cada 2 días) */
+async function bgCheck(){const since=+store.get('nx_bgat',0)||0;if(!since)return;store.set('nx_bgat',0);
+  if(!HAS_NN||!cfg.notify||Date.now()-since<70*60000)return;
+  try{const r=await NXS.notifState();if(!r||r.enabled===false||(+r.lastRun||0)>=since)return;
+    if(Date.now()-(+store.get('nx_bgwarn',0)||0)<2*864e5)return;
+    setTimeout(()=>{if(!$('#sheet').classList.contains('on')&&stack[stack.length-1]!=='player'&&!stack.includes('upd')){store.set('nx_bgwarn',Date.now());bgGuide(true)}},2500)}catch(e){}}
+if(App)App.addListener('appStateChange',st=>{if(!st.isActive)store.set('nx_bgat',Date.now());else bgCheck()});
+setTimeout(bgCheck,4000);
 $('#s-nall').onchange=e=>{cfg.notifyAll=e.target.checked;saveCfg();syncNotify();if(cfg.notifyAll){askNotify();checkLatest(true)}};
 setTimeout(()=>{syncNotify();checkFavs(true);setTimeout(()=>checkLatest(true),4000)},8000);
 

@@ -273,7 +273,12 @@ jobs:
                       NotificationChannel ch = nm == null ? null : nm.getNotificationChannel(NexoraCheck.CH);
                       if (ch != null && ch.getImportance() == NotificationManager.IMPORTANCE_NONE) on = false;
                   } catch (Exception e) { }
-                  JSObject r = new JSObject(); r.put("enabled", on); call.resolve(r);
+                  JSObject r = new JSObject(); r.put("enabled", on);
+                  /* para el asistente de avisos: marca del teléfono, batería sin restricciones y última revisión en segundo plano */
+                  r.put("brand", (Build.MANUFACTURER + " " + Build.BRAND).toLowerCase());
+                  try { PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE); r.put("battery", pm != null && pm.isIgnoringBatteryOptimizations(getContext().getPackageName())); } catch (Exception e) { }
+                  r.put("lastRun", getContext().getSharedPreferences("nexora_chk", 0).getLong("last_run", 0));
+                  call.resolve(r);
               }
 
               @PluginMethod
@@ -496,6 +501,8 @@ jobs:
               @PluginMethod
               public void openAutostart(PluginCall call) {
                   String[][] list = {
+                      {"com.transsion.phonemaster", "com.cyin.himgr.autostart.AutoStartActivity"},
+                      {"com.transsion.phonemaster", "com.cyin.himgr.startup.view.StartupAppListActivity"},
                       {"com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"},
                       {"com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity"},
                       {"com.oplus.safecenter", "com.oplus.safecenter.permission.startup.StartupAppListActivity"},
@@ -1001,6 +1008,7 @@ jobs:
                   }
                   boolean fast = getInputData().getBoolean("fast", false);
                   JSONArray news = new JSONArray();
+                  c.getSharedPreferences(PREFS, 0).edit().putLong("last_run", System.currentTimeMillis()).apply();
                   synchronized (LOCK) { scan(c, fast, news); }
                   if (news.length() > 0) post(c, news, false);
                   if (fast) fast(c, 5, false); else fast(c, 5, true);

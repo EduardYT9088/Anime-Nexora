@@ -1445,7 +1445,7 @@ async function postForm(url,data,headers={}){const h={'User-Agent':(NJW&&NJW.ua)
   if(NXS&&NXS.httpPost){let r;try{r=await NXS.httpPost({url,body,headers:h})}catch(e){throw new Error('La fuente de Latino no responde')}if(r.status>=400)throw new Error('La fuente de Latino respondió '+r.status);return r.data}
   if(NH){let r;try{r=await NH.request({url,method:'POST',headers:h,data:body,responseType:'text',connectTimeout:15000,readTimeout:25000})}catch(e){throw new Error('La fuente de Latino no responde')}return r.data}
   const r=await fetch(url,{method:'POST',body:new URLSearchParams(data)});return r.text()}
-let NJLAST='';const NJC=store.get('nx_njv',0)<4?{}:store.get('nx_njc',{});store.set('nx_njv',4);
+let NJLAST='';const NJC=store.get('nx_njv',0)<5?{}:store.get('nx_njc',{});store.set('nx_njv',5);
 function njSave(){const k=Object.keys(NJC);if(k.length>30)k.sort((a,b)=>NJC[a].t-NJC[b].t).slice(0,k.length-30).forEach(x=>delete NJC[x]);store.set('nx_njc',NJC)}
 /* lista de episodios de la página: {temporada: [enlaces en orden]} y la lista completa */
 function njEpisodes(html){const out={all:[],by:{}};
@@ -1458,15 +1458,29 @@ async function njFind(d,count,key=D.url,fb=D.frBase){
   const c=NJC[key];if(c&&Date.now()-c.t<(c.eps?2*864e5:20*60e3))return c.eps?c:null;
   const base=fb||baseTitle(d.title||'');const want=[d.title,d.esTitle,...(d.alt||[]),base].filter(Boolean).map(skel).filter(x=>x.length>=2);
   const save=v=>{NJC[key]={t:Date.now(),...v};njSave();return v.eps?NJC[key]:null};
-  const{data,url}=await getCF(`${NJB}/?s=${encodeURIComponent(base)}`);NJB=new URL(url).origin;
-  const res=[...parseDoc(data).querySelectorAll('.result-item')].map(r=>{const a=r.querySelector('.title a');return a?{title:a.textContent.trim(),url:a.getAttribute('href')}:null}).filter(r=>r&&/\/online\//.test(r.url));
-  const pick=res.find(r=>skel(r.title)===skel(d.title))||res.find(r=>want.includes(skel(r.title)));
-  if(!pick)return save({});
-  const page=await getCF(pick.url);const E=njEpisodes(page.data);NJLAST=`${E.all.length} episodios, ${(page.data||'').length} bytes${page.via?', navegador':''}`;
+  /* la página guarda muchos títulos RECORTADOS ("Isekai de Cheat Skill wo Te ni Shita Ore wa (Iseleve)"), pero la dirección
+     tiene el nombre completo: se busca con el título y versiones más cortas, y se compara con título y dirección */
+  const words=base.replace(/[:,.!?«»"]/g,' ').split(/\s+/).filter(Boolean);
+  const qs=[...new Set([base,words.length>5?words.slice(0,5).join(' '):'',words.length>3?words.slice(0,3).join(' '):'',d.esTitle||''].filter(q=>q&&q.length>=3))].slice(0,4);
+  const slugT=u=>{try{const m=new URL(u,NJB).pathname.match(/\/online\/([^/]+)/);return m?m[1].replace(/-\d{5,}$/,'').replace(/-/g,' '):''}catch(e){return''}};
+  const score=r=>{const t1=skel(r.title),t2=skel(r.title.replace(/\s*[(«][^)»]*[)»]\s*$/,'')),s1=skel(slugT(r.url)),s2=skel(slugT(r.url).replace(/\s\d+$/,''));
+    if([t1,t2,s1,s2].some(x=>x&&want.includes(x)))return 3;
+    const pre=(a,b)=>a.length>=10&&b.length>=10&&(a.startsWith(b)||b.startsWith(a));
+    return want.some(w=>pre(w,t2)||pre(w,s1)||pre(w,s2))?2:0};
+  let cands=[];
+  for(const q of qs){const{data,url}=await getCF(`${NJB}/?s=${encodeURIComponent(q)}`);NJB=new URL(url).origin;
+    const res=[...parseDoc(data).querySelectorAll('.result-item')].map(r=>{const a=r.querySelector('.title a');return a?{title:a.textContent.trim(),url:a.getAttribute('href')}:null}).filter(r=>r&&/\/online\//.test(r.url));
+    cands=res.map(r=>({...r,sc:skel(r.title)===skel(d.title)?4:score(r)})).filter(r=>r.sc>0).sort((a,b)=>b.sc-a.sc);
+    if(cands.length)break}
+  if(!cands.length)return save({});
   const si=seasonInfo({title:d.title,type:d.type},base);const sn=si&&si.s<99?si.s:1;const near=n=>Math.abs(n-count)<=3;
-  let eps=null;const ss=E.by[sn]||[];
-  if(ss.length&&near(ss.filter(Boolean).length))eps=ss;else if(near(E.all.length))eps=E.all;
-  return save(eps?{eps,p:pick.url}:{})}
+  /* se prueban hasta 2 candidatos: el bueno es el que tiene la misma cantidad de episodios */
+  for(const pick of cands.slice(0,2)){
+    const page=await getCF(pick.url);const E=njEpisodes(page.data);NJLAST=`${E.all.length} episodios, ${(page.data||'').length} bytes${page.via?', navegador':''}`;
+    let eps=null;const ss=E.by[sn]||[];
+    if(ss.length&&near(ss.filter(Boolean).length))eps=ss;else if(near(E.all.length))eps=E.all;
+    if(eps)return save({eps,p:pick.url})}
+  return save({})}
 const njOpts=h=>[...parseDoc(h||'').querySelectorAll('li.dooplay_player_option,li[data-post][data-nume]')].map(li=>[null,li.getAttribute('data-type')||'tv',li.getAttribute('data-post'),li.getAttribute('data-nume'),(li.querySelector('.title')?.textContent||'').trim()]).filter(o=>o[2]&&o[3]);
 async function njEmbeds(epUrl,pg){const base=new URL(pg.url||epUrl).origin;const opts=njOpts(pg.data).slice(0,4);
   const emb=t=>{try{const j=typeof t==='string'?JSON.parse(t):t;return(j&&j.embed_url)||''}catch(e){return''}};

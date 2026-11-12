@@ -1417,7 +1417,7 @@ function njEpisodes(html){const out={all:[],by:{}};
   return out}
 /* busca el mismo anime en la fuente de Latino y decide qué episodio corresponde a cada número */
 async function njFind(d,count,key=D.url,fb=D.frBase){
-  const c=NJC[key];if(c&&Date.now()-c.t<(c.eps?2*864e5:20*60e3))return c.eps?c:null;
+  const c=NJC[key];if(c&&Date.now()-c.t<(c.eps?2*864e5:20*60e3)){if(c.eps&&key===D.url)setTimeout(()=>njMark(c),0);return c.eps?c:null}
   const base=fb||baseTitle(d.title||'');const want=[d.title,d.esTitle,...(d.alt||[]),base].filter(Boolean).map(skel).filter(x=>x.length>=2);
   const save=v=>{NJC[key]={t:Date.now(),...v};njSave();return v.eps?NJC[key]:null};
   /* la página guarda muchos títulos RECORTADOS ("Isekai de Cheat Skill wo Te ni Shita Ore wa (Iseleve)"), pero la dirección
@@ -1436,7 +1436,7 @@ async function njFind(d,count,key=D.url,fb=D.frBase){
     const page=await getCF(pick.url);const E=njEpisodes(page.data);NJLAST=`${E.all.length} episodios, ${(page.data||'').length} bytes${page.via?', navegador':''}`;
     let eps=null;const ss=E.by[sn]||[];
     if(ss.length&&near(ss.filter(Boolean).length))eps=ss;else if(near(E.all.length))eps=E.all;
-    return eps?save({eps,p:pick.url}):null};
+    if(!eps)return null;const r=save({eps,p:pick.url});if(key===D.url)setTimeout(()=>njMark(r),0);return r};
   /* 1) la lista de Latino ya sabe la dirección: sin buscar */
   const ix=latIdx(d);
   if(ix){try{const r=await tryPick({url:`${(LATX&&LATX.host)||NJB}/online/${ix}/`});if(r)return r}catch(e){if(/cancel/i.test(e.message||''))throw e}}
@@ -1473,6 +1473,20 @@ async function njServers(epUrl){let list=null,base='';
   return dub}
 async function njDub(ep){if(!D.data||!D.eps.length)return[];const eps=D.eps;const f=await njFind(D.data,eps.length,D.url,D.frBase);if(!f)return[];
   const i=eps.findIndex(e=>e.url===ep.url);const n=+ep.number;const u=(f.eps[n-1])||(i>=0?f.eps[i]:null);return u?njServers(u):[]}
+/* marca como Latino todos los episodios que la fuente de Latino ya tiene, sin esperar a abrir cada uno */
+function njMark(f){if(!f||!f.eps||!D.eps||!D.eps.length)return;let ch=0;
+  D.eps.forEach(e=>{if(!f.eps[+e.number-1])return;const v=DUB[e.url];if(v&&v.d)return;DUB[e.url]={s:v?v.s:1,d:1,t:Date.now()};ch++});
+  if(!ch)return;store.set('nx_dub',DUB);if(D.avail&&!D.avail.dub){D.avail.dub=true;paintLangsChip()}
+  if(stack.includes('epv'))paintEpLangsNow();
+  if($('#langdlg').classList.contains('on')&&LP&&f.eps[+LP.number-1]&&LAV&&!LAV.dub&&!LBUSY){if(!LTOUCH||D.lang==='dub')LSEL='dub';paintLangTiles({...LAV,dub:true})}}
+function paintEpLangsNow(){$$('#ep-grid [data-eu]').forEach(b=>{const u=b.dataset.eu,v=langsOf(u);const bd=b.querySelector('.bd');if(bd)bd.innerHTML=epBadges(u);
+    const sm=b.querySelector('.tx small');if(v&&sm&&/Revisando|Subtitulado|Latino/.test(sm.textContent))sm.textContent=[v.d?'Latino':'',v.s?'Subtitulado':''].filter(Boolean).join(' · ')});
+  const nl=D.eps.filter(e=>{const v=langsOf(e.url);return v&&v.d}).length;if(nl)$('#e-sub').textContent=`${D.seasonLabel?D.seasonLabel+' · ':''}${D.eps.length} episodios · ${nl} en Latino`}
+/* al abrir un anime que está en la lista de Latino, busca sus episodios en segundo plano */
+async function njWarm(){const my=D.seq;try{const f=await njFind(D.data,D.eps.length,D.url,D.frBase);if(f&&my===D.seq)njMark(f)}catch(e){}}
+/* servidores Latino de un episodio en segundo plano (para que al reproducir arranque rápido) */
+const NJSP={};function njServersBg(ep){if(!ep||NJS[ep.url]||NJSP[ep.url])return;NJSP[ep.url]=1;const u=D.url;
+  njDub(ep).then(d=>{if(d.length&&D.url===u)NJS[ep.url]={t:Date.now(),dub:d}}).catch(()=>{}).finally(()=>{delete NJSP[ep.url]})}
 /* servidores de un episodio del anime abierto: los de la fuente + el Latino de respaldo si hace falta */
 const NJS={};let NJPRE=null;
 /* busca el Latino del siguiente episodio mientras ves este, para que salga al instante */
@@ -1939,6 +1953,7 @@ async function loadLangs(my){
     D.avail={sub:!!(s.sub||[]).length,dub:!!(s.dub||[]).length};DUB[D.eps[0].url]={s:D.avail.sub?1:0,d:D.avail.dub?1:0,t:Date.now()};
     if(!D.avail.dub&&canLat()&&latIdx(D.data))D.avail.dub=true;
     paintLangsChip();
+    if(canLat()&&(latIdx(D.data)||(NJC[D.url]&&NJC[D.url].eps)))setTimeout(njWarm,300);
     if(!D.avail[D.lang])D.lang=D.avail.dub?'dub':'sub';
     if($('#epv').classList.contains('on'))renderEpisodes();
   }catch(e){}
@@ -2141,6 +2156,8 @@ async function askLang(ep){
       DUB[ep.url]={s:av.sub?1:0,d:av.dub?1:0,t:Date.now()};store.set('nx_dub',DUB)}
     catch(e){av={sub:true,dub:true}}
     if(my!==LQ||LP!==ep)return;paintLangTiles(av)}
+  /* la lista de episodios Latino ya dice que este episodio existe: se muestra al instante y los servidores cargan por detrás */
+  {const nf0=NJC[D.url];if(av&&canLat()&&nf0&&nf0.eps&&nf0.eps[+ep.number-1]&&!LNF[ep.url]){if(!av.dub){av={...av,dub:true};if(!LTOUCH||D.lang==='dub')LSEL='dub';paintLangTiles(av)}njServersBg(ep);return}}
   /* ya sabemos que este anime tiene Latino en la fuente de respaldo: buscarlo sin que toques nada */
   if(av&&!av.dub&&canLat()&&!LNF[ep.url]&&(NJS[ep.url]||(NJC[D.url]&&NJC[D.url].eps)||latIdx(D.data))){
     if(NJS[ep.url]){paintLangTiles({...av,dub:true});return}

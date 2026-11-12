@@ -332,7 +332,10 @@ jobs:
                           bar.setOrientation(LinearLayout.HORIZONTAL); bar.setGravity(Gravity.CENTER_VERTICAL);
                           bar.setPadding(px(20), px(40), px(14), px(14)); bar.setVisibility(View.GONE); bar.setBackgroundColor(0xFF14112E);
                           final TextView tv = new TextView(getContext());
-                          tv.setText("Verificación rápida\nToca la casilla de abajo para ver en Latino");
+                          boolean isTv = false;
+                          try { UiModeManager um = (UiModeManager) getContext().getSystemService(Context.UI_MODE_SERVICE);
+                              isTv = (um != null && um.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION) || getContext().getPackageManager().hasSystemFeature("android.software.leanback"); } catch (Exception e) { }
+                          tv.setText(isTv ? "Verificación rápida\nPulsa OK en el control para marcar la casilla" : "Verificación rápida\nToca la casilla de abajo para ver en Latino");
                           tv.setTextColor(0xFFFFFFFF); tv.setTextSize(15); tv.setLineSpacing(px(2), 1f);
                           bar.addView(tv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
                           final Button bt = new Button(getContext()); bt.setText("Cancelar"); bt.setAllCaps(false);
@@ -373,14 +376,34 @@ jobs:
                               hd.post(() -> { try { root.removeView(box); w.stopLoading(); w.destroy(); } catch (Exception e) { } });
                           };
                           bt.setOnClickListener(v -> finish.accept("ERR cancelado"));
-                          /* TV: flechas = moverse entre elementos (Tab), OK = marcar la casilla (Espacio), Atrás = cancelar */
+                          /* TV: OK = toque real sobre la casilla de Cloudflare (se busca su posición en la página); flechas = Tab; Atrás = cancelar */
+                          final String findBox = "(function(){try{var c=null,f=document.querySelector('iframe');if(f){var r=f.getBoundingClientRect();if(r.width>40&&r.height>20)c=r}"
+                              + "if(!c){var a=document.querySelectorAll('div,span,label');for(var i=0;i<a.length;i++){var q=a[i].getBoundingClientRect();if(q.width>=240&&q.width<=340&&q.height>=50&&q.height<=90){c=q;break}}}"
+                              + "if(!c)return '';return [c.left,c.top,c.width,c.height].join(',')}catch(e){return ''}})()";
+                          final Runnable tapBox = () -> w.evaluateJavascript(findBox, v -> {
+                              try {
+                                  String sv = v; try { sv = new JSONArray("[" + v + "]").getString(0); } catch (Exception e) { }
+                                  String[] n = sv.split(","); if (n.length < 4) return;
+                                  float sc = w.getScale(); if (sc <= 0) sc = getContext().getResources().getDisplayMetrics().density;
+                                  float bw = Float.parseFloat(n[2]), bh = Float.parseFloat(n[3]);
+                                  final float x = (Float.parseFloat(n[0]) + Math.min(30f, bw / 2f)) * sc, y = (Float.parseFloat(n[1]) + bh / 2f) * sc;
+                                  final long dt = android.os.SystemClock.uptimeMillis();
+                                  android.view.MotionEvent d = android.view.MotionEvent.obtain(dt, dt, android.view.MotionEvent.ACTION_DOWN, x, y, 0);
+                                  d.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN); w.dispatchTouchEvent(d); d.recycle();
+                                  hd.postDelayed(() -> { android.view.MotionEvent u = android.view.MotionEvent.obtain(dt, android.os.SystemClock.uptimeMillis(), android.view.MotionEvent.ACTION_UP, x, y, 0);
+                                      u.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN); w.dispatchTouchEvent(u); u.recycle(); }, 90);
+                              } catch (Exception e) { }
+                          });
                           w.setOnKeyListener((v, code, ev) -> {
                               if (bar.getVisibility() != View.VISIBLE) return false;
                               if (code == KeyEvent.KEYCODE_BACK) { if (ev.getAction() == KeyEvent.ACTION_UP) finish.accept("ERR cancelado"); return true; }
+                              if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_NUMPAD_ENTER || code == KeyEvent.KEYCODE_BUTTON_A) {
+                                  if (ev.getAction() == KeyEvent.ACTION_UP) tapBox.run();
+                                  return true;
+                              }
                               int map = -1; boolean shift = false;
                               if (code == KeyEvent.KEYCODE_DPAD_DOWN || code == KeyEvent.KEYCODE_DPAD_RIGHT) map = KeyEvent.KEYCODE_TAB;
                               else if (code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_LEFT) { map = KeyEvent.KEYCODE_TAB; shift = true; }
-                              else if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_NUMPAD_ENTER) map = KeyEvent.KEYCODE_SPACE;
                               if (map < 0) return false;
                               v.dispatchKeyEvent(new KeyEvent(ev.getDownTime(), ev.getEventTime(), ev.getAction(), map, ev.getRepeatCount(), shift ? KeyEvent.META_SHIFT_ON : 0));
                               return true;

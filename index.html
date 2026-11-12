@@ -1511,12 +1511,22 @@ async function njServers(epUrl){let list=null,base='';
   return dub}
 async function njDub(ep){if(!D.data||!D.eps.length)return[];const eps=D.eps;const f=await njFind(D.data,eps.length,D.url,D.frBase);if(!f)return[];
   const i=eps.findIndex(e=>e.url===ep.url);const n=+ep.number;const u=(f.eps[n-1])||(i>=0?f.eps[i]:null);return u?njServers(u):[]}
-/* marca como Latino todos los episodios que la fuente de Latino ya tiene, sin esperar a abrir cada uno */
-function njMark(f){if(!f||!f.eps||!D.eps||!D.eps.length)return;let ch=0;
-  D.eps.forEach(e=>{if(!f.eps[+e.number-1])return;const v=DUB[e.url];if(v&&v.d)return;DUB[e.url]={s:v?v.s:1,d:1,t:Date.now()};ch++});
-  if(!ch)return;store.set('nx_dub',DUB);if(D.avail&&!D.avail.dub){D.avail.dub=true;paintLangsChip()}
-  if(stack.includes('epv'))paintEpLangsNow();
-  if($('#langdlg').classList.contains('on')&&LP&&f.eps[+LP.number-1]&&LAV&&!LAV.dub&&!LBUSY){if(!LTOUCH||D.lang==='dub')LSEL='dub';paintLangTiles({...LAV,dub:true})}}
+/* La fuente de Latino también sube episodios SUBTITULADOS: que un episodio exista allá no quiere decir que esté en Latino.
+   Por eso cada episodio se comprueba de verdad (por detrás, 2 a la vez, solo los que se ven en pantalla) y solo entonces lleva LAT. */
+const NJV={},njvQ=[];let njvBusy=0;
+function njVerify(ep,front){const u=ep.url,v=DUB[u];if((v&&v.d)||NJV[u]||NJS[u])return;NJV[u]=1;front?njvQ.unshift(ep):njvQ.push(ep);njvPump()}
+function njvPump(){while(njvBusy<2&&njvQ.length){const ep=njvQ.shift(),my=D.url;njvBusy++;
+  njDub(ep).then(d=>{if(D.url!==my)return;const v=DUB[ep.url];
+      if(d.length){NJS[ep.url]={t:Date.now(),dub:d};DUB[ep.url]={s:v?v.s:1,d:1,t:Date.now()}}else DUB[ep.url]={s:v?v.s:1,d:0,t:Date.now()};
+      store.set('nx_dub',DUB);if(stack.includes('epv'))paintEpLangsNow();
+      if(d.length&&$('#langdlg').classList.contains('on')&&LP&&LP.url===ep.url&&LAV&&!LAV.dub&&!LBUSY){if(!LTOUCH||D.lang==='dub')LSEL='dub';paintLangTiles({...LAV,dub:true})}})
+    .catch(()=>{}).finally(()=>{njvBusy--;njvPump()})}}
+let njObs=null;
+function watchNj(){if(njObs)njObs.disconnect();const f=NJC[D.url];if(!f||!f.eps||!stack.includes('epv')||!canLat())return;const my=D.seq;
+  njObs=new IntersectionObserver(en=>en.forEach(x=>{if(!x.isIntersecting||my!==D.seq)return;njObs.unobserve(x.target);const u=x.target.dataset.eu,ep=D.eps.find(e=>e.url===u);if(ep&&f.eps[+ep.number-1])njVerify(ep)}),{root:$('#epv'),rootMargin:'120px'});
+  $$('#ep-grid [data-eu]').forEach(b=>{const v=langsOf(b.dataset.eu);if(!(v&&v.d))njObs.observe(b)})}
+/* ya se conoce la lista de episodios de la fuente de Latino: el anime tiene Latino y se empiezan a comprobar los episodios visibles */
+function njMark(f){if(!f||!f.eps||!D.eps||!D.eps.length)return;if(D.avail&&!D.avail.dub){D.avail.dub=true;paintLangsChip()}watchNj()}
 function paintEpLangsNow(){$$('#ep-grid [data-eu]').forEach(b=>{const u=b.dataset.eu,v=langsOf(u);const bd=b.querySelector('.bd');if(bd)bd.innerHTML=epBadges(u);
     const sm=b.querySelector('.tx small');if(v&&sm&&/Revisando|Subtitulado|Latino/.test(sm.textContent))sm.textContent=[v.d?'Latino':'',v.s?'Subtitulado':''].filter(Boolean).join(' · ')});
   const nl=D.eps.filter(e=>{const v=langsOf(e.url);return v&&v.d}).length;if(nl)$('#e-sub').textContent=`${D.seasonLabel?D.seasonLabel+' · ':''}${D.eps.length} episodios · ${nl} en Latino`}
@@ -1738,7 +1748,7 @@ async function mostViewed(sigs){
     return out}catch(e){return[]}
 }
 /* ===== ¿Tiene Latino? Revisa los servidores del episodio y lo recuerda 7 días ===== */
-let DUB=store.get('nx_dub',{});if(store.get('nx_dubv',0)<4){DUB={};store.set('nx_dub',{});store.set('nx_dubv',4)}const dubQ=[];let dubBusy=0,dubSaveT;
+let DUB=store.get('nx_dub',{});if(store.get('nx_dubv',0)<5){DUB={};store.set('nx_dub',{});store.set('nx_dubv',5)}const dubQ=[];let dubBusy=0,dubSaveT;
 function langsOf(u){const v=DUB[u];if(!v)return null;const age=Date.now()-v.t;return age<(v.d?7:1)*864e5?v:null}
 function checkEp(u,front){return new Promise(res=>{const c=langsOf(u);if(c)return res(c);const job={u,res};front?dubQ.unshift(job):dubQ.push(job);pumpDub()})}
 function pumpDub(){while(dubBusy<(latMax||(cfg.lite?2:3))&&dubQ.length){const j=dubQ.shift();const c=langsOf(j.u);if(c){j.res(c);continue}dubBusy++;
@@ -2135,12 +2145,12 @@ function renderEpisodes(){
   const g=$('#ep-grid');g.classList.toggle('g',view==='grid');
   if(view==='grid'){
     g.innerHTML=list.map(e=>{const n=String(e.number),isCur=h&&String(h.epNum)===n,isSeen=seen.has(n);const bd=epBadges(e.url);
-      return`<button class="epr ept2 ${isSeen?'seen':''} ${isCur?'cur':''}" data-n="${esc(n)}" data-eu="${esc(e.url)}"><span class="lb">EPISODIO</span><span class="nm">${esc(n.padStart(2,'0'))}</span><span class="bd">${bd}</span>${isSeen?'<span class="st">✓</span>':isCur?'<span class="st"><svg class="i" style="width:11px;height:11px"><use href="#i-play"/></svg></span>':''}${isCur&&h.d?`<div class="pb"><i style="width:${Math.min(100,h.t/h.d*100)}%"></i></div>`:''}</button>`}).join('');watchEpLangs();paintEpDl();return}
+      return`<button class="epr ept2 ${isSeen?'seen':''} ${isCur?'cur':''}" data-n="${esc(n)}" data-eu="${esc(e.url)}"><span class="lb">EPISODIO</span><span class="nm">${esc(n.padStart(2,'0'))}</span><span class="bd">${bd}</span>${isSeen?'<span class="st">✓</span>':isCur?'<span class="st"><svg class="i" style="width:11px;height:11px"><use href="#i-play"/></svg></span>':''}${isCur&&h.d?`<div class="pb"><i style="width:${Math.min(100,h.t/h.d*100)}%"></i></div>`:''}</button>`}).join('');watchEpLangs();paintEpDl();watchNj();return}
   $('#ep-grid').innerHTML=list.map(e=>{const n=String(e.number),isCur=h&&String(h.epNum)===n,isSeen=seen.has(n);
     const v=langsOf(e.url),lg=v?[v.d?'Latino':'',v.s?'Subtitulado':''].filter(Boolean).join(' · '):'Revisando idiomas…';
     const sub=isSeen?'✓ Visto':isCur?`Quedaste en ${fmt(h.t)} de ${fmt(h.d)}`:lg;
     return`<button class="epr ${isSeen?'seen':''} ${isCur?'cur':''}" data-n="${esc(n)}" data-eu="${esc(e.url)}"><span class="n">${esc(n.padStart(2,'0'))}</span><span class="tx"><b>Episodio ${esc(n)}</b><small>${esc(sub)}</small>${isCur&&h.d?`<div class="pb"><i style="width:${Math.min(100,h.t/h.d*100)}%"></i></div>`:''}</span><span class="pl"><svg class="i" style="width:16px;height:16px"><use href="#i-play"/></svg></span></button>`}).join('');
-  watchEpLangs();paintEpDl();
+  watchEpLangs();paintEpDl();watchNj();
 }
 function epBadges(u){const v=langsOf(u);if(!v)return'<span class="q">…</span>';return(v.d?'<span class="l">LAT</span>':'')+(v.s?'<span>SUB</span>':'')}
 /* revisa solo los episodios que se ven en pantalla */
@@ -2195,7 +2205,7 @@ async function askLang(ep){
     catch(e){av={sub:true,dub:true}}
     if(my!==LQ||LP!==ep)return;paintLangTiles(av)}
   /* la lista de episodios Latino ya dice que este episodio existe: se muestra al instante y los servidores cargan por detrás */
-  {const nf0=NJC[D.url];if(av&&canLat()&&nf0&&nf0.eps&&nf0.eps[+ep.number-1]&&!LNF[ep.url]){if(!av.dub){av={...av,dub:true};if(!LTOUCH||D.lang==='dub')LSEL='dub';paintLangTiles(av)}njServersBg(ep);return}}
+  {const nf0=NJC[D.url];if(av&&av.dub&&canLat()&&nf0&&nf0.eps&&nf0.eps[+ep.number-1])njServersBg(ep)}
   /* ya sabemos que este anime tiene Latino en la fuente de respaldo: buscarlo sin que toques nada */
   if(av&&!av.dub&&canLat()&&!LNF[ep.url]&&(NJS[ep.url]||(NJC[D.url]&&NJC[D.url].eps)||latIdx(D.data))){
     if(NJS[ep.url]){paintLangTiles({...av,dub:true});return}

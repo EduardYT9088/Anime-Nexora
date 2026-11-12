@@ -1,0 +1,56 @@
+# Lista de animes con audio latino (animeonline.ninja) para que la app ponga LAT y busque el Latino sola.
+# Se actualiza cada 6 horas y se guarda en la rama "datos" (latino.json). No compila ni publica el APK.
+name: Lista de Latino
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  latino:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Leer los animes con audio latino
+        run: |
+          mkdir out && cd out
+          python3 - <<'PY'
+          import re, json, time, html, urllib.request
+          UA = 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
+          host = 'https://ww4.animeonline.ninja'
+          def get(u):
+              err = None
+              for _ in range(3):
+                  try:
+                      r = urllib.request.urlopen(urllib.request.Request(u, headers={'User-Agent': UA, 'Accept-Language': 'es-ES,es;q=0.9'}), timeout=40)
+                      return r.geturl(), r.read().decode('utf8', 'ignore')
+                  except Exception as e:
+                      err = e; time.sleep(4)
+              raise err
+          u, h = get(host + '/genero/audio-latino/')
+          host = re.match(r'https?://[^/]+', u).group(0)
+          m = re.search(r'P[aá]gina \d+ de (\d+)', h)
+          last = int(m.group(1)) if m else max([1] + [int(x) for x in re.findall(r'/genero/audio-latino/page/(\d+)/', h)])
+          items = {}
+          def parse(h):
+              for b in re.findall(r'<article id="post-\d+" class="item tvshows[^"]*">(.*?)</article>', h, re.S):
+                  t = re.search(r'<h3><a href="([^"]+)">([^<]+)</a>', b)
+                  if not t: continue
+                  s = re.search(r'/online/([^/]+)/?', t.group(1))
+                  if s: items[s.group(1)] = html.unescape(t.group(2)).strip()
+          parse(h)
+          for p in range(2, min(last, 80) + 1):
+              try: parse(get(f'{host}/genero/audio-latino/page/{p}/')[1])
+              except Exception as e: print('página', p, e)
+              time.sleep(0.7)
+          print(len(items), 'animes con latino en', last, 'páginas')
+          if len(items) < 100: raise SystemExit('Muy pocos resultados (¿bloqueo?): no se publica la lista')
+          json.dump({'v': 1, 'at': int(time.time()), 'h': host, 'i': [[t, s] for s, t in items.items()]},
+                    open('latino.json', 'w'), ensure_ascii=False, separators=(',', ':'))
+          PY
+          git init -q && git checkout -q -b datos && git add latino.json
+          git -c user.name=nexora-bot -c user.email=nexora-bot@users.noreply.github.com commit -q -m "Lista de Latino"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" datos

@@ -1467,19 +1467,24 @@ async function njFind(d,count,key=D.url,fb=D.frBase){
     if([t1,t2,s1,s2].some(x=>x&&want.includes(x)))return 3;
     const pre=(a,b)=>a.length>=10&&b.length>=10&&(a.startsWith(b)||b.startsWith(a));
     return want.some(w=>pre(w,t2)||pre(w,s1)||pre(w,s2))?2:0};
+  const si=seasonInfo({title:d.title,type:d.type},base);const sn=si&&si.s<99?si.s:1;const near=n=>Math.abs(n-count)<=3;
+  const tried=new Set();
+  /* abre la página del anime y se queda con ella solo si tiene la misma cantidad de episodios */
+  const tryPick=async pick=>{if(tried.has(pick.url))return null;tried.add(pick.url);
+    const page=await getCF(pick.url);const E=njEpisodes(page.data);NJLAST=`${E.all.length} episodios, ${(page.data||'').length} bytes${page.via?', navegador':''}`;
+    let eps=null;const ss=E.by[sn]||[];
+    if(ss.length&&near(ss.filter(Boolean).length))eps=ss;else if(near(E.all.length))eps=E.all;
+    return eps?save({eps,p:pick.url}):null};
+  /* 1) la lista de Latino ya sabe la dirección: sin buscar */
+  const ix=latIdx(d);
+  if(ix){try{const r=await tryPick({url:`${(LATX&&LATX.host)||NJB}/online/${ix}/`});if(r)return r}catch(e){if(/cancel/i.test(e.message||''))throw e}}
+  /* 2) búsqueda: nombre completo y versiones más cortas; se prueban hasta 2 candidatos */
   let cands=[];
   for(const q of qs){const{data,url}=await getCF(`${NJB}/?s=${encodeURIComponent(q)}`);NJB=new URL(url).origin;
     const res=[...parseDoc(data).querySelectorAll('.result-item')].map(r=>{const a=r.querySelector('.title a');return a?{title:a.textContent.trim(),url:a.getAttribute('href')}:null}).filter(r=>r&&/\/online\//.test(r.url));
     cands=res.map(r=>({...r,sc:skel(r.title)===skel(d.title)?4:score(r)})).filter(r=>r.sc>0).sort((a,b)=>b.sc-a.sc);
     if(cands.length)break}
-  if(!cands.length)return save({});
-  const si=seasonInfo({title:d.title,type:d.type},base);const sn=si&&si.s<99?si.s:1;const near=n=>Math.abs(n-count)<=3;
-  /* se prueban hasta 2 candidatos: el bueno es el que tiene la misma cantidad de episodios */
-  for(const pick of cands.slice(0,2)){
-    const page=await getCF(pick.url);const E=njEpisodes(page.data);NJLAST=`${E.all.length} episodios, ${(page.data||'').length} bytes${page.via?', navegador':''}`;
-    let eps=null;const ss=E.by[sn]||[];
-    if(ss.length&&near(ss.filter(Boolean).length))eps=ss;else if(near(E.all.length))eps=E.all;
-    if(eps)return save({eps,p:pick.url})}
+  for(const pick of cands.slice(0,2)){const r=await tryPick(pick);if(r)return r}
   return save({})}
 const njOpts=h=>[...parseDoc(h||'').querySelectorAll('li.dooplay_player_option,li[data-post][data-nume]')].map(li=>[null,li.getAttribute('data-type')||'tv',li.getAttribute('data-post'),li.getAttribute('data-nume'),(li.querySelector('.title')?.textContent||'').trim()]).filter(o=>o[2]&&o[3]);
 async function njEmbeds(epUrl,pg){const base=new URL(pg.url||epUrl).origin;const opts=njOpts(pg.data).slice(0,4);
@@ -1728,7 +1733,34 @@ function pumpDub(){while(dubBusy<(latMax||(cfg.lite?2:3))&&dubQ.length){const j=
     j.res(v);dubBusy--;pumpDub()})()}}
 const ep1=a=>/\/media\/[^/]+$/.test(new URL(a.url).pathname)?a.url.replace(/\/$/,'')+'/1':null;
 function hasLatino(a){const u=ep1(a);return u?checkEp(u).then(v=>!!(v&&v.d)):Promise.resolve(false)}
-function latBadge(a){const u=ep1(a),v=u&&langsOf(u);return(v&&v.d)||a.dub?'<span class="lat-tag">LAT</span>':''}
+function latBadge(a){const u=ep1(a),v=u&&langsOf(u);return(v&&v.d)||a.dub||(typeof latCard==='function'&&LATX&&latCard(a))?'<span class="lat-tag">LAT</span>':''}
+/* ===== Lista de animes con Latino: la arma GitHub cada 6 h leyendo la sección «audio latino» de la fuente de respaldo =====
+   Con ella la app pone LAT en las portadas, muestra Latino en «Idiomas» y busca el Latino sola, sin tocar «Buscar». */
+const LATURL='https://raw.githubusercontent.com/EduardYT9088/Anime-Nexora/datos/latino.json';
+let LATX=null;
+const latSlugT=sl=>String(sl||'').replace(/-\d{5,}$/,'').replace(/-/g,' ');
+function latBuild(j){const map=new Map(),pre=[];
+  for(const [t,sl] of (j.i||[])){const ks=[skel(t),skel(t.replace(/\s*[(«][^)»]*[)»]\s*$/,'')),skel(latSlugT(sl)),skel(latSlugT(sl).replace(/\s\d+$/,''))].filter(k=>k&&k.length>=3);
+    for(const k of ks)if(!map.has(k))map.set(k,sl);for(const k of new Set(ks))if(k.length>=10)pre.push([k,sl])}
+  LATX={map,pre,host:j.h||NJB,n:(j.i||[]).length}}
+async function latLoad(){const c=store.get('nx_latx',null);if(c&&c.i&&!LATX){latBuild(c);latPaint()}
+  if(c&&Date.now()-(+c.got||0)<6*3600e3)return;
+  try{const r=await get(LATURL+'?v='+Math.floor(Date.now()/3600e3),{Accept:'application/json'});const j=JSON.parse(r.data||'{}');if(!j.i||j.i.length<100)return;
+    j.got=Date.now();store.set('nx_latx',j);latBuild(j);latPaint()}catch(e){}}
+/* ¿este anime está en la lista de Latino? devuelve su dirección en la fuente de respaldo */
+function latIdx(d){if(!LATX||!d||!d.title)return null;const base=baseTitle(d.title);
+  const want=[...new Set([d.title,d.esTitle,...(d.alt||[]),base].filter(Boolean).map(skel).filter(x=>x.length>=3))];
+  for(const w of want){const sl=LATX.map.get(w);if(sl)return sl}
+  for(const w of want){if(w.length<10)continue;for(const [k,sl] of LATX.pre)if(w.startsWith(k)||k.startsWith(w))return sl}
+  return null}
+/* la etiqueta LAT de la lista solo se pone en la 1.ª temporada (otras temporadas pueden no estar dobladas todavía) */
+const latS2=t=>/\b(2nd|3rd|[4-9]th|\d+(st|nd|rd|th) season)\b|\b(season|temporada|part|parte|cour)\s*[2-9]\b|\b(ii|iii|iv)\b\s*$|\bs[2-9]\b/i.test(String(t||''));
+const latCard=a=>!!(a&&a.title&&!latS2(a.title)&&!/pel[ií]cula|movie|ova|especial|special/i.test(a.type||'')&&latIdx(a));
+function latPaint(){$$('.card[data-url]').forEach(c=>{if(c.querySelector('.lat-tag'))return;const a=cache.get(c.dataset.url);
+  if(latCard(a)){const p=c.querySelector('.poster');if(p)p.insertAdjacentHTML('beforeend','<span class="lat-tag">LAT</span>')}});
+  if(stack.includes('detail')&&D.data&&latIdx(D.data)&&D.avail&&!D.avail.dub){D.avail.dub=true;paintLangsChip()}}
+function paintLangsChip(){if(!D.avail)return;$('#d-langs').innerHTML=`Idiomas: `+['dub','sub'].filter(l=>D.avail[l]).map(l=>`<span>${LNAME[l]}</span>`).join('')}
+setTimeout(latLoad,1200);
 /* revisa en segundo plano las portadas que se ven en pantalla y les pone LAT si tienen doblaje */
 const latObs=new IntersectionObserver(en=>en.forEach(x=>{if(!x.isIntersecting)return;const c=x.target;latObs.unobserve(c);
   const a=cache.get(c.dataset.url);if(!a||!ep1(a))return;
@@ -1943,7 +1975,8 @@ async function loadLangs(my){
   if(!D.eps.length)return;
   try{const s=await epFull(D.eps[0].url);if(my!==D.seq)return;
     D.avail={sub:!!(s.sub||[]).length,dub:!!(s.dub||[]).length};DUB[D.eps[0].url]={s:D.avail.sub?1:0,d:D.avail.dub?1:0,t:Date.now()};
-    $('#d-langs').innerHTML=`Idiomas: `+['dub','sub'].filter(l=>D.avail[l]).map(l=>`<span>${LNAME[l]}</span>`).join('');
+    if(!D.avail.dub&&canLat()&&latIdx(D.data))D.avail.dub=true;
+    paintLangsChip();
     if(!D.avail[D.lang])D.lang=D.avail.dub?'dub':'sub';
     if($('#epv').classList.contains('on'))renderEpisodes();
   }catch(e){}
@@ -2147,7 +2180,7 @@ async function askLang(ep){
     catch(e){av={sub:true,dub:true}}
     if(my!==LQ||LP!==ep)return;paintLangTiles(av)}
   /* ya sabemos que este anime tiene Latino en la fuente de respaldo: buscarlo sin que toques nada */
-  if(c&&av&&!av.dub&&canLat()&&!LNF[ep.url]&&(NJS[ep.url]||(NJC[D.url]&&NJC[D.url].eps))){
+  if(av&&!av.dub&&canLat()&&!LNF[ep.url]&&(NJS[ep.url]||(NJC[D.url]&&NJC[D.url].eps)||latIdx(D.data))){
     if(NJS[ep.url]){paintLangTiles({...av,dub:true});return}
     latInline(ep)}
 }

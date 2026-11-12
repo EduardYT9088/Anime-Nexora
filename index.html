@@ -1719,7 +1719,7 @@ async function mostViewed(sigs){
     return out}catch(e){return[]}
 }
 /* ===== ¿Tiene Latino? Revisa los servidores del episodio y lo recuerda 7 días ===== */
-let DUB=store.get('nx_dub',{});if(store.get('nx_dubv',0)<3){DUB={};store.set('nx_dub',{});store.set('nx_dubv',3)}const dubQ=[];let dubBusy=0,dubSaveT;
+let DUB=store.get('nx_dub',{});if(store.get('nx_dubv',0)<4){DUB={};store.set('nx_dub',{});store.set('nx_dubv',4)}const dubQ=[];let dubBusy=0,dubSaveT;
 function langsOf(u){const v=DUB[u];if(!v)return null;const age=Date.now()-v.t;return age<(v.d?7:1)*864e5?v:null}
 function checkEp(u,front){return new Promise(res=>{const c=langsOf(u);if(c)return res(c);const job={u,res};front?dubQ.unshift(job):dubQ.push(job);pumpDub()})}
 function pumpDub(){while(dubBusy<(latMax||(cfg.lite?2:3))&&dubQ.length){const j=dubQ.shift();const c=langsOf(j.u);if(c){j.res(c);continue}dubBusy++;
@@ -2162,10 +2162,14 @@ async function latTest0(ep){const rows=[];const d=D.data||{};
   const fin=()=>{paint();const b=$('#lt-ok');if(b)b.onclick=()=>$('#sheet').classList.remove('on')};
   const step=async(n,fn)=>{const r={n,d:'Probando…',ok:null};rows.push(r);paint();try{const v=await fn();r.ok=true;r.d=v.msg;paint();return v}catch(e){r.ok=false;r.d=(e&&e.message)||String(e);paint();return null}};
   delete NJC[D.url];const base=D.frBase||baseTitle(d.title||'');let res=[],f=null,opts=[],eurl='',page='';
-  const s1=await step('1. Buscar el anime',async()=>{const r=await getCF(`${NJB}/?s=${encodeURIComponent(base)}`);NJB=new URL(r.url).origin;const h=r.data||'';
-    if(/just a moment|cf-chl|challenge-platform/i.test(h)&&!/result-item/.test(h))throw new Error('Bloqueado por Cloudflare ('+h.length+' bytes)');
-    res=[...parseDoc(h).querySelectorAll('.result-item .title a')].map(a=>a.textContent.trim());if(!res.length)throw new Error('0 resultados · '+h.length+' bytes · '+NJB);
-    return{msg:`${r.via?'(navegador interno) ':''}"${base}" → ${res.slice(0,4).join(' | ')}`}});
+  /* igual que la búsqueda real: nombre completo y, si no hay resultados, versiones más cortas */
+  const s1=await step('1. Buscar el anime',async()=>{const words=base.replace(/[:,.!?«»"]/g,' ').split(/\s+/).filter(Boolean);
+    const qs=[...new Set([base,words.length>5?words.slice(0,5).join(' '):'',words.length>3?words.slice(0,3).join(' '):''].filter(Boolean))];let last=0,via='',used='';
+    for(const q of qs){const r=await getCF(`${NJB}/?s=${encodeURIComponent(q)}`);NJB=new URL(r.url).origin;const h=r.data||'';last=h.length;via=r.via||via;
+      if(CFBLK(h))throw new Error('Bloqueado por Cloudflare ('+h.length+' bytes)');
+      res=[...parseDoc(h).querySelectorAll('.result-item .title a')].map(a=>a.textContent.trim());if(res.length){used=q;break}}
+    if(!res.length)throw new Error('0 resultados · '+last+' bytes · '+NJB);
+    return{msg:`${via?'(navegador interno) ':''}"${used}" → ${res.slice(0,4).join(' | ')}`}});
   if(!s1)return fin();
   const s2=await step('2. Lista de episodios',async()=>{f=await njFind(d,D.eps.length);if(!f)throw new Error(`No coincide (la app tiene ${D.eps.length} episodios; la fuente ${NJLAST})`);return{msg:`${f.eps.length} episodios en la fuente · ${D.eps.length} en la app`}});
   if(!s2)return fin();

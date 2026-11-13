@@ -1541,8 +1541,10 @@ const NJS={};let NJPRE=null;
 function njPrefetch(ep){if(!ep||!D.eps)return;const i=D.eps.findIndex(e=>e.url===ep.url);const nx=D.eps.find(e=>+e.number===+ep.number+1)||(i>=0?D.eps[i+1]:null);
   if(!nx||NJS[nx.url]||NJPRE===nx.url)return;const u=D.url;NJPRE=nx.url;
   setTimeout(async()=>{try{if(D.url!==u)return;const d=await njDub(nx);if(d.length){NJS[nx.url]={t:Date.now(),dub:d};DUB[nx.url]={s:1,d:1,t:Date.now()};store.set('nx_dub',DUB)}}catch(e){}finally{if(NJPRE===nx.url)NJPRE=null}},2500)}
-async function epFull(url){const s=await SRC.episode(url);if((s.dub||[]).length||!D.data||isBk(D.url)||useApi())return s;
+/* wantDub: solo se busca el Latino de respaldo (y su verificación de Cloudflare) cuando se va a ver en Latino */
+async function epFull(url,wantDub){const s=await SRC.episode(url);if((s.dub||[]).length||!D.data||isBk(D.url)||useApi())return s;
   const k=NJS[url];if(k&&Date.now()-k.t<15*60e3)return{sub:s.sub||[],dub:k.dub};
+  if(!wantDub)return s;
   const ep=D.eps.find(e=>e.url===url);if(!ep)return s;try{const d=await njDub(ep);if(d.length){NJS[url]={t:Date.now(),dub:d};njPrefetch(ep);return{sub:s.sub||[],dub:d}}}catch(e){}return s}
 const PROV={animeav1:AVP,animeflv:FLVP,tioanime:TIOP,monoschinos:MCP};
 const provFor=url=>/animeflv/i.test(url)?FLVP:/tioanime/i.test(url)?TIOP:/monoschinos/i.test(url)?MCP:AVP;
@@ -1997,7 +1999,7 @@ function paintCont(){const h=hist[D.url];
   const b=$('#d-play');if(b)b.onclick=()=>{const ep=(h&&D.eps.find(x=>String(x.number)===String(h.epNum)))||D.eps[0];askLang(ep)}}
 async function loadLangs(my){
   if(!D.eps.length)return;
-  try{const s=await epFull(D.eps[0].url);if(my!==D.seq)return;
+  try{const s=await epFull(D.eps[0].url,false);if(my!==D.seq)return;
     D.avail={sub:!!(s.sub||[]).length,dub:!!(s.dub||[]).length};DUB[D.eps[0].url]={s:D.avail.sub?1:0,d:D.avail.dub?1:0,t:Date.now()};
     if(!D.avail.dub&&canLat()&&latIdx(D.data))D.avail.dub=true;
     paintLangsChip();
@@ -2200,7 +2202,7 @@ async function askLang(ep){
   paintLangTiles(av);paintLdl();$('#langdlg').classList.add('on');
   if(KBD)setTimeout(()=>{const t=$('#l-opts .lrow.on')||$('#l-go');if(t)t.focus({preventScroll:true})},160);
   if(!av){
-    try{const s2=await inter(()=>epFull(ep.url));av={sub:!!(s2.sub||[]).length,dub:!!(s2.dub||[]).length};
+    try{const s2=await inter(()=>epFull(ep.url,false));av={sub:!!(s2.sub||[]).length,dub:!!(s2.dub||[]).length};
       DUB[ep.url]={s:av.sub?1:0,d:av.dub?1:0,t:Date.now()};store.set('nx_dub',DUB)}
     catch(e){av={sub:true,dub:true}}
     if(my!==LQ||LP!==ep)return;paintLangTiles(av)}
@@ -2209,7 +2211,7 @@ async function askLang(ep){
   /* ya sabemos que este anime tiene Latino en la fuente de respaldo: buscarlo sin que toques nada */
   if(av&&!av.dub&&canLat()&&!LNF[ep.url]&&(NJS[ep.url]||(NJC[D.url]&&NJC[D.url].eps)||latIdx(D.data))){
     if(NJS[ep.url]){paintLangTiles({...av,dub:true});return}
-    latInline(ep)}
+    if(D.lang==='dub')latInline(ep);else njVerify(ep,true)}
 }
 const closeLang=()=>$('#langdlg').classList.remove('on');
 /* Revisión paso a paso del Latino de respaldo (para saber en qué falla en cada teléfono) */
@@ -2321,10 +2323,10 @@ async function loadEpisode(){
   /* episodio descargado: se ve desde el teléfono, sin gastar datos */
   const loc=dlLocal(P.ep,P.lang);P.isLocal=false;
   if(loc&&P.noLocal!==P.ep.url){P.isLocal=true;P.servers={sub:[],dub:[]};P.idx=0;P.alts=[];loader(true,'Abriendo la descarga…');attach(dlSrc(loc),loc.kind==='hls'?'hls':'mp4',tk);
-    if(!P.off)epFull(P.ep.url).then(s=>{if(tk===P.tk)P.servers={sub:s.sub||[],dub:s.dub||[]}}).catch(()=>{});return}
+    if(!P.off)epFull(P.ep.url,false).then(s=>{if(tk===P.tk)P.servers={sub:s.sub||[],dub:s.dub||[]}}).catch(()=>{});return}
   if(P.off)return playerError('Este episodio ya no está descargado.');
   try{
-    const s=await inter(()=>epFull(P.ep.url));if(tk!==P.tk)return;
+    const s=await inter(()=>epFull(P.ep.url,P.lang==='dub'));if(tk!==P.tk)return;
     P.servers={sub:s.sub||[],dub:s.dub||[]};DUB[P.ep.url]={s:P.servers.sub.length?1:0,d:P.servers.dub.length?1:0,t:Date.now()};store.set('nx_dub',DUB);
     if(!P.servers[P.lang].length){const o=P.lang==='sub'?'dub':'sub';if(P.servers[o].length){toast(`No hay ${LNAME[P.lang]} en este episodio, se usa ${LNAME[o]}`);P.lang=o}}
     await playLang(tk);
@@ -2517,7 +2519,9 @@ $('#p-q').onclick=e=>{e.stopPropagation();const h=P.hls,L=qLevels(h);
     toast(v==='auto'?'Calidad automática':'Calidad '+qName(+v))})};
 $('#p-speed').onclick=stop(()=>{P.speed=SPEEDS[(SPEEDS.indexOf(P.speed)+1)%SPEEDS.length];V.playbackRate=P.speed;$('#p-spd').textContent=String(P.speed)+'x'});
 $('#p-fit').onclick=stop(()=>{P.fit=P.fit==='contain'?'cover':'contain';V.style.objectFit=P.fit;toast(P.fit==='cover'?'Pantalla completa':'Ajustado')});
-$('#p-lang').onclick=stop(()=>{const o=P.lang==='sub'?'dub':'sub';
+$('#p-lang').onclick=stop(async()=>{const o=P.lang==='sub'?'dub':'sub';
+  if(o==='dub'&&!(P.servers.dub||[]).length&&!P.off&&canLat()&&(latIdx(D.data)||(NJC[D.url]&&NJC[D.url].eps))){
+    toast('Buscando el Latino…');const ep=P.ep,tk0=P.tk;try{const d=await inter(()=>njDub(ep));if(P.ep!==ep||tk0!==P.tk)return;if(d.length){NJS[ep.url]={t:Date.now(),dub:d};P.servers.dub=d}}catch(e){}}
   if(!(P.servers[o]||[]).length)return toast(LNAME[o]+' no está disponible en este episodio');
   P.resume=P.mode==='video'?V.currentTime:0;P.lang=o;const m=store.get('nx_alang',{});m[D.url]=o;store.set('nx_alang',m);D.lang=o;
   const tk=++P.tk;resetMedia();playLang(tk)});
@@ -2993,7 +2997,7 @@ async function dlPump(){if(DLRUN||!HAS_DL)return;DLRUN=true;
       saveDLQ();await dlRefresh()}}
   finally{DLRUN=false;dlLoop()}}
 async function dlPrepare(it){
-  const run=()=>epFull(it.epUrl);const s=it.it?await inter(run):await run();
+  const run=()=>epFull(it.epUrl,it.lang==='dub');const s=it.it?await inter(run):await run();
   let lang=it.lang,list=(s[lang]||[]).filter(x=>SRC.canResolve(x));
   if(!list.length){const o=lang==='sub'?'dub':'sub',l2=(s[o]||[]).filter(x=>SRC.canResolve(x));if(l2.length){lang=o;list=l2}}
   if(!list.length)throw new Error((s.sub||[]).length||(s.dub||[]).length?'Solo tiene reproductor web, no se puede descargar':'Sin servidores disponibles ahora');

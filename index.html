@@ -1567,7 +1567,14 @@ function njPrefetch(ep){if(!ep||!D.eps)return;const i=D.eps.findIndex(e=>e.url==
   if(!nx||NJS[nx.url]||NJPRE===nx.url)return;const u=D.url;NJPRE=nx.url;
   setTimeout(async()=>{try{if(D.url!==u)return;const d=await njDub(nx);if(d.length){NJS[nx.url]={t:Date.now(),dub:d};DUB[nx.url]={s:1,d:1,t:Date.now()};store.set('nx_dub',DUB)}}catch(e){}finally{if(NJPRE===nx.url)NJPRE=null}},2500)}
 /* wantDub: solo se busca el Latino de respaldo (y su verificación de Cloudflare) cuando se va a ver en Latino */
-async function epFull(url,wantDub){const s=await SRC.episode(url);if((s.dub||[]).length||!D.data||isBk(D.url)||useApi())return s;
+/* servidores de cada episodio guardados 3 min (no se piden dos veces seguidas) */
+const EPM=new Map();function epMemo(url){const c=EPM.get(url);if(c&&Date.now()-c.t<3*60e3)return c.p;const p=SRC.episode(url);EPM.set(url,{t:Date.now(),p});p.catch(()=>EPM.delete(url));return p}
+/* video preparado por adelantado: mientras eliges idioma y antes de que termine el episodio */
+const PRE=new Map();
+function preResolve(ep,lang){if(!ep||!lang||P.off)return;const k=ep.url+'|'+lang,c=PRE.get(k);if(c&&Date.now()-c.t<4*60e3)return;
+  const p=(async()=>{const s=await epFull(ep.url,false);const list=(s[lang]||[]).filter(x=>SRC.canResolve(x));if(!list.length)throw 0;return await SRC.resolve(list.map(x=>x.url))})();
+  p.catch(()=>{});PRE.set(k,{t:Date.now(),p});if(PRE.size>8)PRE.delete(PRE.keys().next().value)}
+async function epFull(url,wantDub){const s=await epMemo(url);if((s.dub||[]).length||!D.data||isBk(D.url)||useApi())return s;
   const k=NJS[url];if(k&&Date.now()-k.t<15*60e3)return{sub:s.sub||[],dub:k.dub};
   if(!wantDub)return s;
   const ep=D.eps.find(e=>e.url===url);if(!ep)return s;try{const d=await njDub(ep);if(d.length){NJS[url]={t:Date.now(),dub:d};njPrefetch(ep);return{sub:s.sub||[],dub:d}}}catch(e){}return s}
@@ -2223,7 +2230,7 @@ let LP=null,LSEL='dub',LAV=null,LBUSY=false,LTOUCH=false;const LNF={};
 let LQ=0;
 const LT={dub:['mic','Latino','Doblado al español'],sub:['cc','Subtitulado','Japonés con subtítulos']};
 const canLat=()=>!!(D.data&&!isBk(D.url)&&!useApi());
-function paintLangTiles(av){LAV=av;const ep=LP;
+function paintLangTiles(av){LAV=av;const ep=LP;if(av&&ep)setTimeout(()=>{if(LP===ep&&LAV&&LAV[LSEL])preResolve(ep,LSEL)},0);
   const row=(l,cls,sub,right)=>`<button class="tile lrow ${cls}" data-l="${l}"><span class="lic"><svg class="i"><use href="#i-${LT[l][0]}"/></svg></span><span class="ltx"><b>${LT[l][1]}</b><small>${sub}</small></span>${right}</button>`;
   if(!av){$('#l-opts').innerHTML=['dub','sub'].map(l=>row(l,'dis wait','Comprobando si está disponible…','<span class="lspin"></span>')).join('');$('#l-go').disabled=true;$('#l-gotx').textContent='Reproducir';return}
   if(!av.sub&&!av.dub)av={sub:true,dub:true};
@@ -2302,7 +2309,7 @@ $('#l-opts').onclick=e=>{const b=e.target.closest('.tile');if(!b)return;
   if(b.classList.contains('wait')||LBUSY)return;
   if(b.classList.contains('dis')&&b.dataset.l==='dub'&&LP&&canLat()){const ep=LP;if(LNF[ep.url]){closeLang();latTest(ep)}else latInline(ep);return}
   if(b.classList.contains('dis'))return toast(b.dataset.l==='dub'&&D.avail&&D.avail.dub?'El doblaje Latino todavía no llega a este episodio; mira los episodios con la etiqueta LAT':(b.dataset.l==='dub'?'Latino':'Subtitulado')+' no está disponible en este episodio');
-  LSEL=b.dataset.l;LTOUCH=true;$$('#l-opts .tile').forEach(x=>x.classList.toggle('on',x===b));$('#l-gotx').textContent=LSEL==='dub'?'Reproducir en Latino':'Reproducir subtitulado';paintLdl()};
+  LSEL=b.dataset.l;LTOUCH=true;$$('#l-opts .tile').forEach(x=>x.classList.toggle('on',x===b));if(LAV&&LAV[LSEL])preResolve(LP,LSEL);$('#l-gotx').textContent=LSEL==='dub'?'Reproducir en Latino':'Reproducir subtitulado';paintLdl()};
 $('#l-remrow').addEventListener('keydown',e=>{if(e.target.id!=='l-remrow')return;if(e.key==='Enter'||e.key===' '||e.key==='NumpadEnter'){e.preventDefault();e.stopPropagation();const c=$('#l-rem');c.checked=!c.checked;toast(c.checked?'Se recordará el idioma para este anime':'No se recordará el idioma')}});
 $('#l-go').onclick=()=>{if($('#l-go').disabled)return;D.lang=LSEL;if($('#l-rem').checked){const m=store.get('nx_alang',{});m[D.url]=LSEL;store.set('nx_alang',m)}closeLang();startPlay(LP,LSEL)};
 $('#l-close').onclick=closeLang;
@@ -2370,7 +2377,7 @@ function paintEpLabel(){$('#p-sub').textContent=`Episodio ${P.ep.number}`;const 
   $('#p-prev').classList.toggle('dim',i<=0);$('#p-nx').classList.toggle('dim',i<0||i>=P.list.length-1)}
 function paintLang(){$('#p-langn').textContent=FLAG[P.lang]+' '+LNAME[P.lang];$('#p-langf').textContent=FLAG[P.lang];$('#p-langb').textContent=LSHORT[P.lang]}
 async function loadEpisode(){
-  const tk=++P.tk;P.diag=[];P.endShown=false;P.endCancel=false;loadSkips(tk);resetMedia();paintLang();loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
+  const tk=++P.tk;P.diag=[];P.endShown=false;P.endCancel=false;P.nextPre=0;loadSkips(tk);resetMedia();paintLang();loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
   /* episodio descargado: se ve desde el teléfono, sin gastar datos */
   const loc=dlLocal(P.ep,P.lang);P.isLocal=false;
   if(loc&&P.noLocal!==P.ep.url){P.isLocal=true;P.servers={sub:[],dub:[]};P.idx=0;P.alts=[];loader(true,'Abriendo la descarga…');attach(dlSrc(loc),loc.kind==='hls'?'hls':'mp4',tk);
@@ -2388,6 +2395,11 @@ async function playLang(tk,skip){
   const list=P.servers[P.lang];paintLang();
   if(!list.length)return playerError('Este episodio no tiene servidores disponibles.');
   /* prueba cada servidor directo que aún no falló */
+  /* si el video ya se preparó mientras elegías, arranca al instante */
+  const pk=PRE.get(P.ep.url+'|'+P.lang);
+  if(pk&&!skip.size&&Date.now()-pk.t<4*60e3){PRE.delete(P.ep.url+'|'+P.lang);
+    try{const r=await pk.p;if(tk!==P.tk)return;const i=list.findIndex(x=>x.url===r.resolvedFrom);
+      if(i>=0){skip.add(r.resolvedFrom);P.idx=i;P.alts=r.alts||[];return attach(r.streamUrl,r.mediaType,tk)}}catch(e){if(tk!==P.tk)return}}
   while(true){
     const sup=list.filter(x=>SRC.canResolve(x)&&!skip.has(x.url));if(!sup.length)break;
     loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
@@ -2509,6 +2521,7 @@ async function loadSkips(tk){
 /* el ending se mide desde el final (las copias del video pueden durar unos segundos más o menos) */
 function edStart(d){const e=P.skips&&P.skips.ed;if(!e)return null;const fromEnd=e.len?e.len-e.a:null;const st=fromEnd!=null&&fromEnd>0?d-fromEnd:e.a;return st>60&&st<d-5?st:null}
 function checkEnding(){
+  if(V.duration&&V.duration-V.currentTime<120&&!P.nextPre){const nx=epAt(1);if(nx){P.nextPre=1;const k=P.lang==='dub'&&!(DUB[nx.url]&&DUB[nx.url].d)?'sub':P.lang;if(k===P.lang)preResolve(nx,P.lang)}}
   const d=V.duration,t=V.currentTime;if(!isFinite(d)||P.mode!=='video')return;
   /* Saltar intro */
   const op=P.skips&&P.skips.op;const sk=$('#skipop'),was=sk.classList.contains('on'),now=!!(op&&t>=op.a&&t<op.b-2&&!P.locked);

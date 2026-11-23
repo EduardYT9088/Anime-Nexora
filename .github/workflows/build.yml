@@ -11,13 +11,8 @@ jobs:
           set +e; mkdir out; cd out
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
           g(){ code=$(curl -s -L -m 30 -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o "$1" -w '%{http_code}' "$2"); echo "$1 $code $(wc -c < "$1") $2" | tee -a index.txt; }
-          g nj-home.html "https://ww4.animeonline.ninja/"
-          g nj-online.html "https://ww4.animeonline.ninja/online/"
-          g nj-lat.html "https://ww4.animeonline.ninja/genero/anime-latino/"
-          g nj-lat2.html "https://ww4.animeonline.ninja/genero/audio-latino/"
-          g nj-ep.html "https://ww4.animeonline.ninja/online/isekai-de-cheat-skill-wo-te-ni-shita-ore-wa-genjitsu-sekai-wo-mo-musou-suru-level-up-wa-jinsei-wo-kaeta-100524/"
-          g nj-sitemap.xml "https://ww4.animeonline.ninja/sitemap.xml"
-          g nj-sitemap2.xml "https://ww4.animeonline.ninja/wp-sitemap.xml"
-          g nj-sm3.xml "https://ww4.animeonline.ninja/tvshows-sitemap.xml"
+          g av-cat-peli.html "https://animeav1.com/catalogo?category=pelicula"
+          g av-cat-tv.html "https://animeav1.com/catalogo?category=tv-anime"
+          g av-cat-base.html "https://animeav1.com/catalogo"
           git init -q && git checkout -q -b diag-datos && git add -A && git -c user.name=diag -c user.email=diag@x commit -q -m datos
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" diag-datos

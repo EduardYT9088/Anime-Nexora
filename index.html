@@ -867,6 +867,42 @@ h2.sec .vt2{font-size:13px;font-weight:700;color:#a78bfa}
 .kbd #nav button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 .kbd .cwc:focus-visible{outline:3px solid #fff;outline-offset:3px;transform:scale(1.03)}
 #catf{margin-bottom:2px}
+
+/* ===== Ajuste a todos los tamaños: el banner crece con su contenido (nunca se corta), TV pequeñas (960×540) y celular horizontal ===== */
+.sl.hx{height:auto;min-height:min(58vh,440px)}
+@media(min-width:700px){.sl.hx{height:auto;min-height:min(56vh,420px)}}
+.tv .sl.hx{height:auto;min-height:min(54vh,400px)}
+.tv .sl.hx .in{padding-bottom:44px}
+.tv .hero .dots{right:28px;bottom:16px}
+.tv{--rail:clamp(188px,18.5vw,236px)}
+.tv #nav{width:var(--rail)}
+.tv #app .view{padding-left:calc(var(--rail) + 20px)}
+.tv #tvbg{left:var(--rail)}
+@media(max-width:1100px){
+  .tv #nav{padding:20px 12px;gap:4px}
+  .tv #nav .nlogo{font-size:21px;padding:0 6px 16px}.tv #nav .nlogo .logo{width:38px;height:38px}
+  .tv #nav button{font-size:14px;padding:10px 12px;gap:12px}.tv #nav button svg{width:20px;height:20px}
+  .tv #v-home .topbar{padding:14px 18px 8px 12px}
+  .tv #v-home .tbtns .ibtn{width:44px;height:44px}
+  .tv .sl.hx .in{max-width:58%;padding:20px 24px 40px}
+  .tv .sl.hx .chips{margin-bottom:8px}.tv .sl.hx .chips .chip{font-size:12px;padding:5px 11px}
+  .tv .sl.hx h1{font-size:30px;margin-bottom:8px}
+  .tv .sl.hx .syn{font-size:14px;margin-bottom:14px}
+  .tv .sl.hx .btn{height:46px;font-size:14.5px;padding:0 16px;border-radius:14px}
+  .tv .sl.hx .btnrow{gap:10px}
+  .tv h2.sec{font-size:20px;margin:18px 12px 12px}
+  .tv .cwc{flex-basis:calc((100% - 36px) / 3)}
+}
+/* celular o tablet acostados (pantalla baja): banner compacto */
+@media(max-height:520px) and (orientation:landscape){
+  html:not(.tv) .sl.hx{min-height:0}
+  html:not(.tv) .sl.hx .in{padding:16px 22px}
+  html:not(.tv) .sl.hx .chips .chip:nth-child(n+3){display:none}
+  html:not(.tv) .sl.hx h1{font-size:22px;-webkit-line-clamp:1;margin-bottom:6px}
+  html:not(.tv) .sl.hx .syn{-webkit-line-clamp:2;font-size:13px;margin-bottom:10px}
+  html:not(.tv) .sl.hx .btn{height:40px;font-size:13.5px}
+  html:not(.tv) .hero .dots{position:relative;left:auto;bottom:auto;transform:none;margin-top:8px}
+}
 </style>
 </head>
 <body>

@@ -2477,6 +2477,7 @@ function paintEpLabel(){$('#p-sub').textContent=`Episodio ${P.ep.number}`;const 
   $('#p-prev').classList.toggle('dim',i<=0);$('#p-nx').classList.toggle('dim',i<0||i>=P.list.length-1)}
 function paintLang(){$('#p-langn').textContent=FLAG[P.lang]+' '+LNAME[P.lang];$('#p-langf').textContent=FLAG[P.lang];$('#p-langb').textContent=LSHORT[P.lang]}
 async function loadEpisode(){
+  if(!P.resume&&P.ep&&P.lastEp===P.ep.url&&P.lastT>5)P.resume=P.lastT;
   const tk=++P.tk;P.diag=[];P.endShown=false;P.endCancel=false;P.nextPre=0;loadSkips(tk);resetMedia();paintLang();loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
   /* episodio descargado: se ve desde el teléfono, sin gastar datos */
   const loc=dlLocal(P.ep,P.lang);P.isLocal=false;
@@ -2536,9 +2537,11 @@ async function attach(url,type,tk){
   const fail=why=>{if(tk!==P.tk||failed)return;failed=true;if(P.mode!=='video')return;
     if(P.isLocal){P.isLocal=false;V.onerror=null;if(P.off)return playerError('No se pudo abrir el archivo descargado. Bórralo y descárgalo otra vez.');P.noLocal=P.ep.url;toast('La descarga no abrió, se usa internet');loadEpisode();return}
     const l=P.servers[P.lang]||[];const it0=l[P.idx];diag((it0&&it0.server||'Servidor')+': '+(why||'no se pudo reproducir'));
-    if(P.alts&&P.alts.length){const n=P.alts.shift();V.onerror=null;toast('Probando otra fuente del mismo servidor…');attach(n,mtype(n),tk);return}
+    /* al cambiar de fuente o servidor se sigue en el mismo minuto (no vuelve al inicio) */
+    if(P.lastEp===P.ep.url&&P.lastT>5)P.resume=P.lastT;
+    if(P.alts&&P.alts.length){const n=P.alts.shift();V.onerror=null;attach(n,mtype(n),tk);return}
     const skip=P.skip||new Set();const it=l[P.idx];if(it)skip.add(it.url);
-    if(l.some(x=>SRC.canResolve(x)&&!skip.has(x.url))){toast('Ese servidor falló, probando otro…');V.onerror=null;playLang(tk,skip);return}
+    if(l.some(x=>SRC.canResolve(x)&&!skip.has(x.url))){V.onerror=null;playLang(tk,skip);return}
     if(isTV)return noDirect(tk);
     const w=l.find(x=>!SRC.canResolve(x));if(w){toast('El video directo falló, usando reproductor web');P.idx=l.indexOf(w);useFrame(w,tk)}else playerError('No se pudo reproducir el video.')};
   V.onerror=()=>fail('video '+(V.error?'código '+V.error.code:'con error'));
@@ -2631,6 +2634,8 @@ function checkEnding(){
   if(!inEnd){if(P.endShown){P.endShown=false;if(!P.endCancel)cancelNext()}P.endCancel=false;return}
   if(!P.endShown&&!P.endCancel&&!V.paused&&left>3&&epAt(1)){P.endShown=true;onEnded(true)}}
 $('#skipop').onclick=e=>{e.stopPropagation();const op=P.skips&&P.skips.op;if(op){V.currentTime=Math.min(op.b,(V.duration||op.b)-1);$('#skipop').classList.remove('on');toast('Intro saltada')}};
+/* último minuto visto de este episodio (para seguir ahí si se recarga o cambia de servidor) */
+V.addEventListener('timeupdate',()=>{if(P.mode==='video'&&P.ep&&V.currentTime>5&&!V.seeking){P.lastT=V.currentTime;P.lastEp=P.ep.url}});
 V.addEventListener('loadedmetadata',()=>{V.playbackRate=P.speed;if(P.resume>5&&P.resume<V.duration-15){V.currentTime=P.resume}P.resume=0});
 V.addEventListener('playing',()=>{loader(false);paintPP()});
 V.addEventListener('waiting',()=>{if(P.mode==='video')loader(true,'Cargando…')});

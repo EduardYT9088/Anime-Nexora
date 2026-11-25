@@ -11,9 +11,9 @@ jobs:
           set +e; mkdir out; cd out
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
           g(){ code=$(curl -s -L -m 30 -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o "$1" -w '%{http_code}' "$2"); echo "$1 $code $(wc -c < "$1") $2" | tee -a index.txt; }
-          g av-home.html "https://animeav1.com/"
-          g av-media.html "https://animeav1.com/media/kikansha-no-mahou-wa-tokubetsu-desu-2nd-season"
-          for id in 4479 4478 4400 3000 1500; do g bd-$id.jpg "https://cdn.animeav1.com/backdrops/$id.jpg"; g cv-$id.jpg "https://cdn.animeav1.com/covers/$id.jpg"; g sc-$id.jpg "https://cdn.animeav1.com/screenshots/$id.jpg"; done
+          for id in 4485 4484 4483 4482 4481 4480 197 3560; do g bd-$id.jpg "https://cdn.animeav1.com/backdrops/$id.jpg"; done
+          for id in 4412 4442 4472; do g th-$id.jpg "https://cdn.animeav1.com/thumbnails/$id.jpg"; done
+          g al.json "https://graphql.anilist.co/?query=%7BMedia(search:%22Kikansha%20no%20Mahou%20wa%20Tokubetsu%20desu%22,type:ANIME)%7BbannerImage%20coverImage%7BextraLarge%7D%7D%7D"
           python3 - <<'PY' >> index.txt
           import struct,glob
           def size(f):

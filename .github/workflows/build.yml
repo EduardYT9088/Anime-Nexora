@@ -452,9 +452,9 @@ jobs:
                                   if (cp[0] < 0) placeCur.run();
                                   /* arriba del todo: pasa a Cancelar */
                                   if (code == KeyEvent.KEYCODE_DPAD_UP && cp[1] <= px(8)) { sel[0] = 1; paintSel.run(); return true; }
-                                  float st = px(12) * Math.min(4f, 1f + ev.getRepeatCount() / 3f);
-                                  if (code == KeyEvent.KEYCODE_DPAD_LEFT) cp[0] -= st; else if (code == KeyEvent.KEYCODE_DPAD_RIGHT) cp[0] += st;
-                                  else if (code == KeyEvent.KEYCODE_DPAD_UP) cp[1] -= st; else cp[1] += st;
+                                  float stp = px(12) * Math.min(4f, 1f + ev.getRepeatCount() / 3f);
+                                  if (code == KeyEvent.KEYCODE_DPAD_LEFT) cp[0] -= stp; else if (code == KeyEvent.KEYCODE_DPAD_RIGHT) cp[0] += stp;
+                                  else if (code == KeyEvent.KEYCODE_DPAD_UP) cp[1] -= stp; else cp[1] += stp;
                                   placeCur.run(); return true;
                               }
                               if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_NUMPAD_ENTER || code == KeyEvent.KEYCODE_BUTTON_A || code == KeyEvent.KEYCODE_SPACE) {

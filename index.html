@@ -1214,7 +1214,7 @@ h2.sec .vt2{font-size:13px;font-weight:700;color:#a78bfa}
 <div class="imgv" id="imgv"><img alt="Imagen"></div>
 
 <!-- REPRODUCTOR -->
-<div class="ov" id="player">
+<div class="ov" id="player" tabindex="-1">
   <video id="vid" playsinline webkit-playsinline preload="auto" poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>
   <iframe id="frame" class="hide" allow="autoplay; fullscreen; encrypted-media"></iframe>
   <div id="seekfx"></div>
@@ -1262,7 +1262,7 @@ const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelect
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const fmt=s=>{if(!isFinite(s))return'0:00';s=Math.floor(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0')};
-let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2600)}
+let toastT;function toast(m,ms){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),ms||2600)}
 const cap=window.Capacitor, native=!!(cap&&cap.isNativePlatform&&cap.isNativePlatform());
 const plug=n=>{try{return native?((cap.Plugins&&cap.Plugins[n])||cap.registerPlugin(n)):null}catch(e){return null}};
 const NXS=plug('NexoraScreen');
@@ -2623,8 +2623,7 @@ async function attach(url,type,tk){
     if(P.alts&&P.alts.length){const n=P.alts.shift();V.onerror=null;attach(n,mtype(n),tk);return}
     const skip=P.skip||new Set();const it=l[P.idx];if(it)skip.add(it.url);
     if(l.some(x=>SRC.canResolve(x)&&!skip.has(x.url))){V.onerror=null;playLang(tk,skip);return}
-    if(isTV)return noDirect(tk);
-    const w=l.find(x=>!SRC.canResolve(x));if(w){toast('El video directo falló, usando reproductor web');P.idx=l.indexOf(w);useFrame(w,tk)}else playerError('No se pudo reproducir el video.')};
+    const w=l.find(x=>!SRC.canResolve(x))||l[P.idx]||l[0];if(w){if(!isTV)toast('El video directo falló, usando reproductor web');P.idx=l.indexOf(w);useFrame(w,tk)}else playerError('No se pudo reproducir el video.')};
   V.onerror=()=>fail('video '+(V.error?'código '+V.error.code:'con error'));
   if(type==='hls'&&window.Hls&&Hls.isSupported()){
     /* empieza con la calidad que aguanta TU internet (velocidad medida en los videos anteriores), no siempre alta ni siempre baja */
@@ -2644,13 +2643,19 @@ async function attach(url,type,tk){
 }
 function useFrame(it,tk){
   if(tk!==P.tk)return;
-  /* en TV el reproductor web no se maneja con el control y muestra publicidad: no se usa */
-  if(isTV)return noDirect(tk);
+  /* reproductor web (también en TV): la app bloquea las ventanas de publicidad; en TV el OK del control toca el video */
+  if(!it)return noDirect(tk);
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}V.pause();V.removeAttribute('src');V.classList.add('hide');
   P.mode='frame';navBlock(true);F.classList.remove('hide');F.src=it.url;loader(false);
   $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op,#p-q').forEach(x=>x.classList.add('hide'));updSrvName();
   $('#ctl').classList.remove('off');clearTimeout(P.hideT);P.hideT=setTimeout(()=>$('#ctl').classList.add('off'),4000);
+  if(isTV){F.tabIndex=-1;setTimeout(()=>{if(P.mode==='frame'&&tk===P.tk)toast('Reproductor web: pulsa OK para dar play · flecha arriba: opciones',5000)},1800)}
 }
+/* TV: un toque real en el centro del reproductor web (play/pausa dentro de la página del servidor); luego el control vuelve a la app */
+function frameTap(){const r=F.getBoundingClientRect();if(!r.width)return;
+  const x=r.left+r.width/2,y=r.top+r.height/2;
+  if(NXS&&NXS.tapAt)NXS.tapAt({x,y}).catch(()=>{});
+  setTimeout(()=>{try{if(document.activeElement===F)F.blur();$('#player').focus({preventScroll:true})}catch(e){}},400)}
 function updSrvName(){if(P.isLocal){$('#p-srvn').textContent='Descargado';return}const l=P.servers[P.lang]||[];const it=l[P.idx];$('#p-srvn').textContent=it?(it.server||'Servidor'):'—'}
 function playerError(msg){
   loader(true,'');$('#ploader').classList.add('err');$('#ptxt').innerHTML=`<b style="font-size:16px;color:#fff">Sin servidores disponibles</b><br><span style="font-weight:500">${esc(msg)}</span><div class="btnrow" style="justify-content:center;margin-top:14px"><button class="btn sec" id="pe-back">Volver</button><button class="btn pri" id="pe-retry">Reintentar</button></div>`;
@@ -2982,6 +2987,13 @@ document.addEventListener('keydown',e=>{
       if(dir){e.preventDefault();showCtl(true);setTimeout(()=>$('#p-pp').focus(),30);return}
     }
     if(dir||k==='Enter')showCtl();
+  }
+  if(inPlayer&&P.mode==='frame'&&!P.locked){
+    if(k==='MediaPlayPause'||k==='MediaPlay'||k==='MediaPause'){e.preventDefault();frameTap();return}
+    if($('#ctl').classList.contains('off')){
+      if(k==='Enter'||k===' '||k==='NumpadEnter'){e.preventDefault();frameTap();return}
+      if(dir){e.preventDefault();showCtl(true);setTimeout(()=>$('#p-srv').focus(),30);return}}
+    else if(dir||k==='Enter'){clearTimeout(P.hideT);P.hideT=setTimeout(()=>$('#ctl').classList.add('off'),6000)}
   }
   if(P.locked&&inPlayer){if(k==='Enter'||k===' '||k==='NumpadEnter'||dir){e.preventDefault();
       if(k!=='ArrowUp'&&k!=='ArrowDown'&&k!=='ArrowLeft'&&k!=='ArrowRight'){

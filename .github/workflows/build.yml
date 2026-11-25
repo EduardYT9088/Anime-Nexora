@@ -608,6 +608,27 @@ jobs:
                   done(call, true);
               }
 
+              /* TV: el OK del control toca el reproductor web (play dentro de la página del servidor) */
+              @PluginMethod
+              public void tapAt(PluginCall call) {
+                  final float x = call.getFloat("x", 0f), y = call.getFloat("y", 0f);
+                  getActivity().runOnUiThread(() -> {
+                      try {
+                          final WebView wv = getBridge().getWebView();
+                          float d = getContext().getResources().getDisplayMetrics().density;
+                          final float px = x * d, py = y * d;
+                          final long t = android.os.SystemClock.uptimeMillis();
+                          android.view.MotionEvent a = android.view.MotionEvent.obtain(t, t, android.view.MotionEvent.ACTION_DOWN, px, py, 0);
+                          a.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN); wv.dispatchTouchEvent(a); a.recycle();
+                          new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                              android.view.MotionEvent b = android.view.MotionEvent.obtain(t, android.os.SystemClock.uptimeMillis(), android.view.MotionEvent.ACTION_UP, px, py, 0);
+                              b.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN); wv.dispatchTouchEvent(b); b.recycle();
+                          }, 80);
+                          call.resolve();
+                      } catch (Exception e) { call.reject(String.valueOf(e.getMessage())); }
+                  });
+              }
+
               /* Reproductor web: bloquea las ventanas de publicidad que abren las páginas de los servidores */
               private volatile boolean blockNav = false;
               private long lastBlockNote = 0;

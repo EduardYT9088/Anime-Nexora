@@ -828,7 +828,7 @@ h2.sec .vt2{font-size:13px;font-weight:700;color:#a78bfa}
 .tv #tvbg img{width:100%;height:100%;object-fit:cover;object-position:50% 20%;opacity:0;transition:opacity .6s}
 .tv #tvbg img.ok{opacity:.16}
 .tv #tvbg:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,6,17,.35),var(--bg) 96%),linear-gradient(90deg,var(--bg),rgba(7,6,17,0) 30%)}
-.tv #v-home{position:relative;z-index:1}
+.tv #v-home{z-index:1}
 .tv .hero{padding:0 12px}
 .tv .hero:before{content:"";position:absolute;left:-6px;right:-6px;top:-10px;bottom:22px;border-radius:34px;background:radial-gradient(ellipse at 50% 50%,rgba(139,92,246,.34),rgba(139,92,246,0) 72%);pointer-events:none}
 .tv .slide{padding:0 4px}
@@ -903,6 +903,9 @@ h2.sec .vt2{font-size:13px;font-weight:700;color:#a78bfa}
   html:not(.tv) .sl.hx .btn{height:40px;font-size:13.5px}
   html:not(.tv) .hero .dots{position:relative;left:auto;bottom:auto;transform:none;margin-top:8px}
 }
+.tv #app .view{z-index:1}
+.tv #tvbg{transition:opacity .3s}
+.tv #app[data-tab]:not([data-tab=home]) #tvbg{opacity:0}
 </style>
 </head>
 <body>
@@ -1867,7 +1870,7 @@ const empty=(t,d)=>`<div class="empty"><b>${t}</b>${d}</div>`;
 /* ================= Navegación ================= */
 let tab='home';
 function go(t){
-  tab=t;$$('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+t));
+  tab=t;$('#app').dataset.tab=t;$$('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+t));
   $$('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.go===t));
   if(t==='search')setTimeout(()=>$('#q').focus(),150);
   if(t==='explore'&&!exploreInit)initExplore();

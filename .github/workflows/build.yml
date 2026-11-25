@@ -336,7 +336,7 @@ jobs:
                           try { UiModeManager um = (UiModeManager) getContext().getSystemService(Context.UI_MODE_SERVICE);
                               isTv = (um != null && um.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION) || getContext().getPackageManager().hasSystemFeature("android.software.leanback"); } catch (Exception e) { }
                           final boolean onTv = isTv;
-                          final String tvMsg = "Verificación rápida: pulsa OK para marcar la casilla\nSi dice «Verificando…» espera unos segundos · Flecha arriba: Cancelar";
+                          final String tvMsg = "Verificación rápida: pulsa OK para marcar la casilla (verás un círculo donde se toca)\nSi dice «Verificando…» espera unos segundos · Flecha arriba + OK: Cancelar · Atrás: salir";
                           tv.setText(isTv ? tvMsg : "Verificación rápida\nToca la casilla de abajo para ver en Latino");
                           tv.setTextColor(0xFFFFFFFF); tv.setTextSize(15); tv.setLineSpacing(px(2), 1f);
                           bar.addView(tv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -344,7 +344,6 @@ jobs:
                           bt.setTextColor(0xFFFFFFFF); bt.setBackgroundColor(0x33FFFFFF); bt.setFocusable(true);
                           bt.setPadding(px(22), px(10), px(22), px(10));
                           /* control remoto: el botón se ve claramente cuando está seleccionado */
-                          bt.setOnFocusChangeListener((v, f) -> { bt.setBackgroundColor(f ? 0xFF7C5CFF : 0x33FFFFFF); bt.setScaleX(f ? 1.08f : 1f); bt.setScaleY(f ? 1.08f : 1f); });
                           bar.addView(bt, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
                           final WebView w = new WebView(getContext());
                           w.setBackgroundColor(0xFF0B0A1A);
@@ -358,6 +357,8 @@ jobs:
                           final Handler hd = new Handler(Looper.getMainLooper());
                           final boolean[] done = {false};
                           final boolean[] ran = {false};
+                          final boolean[] shown = {false};
+                          final int[] cleanN = {0};
                           /* deja solo la casilla de verificación sobre el fondo de la app (oculta textos, logo y pie de página) */
                           final String clean = "(function(){try{var b=document.body;if(!b)return;if(!document.getElementById('nxcf')){var s=document.createElement('style');s.id='nxcf';"
                               + "s.textContent='html,body{background:#0b0a1a!important;margin:0!important}body{min-height:100vh!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important}"
@@ -378,20 +379,31 @@ jobs:
                               r.put("cookie", CookieManager.getInstance().getCookie(url));
                               if (res != null) r.put("result", res);
                               call.resolve(r);
-                              hd.post(() -> { try { root.removeView(box); w.stopLoading(); w.destroy(); } catch (Exception e) { } });
+                              hd.post(() -> { try { if (shown[0]) getBridge().getWebView().setOnKeyListener(null); root.removeView(box); w.stopLoading(); w.destroy(); } catch (Exception e) { } });
                           };
                           bt.setOnClickListener(v -> finish.accept("ERR cancelado"));
                           /* TV: OK = toque real sobre la casilla de Cloudflare (se busca su posición en la página); flechas = Tab; Atrás = cancelar */
                           final String findBox = "(function(){try{var c=null,f=document.querySelector('iframe');if(f){var r=f.getBoundingClientRect();if(r.width>40&&r.height>20)c=r}"
                               + "if(!c){var a=document.querySelectorAll('div,span,label');for(var i=0;i<a.length;i++){var q=a[i].getBoundingClientRect();if(q.width>=240&&q.width<=340&&q.height>=50&&q.height<=90){c=q;break}}}"
                               + "if(!c)return '';return [c.left,c.top,c.width,c.height].join(',')}catch(e){return ''}})()";
+                          /* TV: la app lleva la selección (casilla o Cancelar) sin depender del foco de Android, que en algunos televisores se queda en la pantalla de atrás */
+                          final int[] sel = {0};
+                          final int[] okN = {0};
+                          final Runnable paintSel = () -> {
+                              bt.setBackgroundColor(sel[0] == 1 ? 0xFF7C5CFF : 0x33FFFFFF); bt.setScaleX(sel[0] == 1 ? 1.08f : 1f); bt.setScaleY(sel[0] == 1 ? 1.08f : 1f);
+                              w.evaluateJavascript("(function(){try{var s=document.getElementById('nxsel');if(!s){s=document.createElement('style');s.id='nxsel';(document.head||document.documentElement).appendChild(s)}"
+                                  + "s.textContent=" + (sel[0] == 0 ? "'iframe,body>div>div>div[style*=display]{outline:4px solid #7c5cff!important;outline-offset:6px;border-radius:6px}'" : "''") + "}catch(e){}})()", null);
+                          };
                           final Runnable tapBox = () -> w.evaluateJavascript(findBox, v -> {
                               try {
                                   String sv = v; try { sv = new JSONArray("[" + v + "]").getString(0); } catch (Exception e) { }
                                   String[] n = sv.split(","); if (n.length < 4) return;
                                   float sc = w.getScale(); if (sc <= 0) sc = getContext().getResources().getDisplayMetrics().density;
                                   float bw = Float.parseFloat(n[2]), bh = Float.parseFloat(n[3]);
-                                  final float x = (Float.parseFloat(n[0]) + Math.min(30f, bw / 2f)) * sc, y = (Float.parseFloat(n[1]) + bh / 2f) * sc;
+                                  final float cx = Float.parseFloat(n[0]) + Math.min(28f, bw / 2f), cy = Float.parseFloat(n[1]) + bh / 2f;
+                                  final float x = cx * sc, y = cy * sc;
+                                  /* se ve un círculo donde la app tocó, para saber que el OK llegó */
+                                  w.evaluateJavascript("(function(){try{var d=document.createElement('div');d.style.cssText='position:fixed;z-index:2147483647;pointer-events:none;width:34px;height:34px;border-radius:50%;border:3px solid #7c5cff;background:rgba(124,92,255,.25);left:" + (cx - 17) + "px;top:" + (cy - 17) + "px;transition:opacity .6s';document.documentElement.appendChild(d);setTimeout(function(){d.style.opacity=0},350);setTimeout(function(){d.remove()},1100)}catch(e){}})()", null);
                                   final long dt = android.os.SystemClock.uptimeMillis();
                                   android.view.MotionEvent d = android.view.MotionEvent.obtain(dt, dt, android.view.MotionEvent.ACTION_DOWN, x, y, 0);
                                   d.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN); w.dispatchTouchEvent(d); d.recycle();
@@ -399,24 +411,32 @@ jobs:
                                       u.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN); w.dispatchTouchEvent(u); u.recycle(); }, 90);
                               } catch (Exception e) { }
                           });
-                          w.setOnKeyListener((v, code, ev) -> {
-                              if (bar.getVisibility() != View.VISIBLE) return false;
-                              if (code == KeyEvent.KEYCODE_BACK) { if (ev.getAction() == KeyEvent.ACTION_UP) finish.accept("ERR cancelado"); return true; }
-                              if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_NUMPAD_ENTER || code == KeyEvent.KEYCODE_BUTTON_A) {
-                                  if (ev.getAction() == KeyEvent.ACTION_UP) tapBox.run();
+                          /* segundo intento: teclado (Tab hasta la casilla y Espacio), por si el toque no la marca */
+                          final Runnable keyBox = () -> {
+                              try {
+                                  w.requestFocus();
+                                  w.evaluateJavascript("(function(){try{var f=document.querySelector('iframe');if(f)f.focus()}catch(e){}})()", null);
+                                  final long t = android.os.SystemClock.uptimeMillis();
+                                  hd.postDelayed(() -> { w.dispatchKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_TAB, 0)); w.dispatchKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_TAB, 0)); }, 150);
+                                  hd.postDelayed(() -> { long u = android.os.SystemClock.uptimeMillis(); w.dispatchKeyEvent(new KeyEvent(u, u, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 0)); w.dispatchKeyEvent(new KeyEvent(u, u, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_SPACE, 0)); }, 400);
+                              } catch (Exception e) { }
+                          };
+                          final View.OnKeyListener keys = (v, code, ev) -> {
+                              if (done[0] || bar.getVisibility() != View.VISIBLE) return false;
+                              boolean up = ev.getAction() == KeyEvent.ACTION_UP;
+                              if (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_ESCAPE) { if (up) finish.accept("ERR cancelado"); return true; }
+                              if (code == KeyEvent.KEYCODE_DPAD_UP) { if (up) { sel[0] = 1; paintSel.run(); } return true; }
+                              if (code == KeyEvent.KEYCODE_DPAD_DOWN) { if (up) { sel[0] = 0; paintSel.run(); } return true; }
+                              if (code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT) return true;
+                              if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_NUMPAD_ENTER || code == KeyEvent.KEYCODE_BUTTON_A || code == KeyEvent.KEYCODE_SPACE) {
+                                  if (up) { if (sel[0] == 1) finish.accept("ERR cancelado"); else { okN[0]++; if (okN[0] % 3 == 0) keyBox.run(); else tapBox.run(); } }
                                   return true;
                               }
-                              if (code == KeyEvent.KEYCODE_DPAD_UP) { if (ev.getAction() == KeyEvent.ACTION_UP) bt.requestFocus(); return true; }
-                              /* las demás flechas no mueven nada dentro de la verificación (así el OK siempre marca la casilla) */
-                              if (code == KeyEvent.KEYCODE_DPAD_DOWN || code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT) return true;
                               return false;
-                          });
-                          bt.setOnKeyListener((v, code, ev) -> {
-                              if (code == KeyEvent.KEYCODE_BACK) { if (ev.getAction() == KeyEvent.ACTION_UP) finish.accept("ERR cancelado"); return true; }
-                              if (code == KeyEvent.KEYCODE_DPAD_DOWN) { if (ev.getAction() == KeyEvent.ACTION_UP) w.requestFocus(); return true; }
-                              if (code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT || code == KeyEvent.KEYCODE_DPAD_UP) return true;
-                              return false;
-                          });
+                          };
+                          w.setOnKeyListener(keys);
+                          bt.setOnKeyListener(keys);
+                          bt.setFocusable(false);
                           final Runnable hideBox = () -> {
                               if (bar.getVisibility() != View.VISIBLE) return;
                               bar.setVisibility(View.GONE); box.setElevation(0);
@@ -437,17 +457,22 @@ jobs:
                                   long el = System.currentTimeMillis() - t0;
                                   if (!chal) hideBox.run();
                                   if (wait) {
-                                      if (chal) w.evaluateJavascript(clean, null);
+                                      /* se limpia la página pocas veces (tocarla mucho puede trabar la verificación) */
+                                      if (chal && cleanN[0] < 5) { cleanN[0]++; w.evaluateJavascript(clean, null); }
                                       if (chal && el > quiet && bar.getVisibility() != View.VISIBLE) {
                                           bar.setVisibility(View.VISIBLE); box.bringToFront(); box.setElevation(px(60));
                                           /* control remoto: el foco va a la casilla */
                                           w.setFocusable(true); w.setFocusableInTouchMode(true); w.requestFocus();
+                                          /* el control también se escucha desde la pantalla principal de la app (por si el foco se quedó allí) */
+                                          shown[0] = true; sel[0] = 0; okN[0] = 0; paintSel.run();
+                                          try { getBridge().getWebView().setOnKeyListener(keys); } catch (Exception e) { }
                                           w.evaluateJavascript("(function(){try{var f=document.querySelector('iframe');if(f)f.focus()}catch(e){}})()", null);
                                           if (onTv) { hd.postDelayed(() -> { if (!done[0] && bar.getVisibility() == View.VISIBLE) tapBox.run(); }, 3500);
                                               hd.postDelayed(() -> { if (!done[0] && bar.getVisibility() == View.VISIBLE) tapBox.run(); }, 9000); }
                                       } else if (chal && bar.getVisibility() == View.VISIBLE) {
                                           tv.setText(onTv ? tvMsg : "Verificación rápida\nToca la casilla de abajo para ver en Latino");
-                                          if (!bt.hasFocus() && !w.hasFocus()) w.requestFocus();
+                                          if (!w.hasFocus()) w.requestFocus();
+                                          paintSel.run();
                                       }
                                       hd.removeCallbacks(check[0]);
                                       if (el < tmo) hd.postDelayed(check[0], loading ? 400 : 800); else finish.accept(null);
@@ -471,7 +496,7 @@ jobs:
                           };
                           w.setWebViewClient(new WebViewClient() {
                               /* Cloudflare ya dejó pasar y carga la página real: se esconde al instante */
-                              @Override public void onPageStarted(WebView v, String u, Bitmap f) { if (bar.getVisibility() == View.VISIBLE) tv.setText("Verificado ✓ Cargando…"); }
+                              @Override public void onPageStarted(WebView v, String u, Bitmap f) { cleanN[0] = 0; if (bar.getVisibility() == View.VISIBLE) tv.setText("Verificado ✓ Cargando…"); }
                               @Override public void onPageFinished(WebView v, String u) { hd.removeCallbacks(check[0]); hd.postDelayed(check[0], 300); }
                           });
                           hd.postDelayed(() -> { if (!done[0]) finish.accept(null); }, tmo + 35000);

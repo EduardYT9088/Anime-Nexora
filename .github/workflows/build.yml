@@ -11,8 +11,23 @@ jobs:
           set +e; mkdir out; cd out
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
           g(){ code=$(curl -s -L -m 30 -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o "$1" -w '%{http_code}' "$2"); echo "$1 $code $(wc -c < "$1") $2" | tee -a index.txt; }
-          g av-cat-peli.html "https://animeav1.com/catalogo?category=pelicula"
-          g av-cat-tv.html "https://animeav1.com/catalogo?category=tv-anime"
-          g av-cat-base.html "https://animeav1.com/catalogo"
+          g av-home.html "https://animeav1.com/"
+          g av-media.html "https://animeav1.com/media/kikansha-no-mahou-wa-tokubetsu-desu-2nd-season"
+          for id in 4479 4478 4400 3000 1500; do g bd-$id.jpg "https://cdn.animeav1.com/backdrops/$id.jpg"; g cv-$id.jpg "https://cdn.animeav1.com/covers/$id.jpg"; g sc-$id.jpg "https://cdn.animeav1.com/screenshots/$id.jpg"; done
+          python3 - <<'PY' >> index.txt
+          import struct,glob
+          def size(f):
+              d=open(f,'rb').read()
+              if d[:2]!=b'\xff\xd8': return 'no-jpg'
+              i=2
+              while i<len(d):
+                  if d[i]!=0xFF: i+=1; continue
+                  m=d[i+1]
+                  if m in (0xC0,0xC1,0xC2):
+                      h,w=struct.unpack('>HH',d[i+5:i+9]); return f'{w}x{h}'
+                  l=struct.unpack('>H',d[i+2:i+4])[0]; i+=2+l
+              return '?'
+          for f in sorted(glob.glob('*.jpg')): print('SIZE',f,size(f))
+          PY
           git init -q && git checkout -q -b diag-datos && git add -A && git -c user.name=diag -c user.email=diag@x commit -q -m datos
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" diag-datos

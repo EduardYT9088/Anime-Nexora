@@ -1563,7 +1563,8 @@ async function backupSearch(q){const r=await Promise.allSettled([TIOP.search(q),
 let LATEST={t:0,p:null};
 function latestAll(){if(LATEST.p&&Date.now()-LATEST.t<45e3)return LATEST.p;LATEST.t=Date.now();
   LATEST.p=(async()=>{const[av,tio,mc]=await Promise.allSettled([AVP.latest(),TIOP.latest(),MCP.latest()]);
-    const base=av.status==='fulfilled'?av.value:[];const sk=[];
+    /* cada anime una sola vez (si salieron dos episodios seguidos, queda el más nuevo) */
+    const base=(av.status==='fulfilled'?av.value:[]).filter((a,i,arr)=>arr.findIndex(x=>x.url===a.url)===i);const sk=[];
     base.forEach(a=>{sk.push(skel(a.title));if(a.esTitle)sk.push(skel(a.esTitle));const m=a.url.match(/\/media\/([^/?#]+)/);if(m)sk.push(skel(m[1]))});
     (store.get('nx_lseen',[])||[]).forEach(k=>{const m=String(k).match(/\/media\/([^/?#]+)/);if(m)sk.push(skel(m[1]))});
     const extra=[];[tio,mc].forEach(r=>{if(r.status!=='fulfilled')return;r.value.forEach(a=>{const k=skel(a.title);if(sk.some(x=>sameSk(x,k)))return;sk.push(k);extra.push(a)})});
@@ -1718,6 +1719,24 @@ async function epFull(url,wantDub){const s=await epMemo(url);if((s.dub||[]).leng
   const k=NJS[url];if(k&&Date.now()-k.t<15*60e3)return{sub:s.sub||[],dub:k.dub};
   if(!wantDub)return s;
   const ep=D.eps.find(e=>e.url===url);if(!ep)return s;try{const d=await njDub(ep);if(d.length){NJS[url]={t:Date.now(),dub:d};njPrefetch(ep);return{sub:s.sub||[],dub:d}}}catch(e){}return s}
+/* ===== Más servidores: si los de la fuente principal fallan, el MISMO episodio se busca en AnimeFLV, TioAnime y MonosChinos ===== */
+const seasonN=t=>{t=String(t||'').toLowerCase();const m=t.match(/(\d+)\s*(?:st|nd|rd|th)\s*season|season\s*(\d+)|temporada\s*(\d+)|part(?:e)?\s*(\d+)|\b(ii|iii|iv|v)\s*$|\s(\d)\s*$/);
+  if(!m)return 1;const r={ii:2,iii:3,iv:4,v:5};return +(m[1]||m[2]||m[3]||m[4]||r[m[5]]||m[6])||1};
+function xPick(list,d){const want=[d.title,d.esTitle,...(d.alt||[])].filter(Boolean);const sn=seasonN(d.title);
+  return list.find(r=>want.some(w=>clean(w)===clean(r.title)))||list.find(r=>seasonN(r.title)===sn&&want.some(w=>sameTitle(w,r.title)))}
+const XFOUND=store.get('nx_xf',{});
+async function xProv(prov,d,n,lang){const P0=PROV[prov];if(!P0)return[];const key=prov+'|'+d.url;let hit=XFOUND[key];
+  if(hit===undefined){hit=null;let asked=false;for(const q of [...new Set([d.title,baseTitle(d.title),d.esTitle].filter(Boolean))]){let r=[];try{r=await P0.search(q);asked=true}catch(e){continue}const m=xPick(r,d);if(m){hit=m.url;break}}
+    if(!asked)return[];XFOUND[key]=hit;const ks=Object.keys(XFOUND);if(ks.length>200)delete XFOUND[ks[0]];store.set('nx_xf',XFOUND)}
+  if(!hit)return[];const slug=new URL(hit).pathname.split('/').filter(Boolean).pop();
+  const eu=prov==='animeflv'?`${FLV}/ver/${slug}-${n}`:prov==='tioanime'?`${TIO}/ver/${slug}-${n}`:`${MC}/ver/${slug.replace(/-sub-espanol$/,'')}-episodio-${n}`;
+  const s=await P0.episode(eu);const nm={animeflv:'AnimeFLV',tioanime:'TioAnime',monoschinos:'MonosChinos'}[prov];
+  return (s[lang]||[]).filter(x=>SRC.canResolve(x)).map(x=>({...x,server:(x.server||hostOf(x.url))+' · '+nm,xp:prov}))}
+const XSV=new Map();
+function extraServers(ep,lang){if(!ep||!D.data||isBk(D.url)||/animeflv/i.test(D.url)||useApi())return Promise.resolve([]);const k=ep.url+'|'+lang;const c=XSV.get(k);if(c&&Date.now()-c.t<10*60e3)return c.p;
+  const n=ep.number;const p=Promise.allSettled(['animeflv','tioanime','monoschinos'].map(pv=>Promise.race([xProv(pv,D.data,n,lang),sleep(15000).then(()=>[])])))
+    .then(r=>{const seen=new Set();return r.flatMap(x=>x.status==='fulfilled'?x.value:[]).filter(x=>!seen.has(x.url)&&seen.add(x.url))});
+  XSV.set(k,{t:Date.now(),p});if(XSV.size>20)XSV.delete(XSV.keys().next().value);return p}
 const PROV={animeav1:AVP,animeflv:FLVP,tioanime:TIOP,monoschinos:MCP};
 const provFor=url=>/animeflv/i.test(url)?FLVP:/tioanime/i.test(url)?TIOP:/monoschinos/i.test(url)?MCP:AVP;
 
@@ -1750,8 +1769,30 @@ async function rSw(u){const x=new URL(u);const fu='https://'+(SW_RULES.includes(
 async function rPixel(u){const id=u.match(/\/(?:u|api\/file)\/([A-Za-z0-9]+)/);return id?`https://pixeldrain.com/api/file/${id[1]}`:null}
 async function rGeneric(u){return sniff((await get(u,{'Referer':new URL(u).origin+'/'})).data)}
 const SWHOST=/wish|playnix|medix|niramirus|kravaxxa|davioad|haxlopp|tryzendm|dumbalag|dhcplay|hglink|hgplay|hglamioz/i;
+/* Streamtape: el enlace se arma con trozos de texto en la página (sin ejecutar su código) */
+async function rTape(u){const id=(u.match(/\/[ev]\/([A-Za-z0-9]+)/)||[])[1];const pg=id?`https://streamtape.com/e/${id}`:u;
+  const{data:h}=await get(pg,{'User-Agent':FF,'Referer':'https://streamtape.com/'});
+  const all=[...h.matchAll(/getElementById\(\s*['"]([a-z]*link)['"]\s*\)\.innerHTML\s*=\s*([^;]+);/gi)];if(!all.length)throw new Error('sin enlace');
+  const m=all.find(x=>x[1].toLowerCase()==='robotlink')||all[all.length-1];
+  let out='';for(const part of m[2].split('+')){const q=part.match(/(['"])(.*?)\1/);if(!q)continue;let v=q[2];
+    for(const sb of part.slice(q.index+q[0].length).matchAll(/\.substring\((\d+)(?:\s*,\s*(\d+))?\)/g))v=sb[2]!=null?v.substring(+sb[1],+sb[2]):v.substring(+sb[1]);out+=v}
+  if(!/get_video/.test(out))throw new Error('sin enlace');return (out.startsWith('//')?'https:':out.startsWith('/')?'https://streamtape.com':'')+out+'&stream=1'}
+/* OK.ru: la página trae la lista de calidades */
+async function rOk(u){const id=(u.match(/(?:videoembed|video)\/(\d+)/)||[])[1];if(!id)throw new Error('sin id');
+  const{data:h}=await get('https://ok.ru/videoembed/'+id,{'User-Agent':FF});const m=h.match(/data-options="([^"]+)"/);if(!m)throw new Error('sin datos');
+  const ta=document.createElement('textarea');ta.innerHTML=m[1];const o=JSON.parse(ta.value);let md=o.flashvars&&o.flashvars.metadata;if(typeof md==='string')md=JSON.parse(md);if(!md)throw new Error('sin datos');
+  const ord=['full','quad','hd','sd','low','lowest','mobile'];const out=[];if(md.hlsManifestUrl)out.push(md.hlsManifestUrl);
+  (md.videos||[]).slice().sort((a,b)=>ord.indexOf(a.name)-ord.indexOf(b.name)).forEach(v=>{if(v.url)out.push(v.url)});if(!out.length)throw new Error('sin video');return out}
+/* Mixdrop: el enlace está en el código empaquetado de la página */
+async function rMix(u){const pg=u.replace(/\/f\//,'/e/');const{data:h}=await get(pg,{'User-Agent':FF,'Referer':new URL(pg).origin+'/'});
+  const pk=h.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]*?\.split\('\|'\)[^)]*\)\)/);const t=(pk&&unpack(pk[0]))||h;
+  const m=t.match(/MDCore\.wurl\s*=\s*"([^"]+)"/)||t.match(/MDCore\.vsrc\s*=\s*"([^"]+)"/);if(!m)throw new Error('sin enlace');return m[1].startsWith('//')?'https:'+m[1]:m[1]}
+/* YourUpload: el video está en la página */
+async function rYu(u){const{data:h}=await get(u.replace('/watch/','/embed/'),{'User-Agent':FF,'Referer':'https://www.yourupload.com/'});const m=h.match(/file\s*:\s*['"](https?:[^'"]+\.(?:mp4|m3u8)[^'"]*)['"]/i);if(!m)throw new Error('sin enlace');return m[1]}
 function resolverFor(u){const h=hostOf(u);
+  if(/yourupload/i.test(h))return rYu;
   if(SWHOST.test(h))return rSw;if(/voe/i.test(h))return rVoe;if(/pixeldrain|pdrain/i.test(h))return rPixel;
+  if(/streamtape|strtape|stape|tapecontent|streamta\.pe/i.test(h))return rTape;if(/(^|\.)ok\.ru$|okru/i.test(h))return rOk;if(/mixdrop|mxdrop|mixdroop|m1xdrop/i.test(h))return rMix;
   if(/vidhide|filelions|zilla|dropload|streamvid|vidguard/i.test(h))return rGeneric;return null}
 async function resolveDirect(urls){
   const jobs=urls.map(async u=>{const fn=resolverFor(u);if(!fn)throw 0;const lb=hostOf(u).replace(/^(player|play|embed|cdn)\d*\./,'').split('.')[0];let s;
@@ -1834,9 +1875,6 @@ function imgTag(a,cls=''){const s=imgSrc(a.image);return s?`<img class="${cls}" 
 function art(a,mode=''){const s=imgSrc(a.image);if(!s)return`<div class="art ${mode}" style="${posterBg(a.title)}"></div>`;
   return`<div class="art ${mode}" data-id="${esc(a.id||'')}"><img class="bgb" alt="" src="${esc(s)}" onload="this.classList.add('ok')" onerror="nxImg(this)"><img class="fg" alt="" src="${esc(s)}" onload="this.classList.add('ok')" onerror="nxImg(this)"></div>`}
 const wideOk=new Map();
-function upgradeArt(el,a){if(!el||!a)return;const c=[a.backdrop,a.id?`https://cdn.animeav1.com/backdrops/${a.id}.jpg`:null].filter(Boolean);
-  (async()=>{for(const u of c){let ok=wideOk.get(u);if(ok===undefined){ok=await new Promise(r=>{const im=new Image();im.onload=()=>r(im.naturalWidth>=700&&im.naturalWidth>im.naturalHeight);im.onerror=()=>r(false);im.src=imgSrc(u)});wideOk.set(u,ok)}
-    if(ok){const b=el.querySelector('.bgb');if(b){b.src=imgSrc(u);b.classList.add('ok')}el.classList.add('wide');return}}})()}
 /* Destacados en alta resolución: fondo ancho de la fuente; si es pequeño o no hay, se busca en Kitsu (fondo 3360 px o póster 550 px) */
 let KIT=store.get('nx_kit',{});
 async function kitsuArt(a){const key=skel(a.title);const c=KIT[key];if(c&&Date.now()-c.t<10*864e5)return c;
@@ -1850,16 +1888,22 @@ async function kitsuArt(a){const key=skel(a.title);const c=KIT[key];if(c&&Date.n
   const big=o=>o&&(o.large||o.original)||null;
   const v={t:Date.now(),cover:ex?(big(ex.coverImage)||fam.map(t=>big(t.coverImage)).find(Boolean)||null):null,poster:ex?big(ex.posterImage):null};
   KIT[key]=v;const ks=Object.keys(KIT);if(ks.length>80)ks.sort((x,y)=>KIT[x].t-KIT[y].t).slice(0,ks.length-80).forEach(k=>delete KIT[k]);store.set('nx_kit',KIT);return v}
-function heroArt(el,a){if(!el||!a)return;
-  const probe=u=>new Promise(r=>{const im=new Image();im.onload=()=>r({w:im.naturalWidth,h:im.naturalHeight});im.onerror=()=>r(null);im.src=imgSrc(u)});
-  const setWide=u=>{const b=el.querySelector('.bgb');if(!b)return;const im=new Image();im.onload=()=>{b.src=im.src;b.classList.add('ok');el.classList.add('wide')};im.src=imgSrc(u)};
-  (async()=>{let best=null;
-    for(const u of [a.backdrop,a.id?`https://cdn.animeav1.com/backdrops/${a.id}.jpg`:null].filter(Boolean)){const d=await probe(u);if(d&&d.w>=700&&d.w>d.h){best={u,...d};break}}
-    if(best)setWide(best.u);
-    if(best&&best.h>=600)return;
-    let k=null;try{k=await kitsuArt(a)}catch(e){}
-    if(k&&k.cover){setWide(k.cover);return}
-    if(!best&&k&&k.poster){const pi=new Image();pi.onload=()=>el.querySelectorAll('img').forEach(i=>{i.src=pi.src;i.classList.add('ok')});pi.src=imgSrc(k.poster)}})()}
+/* Arte nítido: se elige la imagen que mejor se ve en ESE recuadro según su tamaño real en pantalla.
+   Un fondo ancho solo se usa si llena el recuadro sin estirarse ni recortarse de más (en el celular, el destacado alto casi nunca);
+   si no, póster nítido (Kitsu, 550 px) sobre su versión difuminada. */
+const artDim=new Map();
+function probeImg(u){if(artDim.has(u))return artDim.get(u);const p=new Promise(r=>{const im=new Image();im.onload=()=>r({w:im.naturalWidth,h:im.naturalHeight});im.onerror=()=>r(null);im.src=imgSrc(u)});artDim.set(u,p);if(artDim.size>200)artDim.delete(artDim.keys().next().value);return p}
+function setWide(el,u){const b=el.querySelector('.bgb');if(!b)return;const im=new Image();im.onload=()=>{b.src=im.src;b.classList.add('ok');el.classList.add('wide')};im.src=imgSrc(u)}
+function upgradeArt(el,a){if(!el||!a)return;
+  (async()=>{const dpr=Math.min(devicePixelRatio||1,3);let r=el.getBoundingClientRect();if(!r.width){await sleep(500);r=el.getBoundingClientRect()}
+    const W=(r.width||360)*dpr,H=(r.height||220)*dpr;
+    const fit=d=>{if(!d||d.w<500||d.w<=d.h)return null;const sc=Math.max(W/d.w,H/d.h);return{sc,frac:W/(d.w*sc)}};
+    let best=null;const tryWide=async u=>{if(!u)return;const f=fit(await probeImg(u));if(f&&f.sc<=1.45&&f.frac>=.38&&(!best||f.sc<best.f.sc))best={u,f}};
+    await tryWide(a.backdrop);if(!best&&a.id)await tryWide(`https://cdn.animeav1.com/backdrops/${a.id}.jpg`);
+    let k=null;if((!best||best.f.sc>1.1)&&a.title){try{k=await kitsuArt(a)}catch(e){}if(k&&k.cover)await tryWide(k.cover)}
+    if(best){setWide(el,best.u);return}
+    if(k&&k.poster){const pi=new Image();pi.onload=()=>el.querySelectorAll('img').forEach(i=>{i.src=pi.src;i.classList.add('ok')});pi.src=imgSrc(k.poster)}})()}
+const heroArt=upgradeArt;
 /* Títulos en español (o inglés si no hay), con caché */
 let TT=store.get('nx_tt2',{});const ttQ=[];let ttBusy=false,ttSaveT;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -2000,7 +2044,7 @@ async function loadHome(){
   $('#home-rows').onclick=e=>{const b=e.target.closest('[data-vt]');if(!b)return;e.stopPropagation();const r=rows[+b.dataset.vt];openExplore(r.genre||'',r.order||'')};
   renderContinue();
   let heroDone=false;const fails=[],sigs=new Set();const hideRow=i=>{const el=$('#rs'+i);if(el)el.remove()};
-  const show=(i,list,isEp)=>{const sig=list.slice(0,4).map(a=>a.url).join('|');if(!list.length||(!isEp&&sigs.has(sig))){hideRow(i);return false}if(!isEp)sigs.add(sig);
+  const show=(i,list,isEp)=>{list=list.filter((a,k,arr)=>arr.findIndex(x=>x.url===a.url)===k);const sig=list.slice(0,4).map(a=>a.url).join('|');if(!list.length||(!isEp&&sigs.has(sig))){hideRow(i);return false}if(!isEp)sigs.add(sig);
     $('#r'+i).innerHTML=list.map(a=>isEp?epCard(a):card(a)).join('');scheduleLat();return true};
   const load=async(r,i)=>{
     try{
@@ -2038,7 +2082,7 @@ async function loadHome(){
   const hr=$('#h-retry');if(hr)hr.onclick=()=>loadHome();
 }
 function buildHero(list){
-  const items=list.filter(a=>a.image).slice(0,6);if(!items.length){$('#slides').innerHTML='';return}
+  const items=list.filter((a,i,arr)=>a.image&&arr.findIndex(x=>x.url===a.url)===i).slice(0,6);if(!items.length){$('#slides').innerHTML='';return}
   $('#slides').innerHTML=items.map((a,i)=>{cache.set(a.url,a);return`<div class="slide"><div class="sl hx" data-hu="${esc(a.url)}"><div data-url="${esc(a.url)}" style="position:absolute;inset:0">${art(a)}</div>
     <div class="in"><div class="chips"><span class="chip ac"><svg><use href="#i-star"/></svg><span class="ph">#${i+1} EN TENDENCIA</span><span class="tvt">Anime</span></span>${a.type?`<span class="chip g">${esc(typeLabel(a.type))}</span>`:''}${a.year?`<span class="chip g">${esc(a.year)}</span>`:''}</div>
     <h1>${ttSpan(a)}</h1><p class="syn"></p>
@@ -2093,7 +2137,7 @@ function renderContinue(){
     const pct=h.d?Math.min(100,h.t/h.d*100):0;const a=cache.get(h.url)||{};
     return`<button class="cwc" data-url="${esc(h.url)}">${art({image:h.image||a.image,id:a.id||h.id,title:h.title})}<span class="pl"><svg class="i"><use href="#i-play"/></svg></span>
       <span class="tx"><b>${esc(h.title||'')}</b><span>Episodio ${esc(h.epNum)}${h.lang==='dub'?' · Latino':''}</span><span class="pb"><i style="width:${pct.toFixed(1)}%"></i></span></span></button>`}).join('')}</div>`;
-  $$('#r-cont .cwc').forEach((c,i)=>{const h=list[i],a=cache.get(h.url)||{};if(a.id||h.id)upgradeArt(c.querySelector('.art'),{id:a.id||h.id,backdrop:a.backdrop})});
+  $$('#r-cont .cwc').forEach((c,i)=>{const h=list[i],a=cache.get(h.url)||{};upgradeArt(c.querySelector('.art'),{id:a.id||h.id,backdrop:a.backdrop,title:h.title||a.title})});
   $('#cw-all').onclick=e=>{e.stopPropagation();go('lib');const b=$('[data-lib="hist"]');if(b)b.click()};
 }
 
@@ -2559,7 +2603,7 @@ function paintEpLabel(){$('#p-sub').textContent=`Episodio ${P.ep.number}`;const 
 function paintLang(){$('#p-langn').textContent=FLAG[P.lang]+' '+LNAME[P.lang];$('#p-langf').textContent=FLAG[P.lang];$('#p-langb').textContent=LSHORT[P.lang]}
 async function loadEpisode(){
   if(!P.resume&&P.ep&&P.lastEp===P.ep.url&&P.lastT>5)P.resume=P.lastT;
-  const tk=++P.tk;P.diag=[];P.endShown=false;P.endCancel=false;P.nextPre=0;loadSkips(tk);resetMedia();paintLang();loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
+  const tk=++P.tk;P.diag=[];P.xTried=0;P.endShown=false;P.endCancel=false;P.nextPre=0;loadSkips(tk);resetMedia();paintLang();loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
   /* episodio descargado: se ve desde el teléfono, sin gastar datos */
   const loc=dlLocal(P.ep,P.lang);P.isLocal=false;
   if(loc&&P.noLocal!==P.ep.url){P.isLocal=true;P.servers={sub:[],dub:[]};P.idx=0;P.alts=[];loader(true,'Abriendo la descarga…');attach(dlSrc(loc),loc.kind==='hls'?'hls':'mp4',tk);
@@ -2588,9 +2632,14 @@ async function playLang(tk,skip){
     try{const r=await SRC.resolve(sup.map(x=>x.url));if(tk!==P.tk)return;
       const from=r.resolvedFrom||sup[0].url;skip.add(from);
       P.idx=Math.max(0,list.findIndex(x=>x.url===from));P.alts=r.alts||[];return attach(r.streamUrl,r.mediaType,tk)}
-    catch(e){if(tk!==P.tk)return;sup.forEach(x=>skip.add(x.url))}
+    catch(e){if(tk!==P.tk)return;sup.forEach(x=>skip.add(x.url));if(!P.xTried)extraServers(P.ep,P.lang)}
   }
-  /* sin video directo: en TV se avisa; en el móvil se abre el reproductor web */
+  /* los de la fuente principal fallaron: el mismo episodio en otras fuentes (sin que se repitan servidores) */
+  if(!P.xTried&&!P.isLocal){P.xTried=1;loader(true,`${FLAG[P.lang]} Buscando más servidores…`);
+    const ex=await extraServers(P.ep,P.lang).catch(()=>[]);if(tk!==P.tk)return;
+    const have=new Set(list.map(x=>x.url));const add=ex.filter(x=>!have.has(x.url));
+    if(add.length){list.push(...add);return playLang(tk,skip)}}
+  /* sin video directo: se abre el reproductor web (publicidad bloqueada) */
   const web=list.findIndex(x=>!SRC.canResolve(x));P.idx=web<0?0:web;useFrame(list[P.idx],tk);
 }
 function noDirect(tk){
@@ -2622,7 +2671,7 @@ async function attach(url,type,tk){
     if(P.lastEp===P.ep.url&&P.lastT>5)P.resume=P.lastT;
     if(P.alts&&P.alts.length){const n=P.alts.shift();V.onerror=null;attach(n,mtype(n),tk);return}
     const skip=P.skip||new Set();const it=l[P.idx];if(it)skip.add(it.url);
-    if(l.some(x=>SRC.canResolve(x)&&!skip.has(x.url))){V.onerror=null;playLang(tk,skip);return}
+    if(l.some(x=>SRC.canResolve(x)&&!skip.has(x.url))||!P.xTried){V.onerror=null;playLang(tk,skip);return}
     const w=l.find(x=>!SRC.canResolve(x))||l[P.idx]||l[0];if(w){if(!isTV)toast('El video directo falló, usando reproductor web');P.idx=l.indexOf(w);useFrame(w,tk)}else playerError('No se pudo reproducir el video.')};
   V.onerror=()=>fail('video '+(V.error?'código '+V.error.code:'con error'));
   if(type==='hls'&&window.Hls&&Hls.isSupported()){

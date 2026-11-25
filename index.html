@@ -817,7 +817,8 @@ h2.sec .vt2{font-size:13px;font-weight:700;color:#a78bfa}
 .tv #nav button svg{width:24px;height:24px}
 .tv #nav button.on{background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff}
 .tv #nav button.on svg{stroke:#fff}
-.tv #nav [data-go=search],.tv #nav [data-go=lib]{display:none}
+.tv #nav [data-go=lib]{display:none}
+.tv #nav [data-go=search]{order:1}
 .tv #nav .ntx{display:none}.tv #nav .ntv{display:inline}
 .tv #nav .nlogo{order:0}.tv #nav [data-go=home]{order:1}.tv #nav [data-tvcat=pelicula]{order:2}.tv #nav [data-tvcat=tv-anime]{order:3}.tv #nav [data-go=explore]{order:4}.tv #nav [data-tvlib=fav]{order:5}.tv #nav [data-tvlib=hist]{order:6}.tv #nav [data-go=set]{order:7}
 .tv #app .view{padding-left:256px;padding-right:8px}
@@ -906,9 +907,19 @@ h2.sec .vt2{font-size:13px;font-weight:700;color:#a78bfa}
 .tv #app .view{z-index:1}
 .tv #tvbg{transition:opacity .3s}
 .tv #app[data-tab]:not([data-tab=home]) #tvbg{opacity:0}
-.cfon *,.cfon *:before,.cfon *:after{animation-play-state:paused!important;transition:none!important}
 .tv .sl.hx .art:not(.wide) .bgb{inset:-40px!important;width:calc(100% + 80px)!important;height:calc(100% + 80px)!important;filter:blur(24px) saturate(1.35) brightness(.62)!important}
 .tv .sl.hx .art:not(.wide) .fg{display:block;left:auto;right:5%;top:7%;height:86%;width:auto;max-width:36%;transform:none}
+#vcur{position:fixed;left:0;top:0;z-index:60;width:30px;height:30px;pointer-events:none;display:none;filter:drop-shadow(0 2px 4px rgba(0,0,0,.7));transition:opacity .4s}
+#vcur svg{width:100%;height:100%;fill:#fff;stroke:#2a1b6e;stroke-width:1.4}
+#vcur.dim{opacity:.35}
+#vcur:after{content:"";position:absolute;left:-14px;top:-14px;width:34px;height:34px;border-radius:50%;border:3px solid #7c5cff;opacity:0}
+#vcur.tap:after{animation:vctap .5s ease-out}
+@keyframes vctap{0%{opacity:1;transform:scale(.4)}100%{opacity:0;transform:scale(1.3)}}
+/* TV: sin desenfoques en vivo (las TV con poca potencia se ponen lentas); fondos sólidos en su lugar */
+.tv *{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.tv .chip{background:rgba(30,26,60,.85)}.tv .btn.sec,.tv .sl.hx .btn.sec{background:rgba(24,20,52,.88)}
+.tv .dlg{background:rgba(4,3,12,.86)}
+.tv .sl.hx .art:not(.wide) .bgb{filter:brightness(.42) saturate(1.2)!important}
 </style>
 </head>
 <body>
@@ -1595,9 +1606,9 @@ let CFLOCK=Promise.resolve(),CFCAN=0;
 async function getCFweb(url,js){
   const it=NJINT>0;
   /* mientras se verifica, la app de fondo se queda quieta (menos lag en TV) */
-  document.documentElement.classList.add('cfon');HPAUSE0=HPAUSE;HPAUSE=true;
+  if(it){HPAUSE0=HPAUSE;HPAUSE=true}
   let w;try{w=await NXS.webGet({url,timeout:it?90000:25000,quiet:it?(isTV?5000:8000):9999999,...(js?{js}:{})})}
-  finally{document.documentElement.classList.remove('cfon');HPAUSE=HPAUSE0}
+  finally{if(it)HPAUSE=HPAUSE0}
   if(!w||!w.data||/just a moment|un momento|attention required|access denied|error 10\d\d/i.test(w.title||''))
     throw new Error(w&&/cancel/.test(w.result||'')?'Verificación cancelada':'No se pudo pasar la verificación de Cloudflare ('+((w&&w.title)||'sin respuesta')+')');
   NJW={ua:w.ua,cookie:w.cookie||''};return{data:w.data,url:w.url||url,via:'navegador',result:w.result}}
@@ -2143,7 +2154,9 @@ function renderContinue(){
 
 /* ================= BUSCAR ================= */
 let qT,qSeq=0;
-$('#q').addEventListener('input',e=>{clearTimeout(qT);qT=setTimeout(()=>runSearch(e.target.value),550)});
+$('#q').addEventListener('input',e=>{clearTimeout(qT);qT=setTimeout(()=>runSearch(e.target.value),isTV?350:550)});
+/* teclados de TV: algunos solo entregan el texto al terminar la palabra o al cerrar el teclado */
+['compositionend','change'].forEach(ev=>$('#q').addEventListener(ev,e=>{clearTimeout(qT);qT=setTimeout(()=>runSearch(e.target.value),200)}));
 $('#q').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();e.stopPropagation();e.target.blur();clearTimeout(qT);runSearch(e.target.value);
   if(KBD){let n=0;const t=setInterval(()=>{const c=$('#s-res .card');if(c||++n>40){clearInterval(t);if(c&&document.activeElement!==$('#q'))c.focus({preventScroll:true})}},250)}}});
 async function runSearch(v){
@@ -2654,7 +2667,7 @@ function noDirect(tk){
 /* mientras se usa el reproductor web, la app no deja que la página abra publicidad ni el navegador */
 let NAVB=false;function navBlock(on){if(NAVB===on)return;NAVB=on;try{if(NXS&&NXS.navBlock)NXS.navBlock({on}).catch(()=>{})}catch(e){}}
 if(NXS&&NXS.addListener)try{NXS.addListener('nxBlocked',()=>toast('Se bloqueó una ventana de publicidad del servidor')).catch?.(()=>{})}catch(e){}
-function resetMedia(){navBlock(false);
+function resetMedia(){navBlock(false);if($('#vcur'))vcur(false);
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}
   V.pause();V.removeAttribute('src');V.load();F.src='about:blank';F.classList.add('hide');V.classList.remove('hide');P.mode='video';
   $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op,#p-q').forEach(x=>x.classList.remove('hide'));setSeek(0,0);$('#p-seek').style.setProperty('--b','0%');paintQ()
@@ -2698,11 +2711,18 @@ function useFrame(it,tk){
   P.mode='frame';navBlock(true);F.classList.remove('hide');F.src=it.url;loader(false);
   $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op,#p-q').forEach(x=>x.classList.add('hide'));updSrvName();
   $('#ctl').classList.remove('off');clearTimeout(P.hideT);P.hideT=setTimeout(()=>$('#ctl').classList.add('off'),4000);
-  if(isTV){F.tabIndex=-1;setTimeout(()=>{if(P.mode==='frame'&&tk===P.tk)toast('Reproductor web: pulsa OK para dar play · flecha arriba: opciones',5000)},1800)}
+  if(isTV){F.tabIndex=-1;VC.x=-1;setTimeout(()=>{if(P.mode==='frame'&&tk===P.tk){vcur();toast('Reproductor web: mueve el cursor con las flechas y pulsa OK · arriba del todo: opciones',6000)}},1800)}
 }
-/* TV: un toque real en el centro del reproductor web (play/pausa dentro de la página del servidor); luego el control vuelve a la app */
-function frameTap(){const r=F.getBoundingClientRect();if(!r.width)return;
-  const x=r.left+r.width/2,y=r.top+r.height/2;
+/* TV: cursor que se mueve con las flechas (como en Downloader); OK = toque real donde está el cursor; luego el control vuelve a la app */
+const VC={x:-1,y:-1};
+function vcur(show){let c=$('#vcur');if(!c){c=document.createElement('div');c.id='vcur';c.innerHTML='<svg viewBox="0 0 24 24"><path d="M3 2v17l4.6-4.3 3.3 7.3 3-1.4-3.3-7.1H17z"/></svg>';$('#player').appendChild(c)}
+  if(show===false){c.style.display='none';return}const r=F.getBoundingClientRect();
+  if(VC.x<0){VC.x=r.left+r.width/2;VC.y=r.top+r.height/2}VC.x=Math.max(r.left+2,Math.min(r.right-4,VC.x));VC.y=Math.max(r.top+2,Math.min(r.bottom-4,VC.y));
+  c.style.display='block';c.style.transform=`translate(${VC.x-3}px,${VC.y-2}px)`;clearTimeout(vcur.t);vcur.t=setTimeout(()=>c.classList.add('dim'),4000);c.classList.remove('dim')}
+function vcMove(k,rep){const st=Math.min(60,14+(rep||0)*6);if(k==='ArrowLeft')VC.x-=st;if(k==='ArrowRight')VC.x+=st;if(k==='ArrowUp')VC.y-=st;if(k==='ArrowDown')VC.y+=st;vcur()}
+function frameTap(center){const r=F.getBoundingClientRect();if(!r.width)return;
+  if(VC.x<0||center){VC.x=r.left+r.width/2;VC.y=r.top+r.height/2}vcur();
+  const x=VC.x,y=VC.y;const c=$('#vcur');if(c){c.classList.remove('tap');void c.offsetWidth;c.classList.add('tap')}
   if(NXS&&NXS.tapAt)NXS.tapAt({x,y}).catch(()=>{});
   setTimeout(()=>{try{if(document.activeElement===F)F.blur();$('#player').focus({preventScroll:true})}catch(e){}},400)}
 function updSrvName(){if(P.isLocal){$('#p-srvn').textContent='Descargado';return}const l=P.servers[P.lang]||[];const it=l[P.idx];$('#p-srvn').textContent=it?(it.server||'Servidor'):'—'}
@@ -3038,10 +3058,11 @@ document.addEventListener('keydown',e=>{
     if(dir||k==='Enter')showCtl();
   }
   if(inPlayer&&P.mode==='frame'&&!P.locked){
-    if(k==='MediaPlayPause'||k==='MediaPlay'||k==='MediaPause'){e.preventDefault();frameTap();return}
+    if(k==='MediaPlayPause'||k==='MediaPlay'||k==='MediaPause'){e.preventDefault();frameTap(true);return}
     if($('#ctl').classList.contains('off')){
       if(k==='Enter'||k===' '||k==='NumpadEnter'){e.preventDefault();frameTap();return}
-      if(dir){e.preventDefault();showCtl(true);setTimeout(()=>$('#p-srv').focus(),30);return}}
+      /* flechas mueven el cursor; arriba del todo abre las opciones */
+      if(dir){e.preventDefault();const r=F.getBoundingClientRect();if(k==='ArrowUp'&&VC.y>=0&&VC.y<=r.top+8){vcur(false);showCtl(true);setTimeout(()=>$('#p-srv').focus(),30);return}vcMove(k,e.repeat?(vcMove.n=(vcMove.n||0)+1):(vcMove.n=0));return}}
     else if(dir||k==='Enter'){clearTimeout(P.hideT);P.hideT=setTimeout(()=>$('#ctl').classList.add('off'),6000)}
   }
   if(P.locked&&inPlayer){if(k==='Enter'||k===' '||k==='NumpadEnter'||dir){e.preventDefault();

@@ -906,6 +906,9 @@ h2.sec .vt2{font-size:13px;font-weight:700;color:#a78bfa}
 .tv #app .view{z-index:1}
 .tv #tvbg{transition:opacity .3s}
 .tv #app[data-tab]:not([data-tab=home]) #tvbg{opacity:0}
+.cfon *,.cfon *:before,.cfon *:after{animation-play-state:paused!important;transition:none!important}
+.tv .sl.hx .art:not(.wide) .bgb{inset:-40px!important;width:calc(100% + 80px)!important;height:calc(100% + 80px)!important;filter:blur(24px) saturate(1.35) brightness(.62)!important}
+.tv .sl.hx .art:not(.wide) .fg{display:block;left:auto;right:5%;top:7%;height:86%;width:auto;max-width:36%;transform:none}
 </style>
 </head>
 <body>
@@ -1579,8 +1582,21 @@ async function getCF(url,headers,js){let why='';
     catch(e){if(!/40[1-9]|429|50[0-9]/.test(e.message))throw e;why=(e.message.match(/\d{3}/)||['bloqueo'])[0]}}
   if(!NXS||!NXS.webGet)throw new Error('Bloqueado por Cloudflare ('+why+')');
   if(/animeonline\.ninja/i.test(url))NJWEB=true;
+  /* una sola verificación a la vez: si otra ya pasó mientras esperaba, se usa esa (no aparece la casilla dos veces seguidas) */
+  if(!(NJINT>0))return getCFweb(url,js);
+  const ck0=NJW&&NJW.cookie,t0=Date.now();let rel;const prev=CFLOCK;CFLOCK=new Promise(r=>rel=r);await prev;
+  try{
+    if(CFCAN>t0)throw new Error('Verificación cancelada');
+    if(!js&&NJW&&NJW.cookie&&NJW.cookie!==ck0){try{const r=await get(url,{...(headers||{}),Cookie:NJW.cookie,'User-Agent':NJW.ua});if(!CFBLK(r.data))return r}catch(e){}}
+    return await getCFweb(url,js)}
+  catch(e){if(/cancelad/.test(e.message))CFCAN=Date.now();throw e}finally{rel()}}
+let CFLOCK=Promise.resolve(),CFCAN=0;
+async function getCFweb(url,js){
   const it=NJINT>0;
-  const w=await NXS.webGet({url,timeout:it?90000:25000,quiet:it?8000:9999999,...(js?{js}:{})});
+  /* mientras se verifica, la app de fondo se queda quieta (menos lag en TV) */
+  document.documentElement.classList.add('cfon');HPAUSE0=HPAUSE;HPAUSE=true;
+  let w;try{w=await NXS.webGet({url,timeout:it?90000:25000,quiet:it?(isTV?5000:8000):9999999,...(js?{js}:{})})}
+  finally{document.documentElement.classList.remove('cfon');HPAUSE=HPAUSE0}
   if(!w||!w.data||/just a moment|un momento|attention required|access denied|error 10\d\d/i.test(w.title||''))
     throw new Error(w&&/cancel/.test(w.result||'')?'Verificación cancelada':'No se pudo pasar la verificación de Cloudflare ('+((w&&w.title)||'sin respuesta')+')');
   NJW={ua:w.ua,cookie:w.cookie||''};return{data:w.data,url:w.url||url,via:'navegador',result:w.result}}
@@ -1821,6 +1837,29 @@ const wideOk=new Map();
 function upgradeArt(el,a){if(!el||!a)return;const c=[a.backdrop,a.id?`https://cdn.animeav1.com/backdrops/${a.id}.jpg`:null].filter(Boolean);
   (async()=>{for(const u of c){let ok=wideOk.get(u);if(ok===undefined){ok=await new Promise(r=>{const im=new Image();im.onload=()=>r(im.naturalWidth>=700&&im.naturalWidth>im.naturalHeight);im.onerror=()=>r(false);im.src=imgSrc(u)});wideOk.set(u,ok)}
     if(ok){const b=el.querySelector('.bgb');if(b){b.src=imgSrc(u);b.classList.add('ok')}el.classList.add('wide');return}}})()}
+/* Destacados en alta resolución: fondo ancho de la fuente; si es pequeño o no hay, se busca en Kitsu (fondo 3360 px o póster 550 px) */
+let KIT=store.get('nx_kit',{});
+async function kitsuArt(a){const key=skel(a.title);const c=KIT[key];if(c&&Date.now()-c.t<10*864e5)return c;
+  const q=encodeURIComponent(baseTitle(a.title)||a.title);
+  const r=await get('https://kitsu.io/api/edge/anime?filter%5Btext%5D='+q+'&page%5Blimit%5D=5&fields%5Banime%5D=canonicalTitle,titles,posterImage,coverImage',{Accept:'application/vnd.api+json'});
+  const d=(JSON.parse(r.data||'{}').data||[]).map(x=>x.attributes||{});
+  const names=t=>[t.canonicalTitle,...Object.values(t.titles||{})].filter(Boolean).map(skel);
+  const bk=skel(baseTitle(a.title));
+  const ex=d.find(t=>names(t).includes(key))||d.find(t=>names(t).some(n=>bk.length>=4&&(n.startsWith(bk)||bk.startsWith(n))));
+  const fam=d.filter(t=>names(t).some(n=>bk.length>=4&&n.startsWith(bk.slice(0,14))));
+  const big=o=>o&&(o.large||o.original)||null;
+  const v={t:Date.now(),cover:ex?(big(ex.coverImage)||fam.map(t=>big(t.coverImage)).find(Boolean)||null):null,poster:ex?big(ex.posterImage):null};
+  KIT[key]=v;const ks=Object.keys(KIT);if(ks.length>80)ks.sort((x,y)=>KIT[x].t-KIT[y].t).slice(0,ks.length-80).forEach(k=>delete KIT[k]);store.set('nx_kit',KIT);return v}
+function heroArt(el,a){if(!el||!a)return;
+  const probe=u=>new Promise(r=>{const im=new Image();im.onload=()=>r({w:im.naturalWidth,h:im.naturalHeight});im.onerror=()=>r(null);im.src=imgSrc(u)});
+  const setWide=u=>{const b=el.querySelector('.bgb');if(!b)return;const im=new Image();im.onload=()=>{b.src=im.src;b.classList.add('ok');el.classList.add('wide')};im.src=imgSrc(u)};
+  (async()=>{let best=null;
+    for(const u of [a.backdrop,a.id?`https://cdn.animeav1.com/backdrops/${a.id}.jpg`:null].filter(Boolean)){const d=await probe(u);if(d&&d.w>=700&&d.w>d.h){best={u,...d};break}}
+    if(best)setWide(best.u);
+    if(best&&best.h>=600)return;
+    let k=null;try{k=await kitsuArt(a)}catch(e){}
+    if(k&&k.cover){setWide(k.cover);return}
+    if(!best&&k&&k.poster){const pi=new Image();pi.onload=()=>el.querySelectorAll('img').forEach(i=>{i.src=pi.src;i.classList.add('ok')});pi.src=imgSrc(k.poster)}})()}
 /* Títulos en español (o inglés si no hay), con caché */
 let TT=store.get('nx_tt2',{});const ttQ=[];let ttBusy=false,ttSaveT;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -2010,7 +2049,7 @@ function buildHero(list){
   $('#dots').innerHTML=items.map((_,i)=>`<i class="${i?'':'on'}"></i>`).join('');
   const sl=$('#slides');slideI=0;sl.scrollLeft=0;
   /* fondo ancho (si la fuente lo tiene) y género + sinopsis de cada destacado */
-  $$('#slides .sl.hx').forEach((el,i)=>{upgradeArt(el.querySelector('.art'),items[i])});heroInfo(items);
+  $$('#slides .sl.hx').forEach((el,i)=>{heroArt(el.querySelector('.art'),items[i])});heroInfo(items);
   /* control remoto: solo se puede llegar a los botones del destacado que se ve (no a los ocultos) */
   const onlyVisible=i=>$$('#slides .slide').forEach((x,k)=>x.querySelectorAll('button,[data-url]').forEach(b=>{if(k===i)b.removeAttribute('tabindex');else b.tabIndex=-1}));
   let vis=0;sl.onscroll=()=>{const i=Math.round(sl.scrollLeft/sl.clientWidth);if(i!==vis){vis=i;tvBg(items[i]);const ae=document.activeElement,had=KBD&&sl.contains(ae),role=had?(ae.dataset.hnext?'[data-hnext]':ae.dataset.hpause?'[data-hpause]':ae.dataset.hfav?'[data-hfav]':'[data-hplay]'):'';onlyVisible(i);if(had)setTimeout(()=>{const b=$$('#slides .slide')[i]?.querySelector(role);if(b)b.focus({preventScroll:true})},60)}slideI=i;$$('#dots i').forEach((d,k)=>d.classList.toggle('on',k===i))};tvBg(items[0]);onlyVisible(0);
@@ -2024,7 +2063,7 @@ function buildHero(list){
   const restart=()=>{clearInterval(slideT);slideT=setInterval(()=>{if(tab!=='home'||!items.length||stack.length||HPAUSE)return;if(KBD&&sl.contains(document.activeElement))return;goSlide(slideI+1)},cfg.lite?9000:7000)};
   restart();
 }
-let HPAUSE=false;
+let HPAUSE=false,HPAUSE0=false;
 /* TV: el fondo de la página toma la imagen del destacado (suave, sin desenfoque para no dar lag) */
 function tvBg(a){if(!isTV||!a)return;const im=$('#tvbgi');if(!im)return;const u=imgSrc(a.image);if(im.dataset.u===u)return;im.dataset.u=u;im.classList.remove('ok');im.onload=()=>im.classList.add('ok');im.src=u}
 function tvNavMark(b){$$('#nav button').forEach(x=>x.classList.toggle('on',x===b))}
@@ -2113,7 +2152,8 @@ async function latBatch(my,reset){
   const addCard=a=>{if(my!==E.seq||E.latShown.has(a.url))return;E.latShown.add(a.url);added++;
     const sk=$('#e-grid .sk-lat');if(sk)sk.remove();$('#e-grid').insertAdjacentHTML('beforeend',card(a));
     $('#e-note').textContent=`${E.latShown.size} ${E.latShown.size===1?'anime':'animes'} con doblaje latino`};
-  latMax=10;pumpDub();
+  if(!LATX)await Promise.race([latLoad(),sleep(2500)]);
+  latMax=isTV?6:10;pumpDub();
   let mb=$('#e-moreb');if(!mb){$('#e-sent').innerHTML='<button class="btn" id="e-moreb"></button>';mb=$('#e-moreb');mb.onclick=()=>{if(!E.busy&&!mb.classList.contains('busy'))exploreLoad(false)}}
   mb.classList.add('busy');
   try{
@@ -2124,7 +2164,9 @@ async function latBatch(my,reset){
       if(my!==E.seq)return;
       const items=res.flatMap(r=>r.results).filter(a=>!E.latShown.has(a.url));
       E.more=res[res.length-1].hasMore&&res[res.length-1].results.length>0;
-      await Promise.all(items.map(a=>(a.dub?Promise.resolve(true):hasLatino(a)).then(ok=>{if(ok)addCard(a)})));
+      /* primero los que ya están en la lista de Latino (al instante, sin abrir episodios); el resto se revisa en segundo plano */
+      const fast=items.filter(a=>a.dub||latCard(a)),slow=items.filter(a=>!fast.includes(a));fast.forEach(addCard);
+      if(added<GOAL)await Promise.all(slow.map(a=>hasLatino(a).then(ok=>{if(ok)addCard(a)})));
     }
   }finally{latMax=0}
   if(my!==E.seq)return;

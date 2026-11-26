@@ -2168,13 +2168,22 @@ $('#q').addEventListener('input',e=>{clearTimeout(qT);qT=setTimeout(()=>runSearc
 ['compositionend','change'].forEach(ev=>$('#q').addEventListener(ev,e=>{clearTimeout(qT);qT=setTimeout(()=>runSearch(e.target.value),200)}));
 $('#q').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();e.stopPropagation();e.target.blur();clearTimeout(qT);runSearch(e.target.value);
   if(KBD){let n=0;const t=setInterval(()=>{const c=$('#s-res .card');if(c||++n>40){clearInterval(t);if(c&&document.activeElement!==$('#q'))c.focus({preventScroll:true})}},250)}}});
-async function runSearch(v){
+/* la misma búsqueda no se repite (al bajar a los resultados el teclado de la TV avisa otra vez del texto) */
+let lastQ='';
+/* repinta los resultados sin perder el que tienes seleccionado con el control */
+function paintRes(out,list,more){const sig=list.map(a=>a.url).join('|');
+  if(out.dataset.sig===sig){const n=out.querySelector('.lg-note');if(!more&&n)n.remove();return}
+  const fa=document.activeElement,fu=fa&&out.contains(fa)?fa.dataset.url:null;out.dataset.sig=sig;
+  out.innerHTML=`<div class="grid">${list.map(a=>card(a)).join('')}</div>`+(more?'<p class="lg-note" style="text-align:center;margin:14px 0">Buscando más…</p>':'');
+  if(fu){const n=[...out.querySelectorAll('.card')].find(c=>c.dataset.url===fu);if(n)n.focus({preventScroll:true})}}
+async function runSearch(v,force){
   v=v.trim();const out=$('#s-res');
-  if(v.length<2){out.innerHTML=empty('¿Qué quieres ver hoy?','Escribe el nombre de una serie para buscarla en todos los proveedores.');return}
-  const my=++qSeq;out.innerHTML=`<div class="grid">${skCards(9)}</div>`;
-  try{const r=await SRC.search(v,false,part=>{if(my!==qSeq||!part.length)return;out.innerHTML=`<div class="grid">${part.map(a=>card(a)).join('')}</div><p class="lg-note" style="text-align:center;margin:14px 0">Buscando más…</p>`;setTimeout(scheduleLat,0)});if(my!==qSeq)return;
-    if(r.length)setTimeout(scheduleLat,0);out.innerHTML=r.length?`<div class="grid">${r.map(a=>card(a)).join('')}</div>`:empty('Sin resultados','Prueba con el nombre en español, inglés o japonés.')}
-  catch(e){if(my===qSeq)out.innerHTML=empty('No se pudo buscar',esc(e.message))}
+  if(!force&&v===lastQ)return;lastQ=v;
+  if(v.length<2){out.dataset.sig='';out.innerHTML=empty('¿Qué quieres ver hoy?','Escribe el nombre de una serie para buscarla en todos los proveedores.');return}
+  const my=++qSeq;out.dataset.sig='';out.innerHTML=`<div class="grid">${skCards(9)}</div>`;
+  try{const r=await SRC.search(v,false,part=>{if(my!==qSeq||!part.length)return;paintRes(out,part,true);setTimeout(scheduleLat,0)});if(my!==qSeq)return;
+    if(r.length){paintRes(out,r,false);setTimeout(scheduleLat,0)}else{out.dataset.sig='-';out.innerHTML=empty('Sin resultados','Prueba con el nombre en español, inglés o japonés.')}}
+  catch(e){if(my===qSeq){lastQ='';out.innerHTML=empty('No se pudo buscar',esc(e.message))}}
 }
 
 /* ================= EXPLORAR ================= */

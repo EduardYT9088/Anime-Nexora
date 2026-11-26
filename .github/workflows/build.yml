@@ -11,19 +11,7 @@ jobs:
           set +e; mkdir out; cd out
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
           g(){ code=$(curl -s -L -m 30 -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o "$1" -w '%{http_code}' "$2"); echo "$1 $code $(wc -c < "$1") $2" | tee -a index.txt; }
-          g api.json "https://byselapuix.com/api/videos/vdkne9r0g1sg"
-          cat > dec.js <<'JS'
-          const j=JSON.parse(require('fs').readFileSync('api.json','utf8')).playback;
-          const b=s=>Buffer.from(s.replace(/-/g,'+').replace(/_/g,'/'),'base64');
-          const v=+j.version;const key=Buffer.concat([v,31-v].map(i=>b(j.key_parts[i-1])));
-          (async()=>{const k=await crypto.subtle.importKey('raw',key,'AES-GCM',false,['decrypt']);const pt=JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b(j.iv)},k,b(j.payload))));console.log(pt.sources[0].url)})();
-          JS
-          M=$(node dec.js); echo "M=$M" >> index.txt
-          curl -s -D m-head.txt -m 20 -A "$UA" -H "Origin: http://localhost" -o master.m3u8 "$M"; cat m-head.txt >> index.txt; head -20 master.m3u8 >> index.txt
-          V=$(grep -v '^#' master.m3u8 | head -1); case "$V" in http*) ;; *) V="$(dirname "$M")/$V";; esac; echo "V=$V" >> index.txt
-          curl -s -D v-head.txt -m 20 -A "$UA" -H "Origin: http://localhost" -o v.m3u8 "$V"; cat v-head.txt >> index.txt; head -12 v.m3u8 >> index.txt
-          S=$(grep -v '^#' v.m3u8 | head -1); case "$S" in http*) ;; *) S="$(dirname "$V")/$S";; esac
-          curl -s -D s-head.txt -m 20 -A "$UA" -H "Origin: http://localhost" -o seg.bin -r 0-1000 "$S"; cat s-head.txt >> index.txt
+          for L in https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.mini.txt https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/popupads.txt https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/domains/pro.mini.txt https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro.mini-onlydomains.txt; do n=$(echo "$L" | md5sum | cut -c1-6); curl -sL -m 60 -o "l-$n.txt" -w "%{http_code} %{size_download} $L\n" "$L" | tee -a index.txt; head -c 300 "l-$n.txt" | tr '\n' '|' >> index.txt; echo >> index.txt; done
           python3 - <<'PY' >> index.txt
           import struct,glob
           def size(f):

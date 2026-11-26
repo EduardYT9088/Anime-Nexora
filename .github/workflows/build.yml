@@ -15,7 +15,7 @@ permissions:
 
 env:
   APP_NAME: "Animes Nexora Plus"
-  APP_VERSION: "1.0.3"   # <- cambia aquí la versión del APK
+  APP_VERSION: "1.0.4"   # <- cambia aquí la versión del APK
   # Comentarios (Supabase): pega aquí la "Project URL" y la clave pública ("anon" o "publishable")
   NX_SB_URL: "https://lvnuolgcqttvlkvgagde.supabase.co"
   NX_SB_KEY: "sb_publishable_vvj-N9C2rbS-_rXPtxOHtg_iRBDuPaq"
@@ -104,6 +104,14 @@ jobs:
         run: |
           cd _build/android/app/src/main
           RES=res
+          # Lista de dominios de publicidad (HaGeZi Pro mini + Pop-Up Ads) para el reproductor web; si no descarga, la app usa su lista interna
+          mkdir -p assets
+          : > assets/adhosts.txt
+          for L in https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro.mini-onlydomains.txt https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/popupads-onlydomains.txt; do
+            curl -sfL --retry 3 -m 60 "$L" | grep -v '^#' | tr -d '\r' | grep -E '^[a-z0-9.-]+$' >> assets/adhosts.txt || true
+          done
+          sort -u -o assets/adhosts.txt assets/adhosts.txt || true
+          echo "Dominios de publicidad: $(wc -l < assets/adhosts.txt)"
           # Pantalla completa: usa la zona de la cámara perforada y oculta las barras al ver un episodio
           JDIR=java/$(echo "$APP_ID" | tr . /)
           mkdir -p $JDIR
@@ -184,6 +192,13 @@ jobs:
               @Override
               public void load() {
                   NexoraCheck.schedule(getContext());
+                  /* reproductor web: bloquea las peticiones de publicidad dentro de la página del servidor */
+                  final NexoraScreen self = this;
+                  loadAdList(getContext());
+                  try { getActivity().runOnUiThread(() -> { try { getBridge().getWebView().setWebViewClient(new AdClient(getBridge(), self));
+                      /* se recuerda cuándo se tocó la pantalla: la publicidad salta justo después de un toque */
+                      getBridge().getWebView().setOnTouchListener((tv0, me) -> { if (me.getAction() == android.view.MotionEvent.ACTION_DOWN) lastTap = System.currentTimeMillis(); return false; });
+                  } catch (Exception e) { } }); } catch (Exception e) { }
                   try { fromNotification(getActivity().getIntent()); } catch (Exception e) { }
               }
 
@@ -198,11 +213,12 @@ jobs:
                   if (i == null) return;
                   String u = i.getStringExtra("nx_url");
                   boolean inbox = i.getBooleanExtra("nx_inbox", false);
-                  if (u == null && !inbox) return;
+                  boolean dl = i.getBooleanExtra("nx_dl", false);
+                  if (u == null && !inbox && !dl) return;
                   JSObject d = new JSObject();
                   if (u != null) { d.put("url", u); d.put("ep", i.getIntExtra("nx_ep", 0)); }
-                  d.put("inbox", inbox);
-                  i.removeExtra("nx_url"); i.removeExtra("nx_inbox");
+                  d.put("inbox", inbox); d.put("dl", dl);
+                  i.removeExtra("nx_url"); i.removeExtra("nx_inbox"); i.removeExtra("nx_dl");
                   notifyListeners("nxOpen", d, true);
               }
 
@@ -272,7 +288,12 @@ jobs:
                       NotificationChannel ch = nm == null ? null : nm.getNotificationChannel(NexoraCheck.CH);
                       if (ch != null && ch.getImportance() == NotificationManager.IMPORTANCE_NONE) on = false;
                   } catch (Exception e) { }
-                  JSObject r = new JSObject(); r.put("enabled", on); call.resolve(r);
+                  JSObject r = new JSObject(); r.put("enabled", on);
+                  /* para el asistente de avisos: marca del teléfono, batería sin restricciones y última revisión en segundo plano */
+                  r.put("brand", (Build.MANUFACTURER + " " + Build.BRAND).toLowerCase());
+                  try { PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE); r.put("battery", pm != null && pm.isIgnoringBatteryOptimizations(getContext().getPackageName())); } catch (Exception e) { }
+                  r.put("lastRun", getContext().getSharedPreferences("nexora_chk", 0).getLong("last_run", 0));
+                  call.resolve(r);
               }
 
               @PluginMethod
@@ -326,11 +347,18 @@ jobs:
                           bar.setOrientation(LinearLayout.HORIZONTAL); bar.setGravity(Gravity.CENTER_VERTICAL);
                           bar.setPadding(px(20), px(40), px(14), px(14)); bar.setVisibility(View.GONE); bar.setBackgroundColor(0xFF14112E);
                           final TextView tv = new TextView(getContext());
-                          tv.setText("Verificación rápida\nToca la casilla de abajo para ver en Latino");
+                          boolean isTv = false;
+                          try { UiModeManager um = (UiModeManager) getContext().getSystemService(Context.UI_MODE_SERVICE);
+                              isTv = (um != null && um.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION) || getContext().getPackageManager().hasSystemFeature("android.software.leanback"); } catch (Exception e) { }
+                          final boolean onTv = isTv;
+                          final String tvMsg = "Verificación rápida: mueve la flecha con el control hasta la casilla y pulsa OK\nSi dice «Verificando…» espera unos segundos · Arriba del todo: Cancelar · Atrás: salir";
+                          tv.setText(isTv ? tvMsg : "Verificación rápida\nToca la casilla de abajo para ver en Latino");
                           tv.setTextColor(0xFFFFFFFF); tv.setTextSize(15); tv.setLineSpacing(px(2), 1f);
                           bar.addView(tv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
                           final Button bt = new Button(getContext()); bt.setText("Cancelar"); bt.setAllCaps(false);
-                          bt.setTextColor(0xFFFFFFFF); bt.setBackgroundColor(0x33FFFFFF);
+                          bt.setTextColor(0xFFFFFFFF); bt.setBackgroundColor(0x33FFFFFF); bt.setFocusable(true);
+                          bt.setPadding(px(22), px(10), px(22), px(10));
+                          /* control remoto: el botón se ve claramente cuando está seleccionado */
                           bar.addView(bt, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
                           final WebView w = new WebView(getContext());
                           w.setBackgroundColor(0xFF0B0A1A);
@@ -339,11 +367,30 @@ jobs:
                           CookieManager.getInstance().setAcceptCookie(true);
                           CookieManager.getInstance().setAcceptThirdPartyCookies(w, true);
                           box.addView(bar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-                          box.addView(w, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+                          /* TV: cursor (flecha) que se mueve con el control, como en Downloader */
+                          final FrameLayout wrap = new FrameLayout(getContext());
+                          wrap.addView(w, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                          final int cs = px(30);
+                          final View cur = new View(getContext()) {
+                              final android.graphics.Paint pf = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                              final android.graphics.Path pa = new android.graphics.Path();
+                              @Override protected void onDraw(android.graphics.Canvas c) {
+                                  float k = getWidth() / 24f; pa.reset();
+                                  pa.moveTo(3 * k, 2 * k); pa.lineTo(3 * k, 19 * k); pa.lineTo(7.6f * k, 14.7f * k); pa.lineTo(10.9f * k, 22 * k); pa.lineTo(13.9f * k, 20.6f * k); pa.lineTo(10.6f * k, 13.5f * k); pa.lineTo(17 * k, 13.5f * k); pa.close();
+                                  pf.setStyle(android.graphics.Paint.Style.FILL); pf.setColor(0xFFFFFFFF); c.drawPath(pa, pf);
+                                  pf.setStyle(android.graphics.Paint.Style.STROKE); pf.setStrokeWidth(1.6f * k); pf.setColor(0xFF4B2DB8); c.drawPath(pa, pf);
+                              }
+                          };
+                          cur.setVisibility(View.GONE); cur.setElevation(px(10));
+                          wrap.addView(cur, new FrameLayout.LayoutParams(cs, cs));
+                          box.addView(wrap, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
                           root.addView(box, 0, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
                           final Handler hd = new Handler(Looper.getMainLooper());
                           final boolean[] done = {false};
                           final boolean[] ran = {false};
+                          final boolean[] shown = {false};
+                          final Window.Callback[] prevCb = {null};
+                          final int[] cleanN = {0};
                           /* deja solo la casilla de verificación sobre el fondo de la app (oculta textos, logo y pie de página) */
                           final String clean = "(function(){try{var b=document.body;if(!b)return;if(!document.getElementById('nxcf')){var s=document.createElement('style');s.id='nxcf';"
                               + "s.textContent='html,body{background:#0b0a1a!important;margin:0!important}body{min-height:100vh!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important}"
@@ -364,21 +411,77 @@ jobs:
                               r.put("cookie", CookieManager.getInstance().getCookie(url));
                               if (res != null) r.put("result", res);
                               call.resolve(r);
-                              hd.post(() -> { try { root.removeView(box); w.stopLoading(); w.destroy(); } catch (Exception e) { } });
+                              hd.post(() -> { try { if (prevCb[0] != null) { getActivity().getWindow().setCallback(prevCb[0]); prevCb[0] = null; } if (shown[0]) getBridge().getWebView().setOnKeyListener(null); root.removeView(box); w.stopLoading(); w.destroy(); } catch (Exception e) { } });
                           };
                           bt.setOnClickListener(v -> finish.accept("ERR cancelado"));
-                          /* TV: flechas = moverse entre elementos (Tab), OK = marcar la casilla (Espacio), Atrás = cancelar */
-                          w.setOnKeyListener((v, code, ev) -> {
-                              if (bar.getVisibility() != View.VISIBLE) return false;
-                              if (code == KeyEvent.KEYCODE_BACK) { if (ev.getAction() == KeyEvent.ACTION_UP) finish.accept("ERR cancelado"); return true; }
-                              int map = -1; boolean shift = false;
-                              if (code == KeyEvent.KEYCODE_DPAD_DOWN || code == KeyEvent.KEYCODE_DPAD_RIGHT) map = KeyEvent.KEYCODE_TAB;
-                              else if (code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_LEFT) { map = KeyEvent.KEYCODE_TAB; shift = true; }
-                              else if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_NUMPAD_ENTER) map = KeyEvent.KEYCODE_SPACE;
-                              if (map < 0) return false;
-                              v.dispatchKeyEvent(new KeyEvent(ev.getDownTime(), ev.getEventTime(), ev.getAction(), map, ev.getRepeatCount(), shift ? KeyEvent.META_SHIFT_ON : 0));
-                              return true;
+                          /* TV: OK = toque real sobre la casilla de Cloudflare (se busca su posición en la página); flechas = Tab; Atrás = cancelar */
+                          final String findBox = "(function(){try{var c=null,f=document.querySelector('iframe');if(f){var r=f.getBoundingClientRect();if(r.width>40&&r.height>20)c=r}"
+                              + "if(!c){var a=document.querySelectorAll('div,span,label');for(var i=0;i<a.length;i++){var q=a[i].getBoundingClientRect();if(q.width>=240&&q.width<=340&&q.height>=50&&q.height<=90){c=q;break}}}"
+                              + "if(!c)return '';return [c.left,c.top,c.width,c.height].join(',')}catch(e){return ''}})()";
+                          /* TV: la app lleva la selección (cursor o Cancelar) sin depender del foco de Android, que en algunos televisores se queda en la pantalla de atrás */
+                          final int[] sel = {0};
+                          final float[] cp = {-1f, -1f};
+                          final Runnable paintSel = () -> {
+                              bt.setBackgroundColor(sel[0] == 1 ? 0xFF7C5CFF : 0x33FFFFFF); bt.setScaleX(sel[0] == 1 ? 1.08f : 1f); bt.setScaleY(sel[0] == 1 ? 1.08f : 1f);
+                              cur.setAlpha(sel[0] == 1 ? 0.35f : 1f);
+                          };
+                          /* la punta de la flecha queda justo en el punto que se toca */
+                          final Runnable placeCur = () -> {
+                              float W = wrap.getWidth(), H = wrap.getHeight();
+                              if (cp[0] < 0) { cp[0] = W / 2f; cp[1] = H / 3f; }
+                              cp[0] = Math.max(2f, Math.min(W - 4f, cp[0])); cp[1] = Math.max(2f, Math.min(H - 4f, cp[1]));
+                              float k = cs / 24f; cur.setTranslationX(cp[0] - 3 * k); cur.setTranslationY(cp[1] - 2 * k);
+                              if (onTv) cur.setVisibility(View.VISIBLE);
+                          };
+                          final java.util.function.BiConsumer<Float, Float> tapPx = (x, y) -> {
+                              float sc = w.getScale(); if (sc <= 0) sc = getContext().getResources().getDisplayMetrics().density;
+                              float cx = x / sc, cy = y / sc;
+                              /* círculo donde se tocó, para saber que el OK llegó */
+                              w.evaluateJavascript("(function(){try{var d=document.createElement('div');d.style.cssText='position:fixed;z-index:2147483647;pointer-events:none;width:34px;height:34px;border-radius:50%;border:3px solid #7c5cff;background:rgba(124,92,255,.25);left:" + (cx - 17) + "px;top:" + (cy - 17) + "px;transition:opacity .6s';document.documentElement.appendChild(d);setTimeout(function(){d.style.opacity=0},350);setTimeout(function(){d.remove()},1100)}catch(e){}})()", null);
+                              final long dt = android.os.SystemClock.uptimeMillis();
+                              android.view.MotionEvent d = android.view.MotionEvent.obtain(dt, dt, android.view.MotionEvent.ACTION_DOWN, x, y, 0);
+                              d.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN); w.dispatchTouchEvent(d); d.recycle();
+                              hd.postDelayed(() -> { android.view.MotionEvent u = android.view.MotionEvent.obtain(dt, android.os.SystemClock.uptimeMillis(), android.view.MotionEvent.ACTION_UP, x, y, 0);
+                                  u.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN); w.dispatchTouchEvent(u); u.recycle(); }, 90);
+                          };
+                          /* busca la casilla y pone el cursor encima (tap = también la toca) */
+                          final java.util.function.Consumer<Boolean> aimBox = tap -> w.evaluateJavascript(findBox, v -> {
+                              try {
+                                  String sv = v; try { sv = new JSONArray("[" + v + "]").getString(0); } catch (Exception e) { }
+                                  String[] n = sv.split(",");
+                                  if (n.length < 4) { placeCur.run(); return; }
+                                  float sc = w.getScale(); if (sc <= 0) sc = getContext().getResources().getDisplayMetrics().density;
+                                  float bw = Float.parseFloat(n[2]), bh = Float.parseFloat(n[3]);
+                                  cp[0] = (Float.parseFloat(n[0]) + Math.min(28f, bw / 2f)) * sc; cp[1] = (Float.parseFloat(n[1]) + bh / 2f) * sc;
+                                  placeCur.run();
+                                  if (tap) tapPx.accept(cp[0], cp[1]);
+                              } catch (Exception e) { placeCur.run(); }
                           });
+                          final Runnable tapBox = () -> aimBox.accept(true);
+                          final View.OnKeyListener keys = (v, code, ev) -> {
+                              if (done[0] || bar.getVisibility() != View.VISIBLE) return false;
+                              boolean up = ev.getAction() == KeyEvent.ACTION_UP, down = ev.getAction() == KeyEvent.ACTION_DOWN;
+                              if (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_ESCAPE) { if (up) finish.accept("ERR cancelado"); return true; }
+                              if (code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_DOWN || code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                                  if (!down) return true;
+                                  if (sel[0] == 1) { if (code == KeyEvent.KEYCODE_DPAD_DOWN) { sel[0] = 0; paintSel.run(); } return true; }
+                                  if (cp[0] < 0) placeCur.run();
+                                  /* arriba del todo: pasa a Cancelar */
+                                  if (code == KeyEvent.KEYCODE_DPAD_UP && cp[1] <= px(8)) { sel[0] = 1; paintSel.run(); return true; }
+                                  float stp = px(12) * Math.min(4f, 1f + ev.getRepeatCount() / 3f);
+                                  if (code == KeyEvent.KEYCODE_DPAD_LEFT) cp[0] -= stp; else if (code == KeyEvent.KEYCODE_DPAD_RIGHT) cp[0] += stp;
+                                  else if (code == KeyEvent.KEYCODE_DPAD_UP) cp[1] -= stp; else cp[1] += stp;
+                                  placeCur.run(); return true;
+                              }
+                              if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_NUMPAD_ENTER || code == KeyEvent.KEYCODE_BUTTON_A || code == KeyEvent.KEYCODE_SPACE) {
+                                  if (up) { if (sel[0] == 1) finish.accept("ERR cancelado"); else { if (cp[0] < 0) aimBox.accept(true); else tapPx.accept(cp[0], cp[1]); } }
+                                  return true;
+                              }
+                              return false;
+                          };
+                          w.setOnKeyListener(keys);
+                          bt.setOnKeyListener(keys);
+                          bt.setFocusable(false);
                           final Runnable hideBox = () -> {
                               if (bar.getVisibility() != View.VISIBLE) return;
                               bar.setVisibility(View.GONE); box.setElevation(0);
@@ -386,7 +489,7 @@ jobs:
                           };
                           check[0] = () -> {
                               if (done[0]) return;
-                              w.evaluateJavascript("JSON.stringify([document.title||'',document.documentElement?document.documentElement.outerHTML:'',document.readyState||''])", v -> {
+                              w.evaluateJavascript("(function(){var t=document.title||'',d=document.documentElement,h=d?d.outerHTML:'';var c=/just a moment|un momento|checking/i.test(t)||h.length<2000;return JSON.stringify([t,c?h.slice(0,1500):h,document.readyState||''])})()", v -> {
                                   if (done[0]) return;
                                   String title = "", html = "", rs = "";
                                   try { JSONArray a = new JSONArray(new JSONArray("[" + v + "]").getString(0)); title = a.getString(0); html = a.getString(1); rs = a.optString(2, ""); } catch (Exception e) { }
@@ -399,12 +502,34 @@ jobs:
                                   long el = System.currentTimeMillis() - t0;
                                   if (!chal) hideBox.run();
                                   if (wait) {
-                                      if (chal) w.evaluateJavascript(clean, null);
+                                      /* se limpia la página pocas veces (tocarla mucho puede trabar la verificación) */
+                                      if (chal && cleanN[0] < 5) { cleanN[0]++; w.evaluateJavascript(clean, null); }
                                       if (chal && el > quiet && bar.getVisibility() != View.VISIBLE) {
                                           bar.setVisibility(View.VISIBLE); box.bringToFront(); box.setElevation(px(60));
                                           /* control remoto: el foco va a la casilla */
                                           w.setFocusable(true); w.setFocusableInTouchMode(true); w.requestFocus();
+                                          /* el control también se escucha desde la pantalla principal de la app (por si el foco se quedó allí) */
+                                          shown[0] = true; sel[0] = 0; paintSel.run();
+                                          if (onTv) hd.postDelayed(() -> aimBox.accept(false), 600);
+                                          try { getBridge().getWebView().setOnKeyListener(keys); } catch (Exception e) { }
+                                          /* el control se intercepta a nivel de toda la ventana: así llega aunque el foco del televisor esté en otra parte */
+                                          if (prevCb[0] == null) try {
+                                              final Window wnd = getActivity().getWindow();
+                                              prevCb[0] = wnd.getCallback();
+                                              final Window.Callback base = prevCb[0];
+                                              wnd.setCallback((Window.Callback) java.lang.reflect.Proxy.newProxyInstance(Window.Callback.class.getClassLoader(), new Class<?>[]{ Window.Callback.class }, (proxy, mth, args) -> {
+                                                  if ("dispatchKeyEvent".equals(mth.getName()) && args != null && args.length == 1 && args[0] instanceof KeyEvent) {
+                                                      KeyEvent kev = (KeyEvent) args[0];
+                                                      if (keys.onKey(w, kev.getKeyCode(), kev)) return Boolean.TRUE;
+                                                  }
+                                                  try { return mth.invoke(base, args); } catch (java.lang.reflect.InvocationTargetException ite) { throw ite.getCause(); }
+                                              }));
+                                          } catch (Exception e) { prevCb[0] = null; }
                                           w.evaluateJavascript("(function(){try{var f=document.querySelector('iframe');if(f)f.focus()}catch(e){}})()", null);
+                                      } else if (chal && bar.getVisibility() == View.VISIBLE) {
+                                          tv.setText(onTv ? tvMsg : "Verificación rápida\nToca la casilla de abajo para ver en Latino");
+                                          if (!w.hasFocus()) w.requestFocus();
+                                          paintSel.run();
                                       }
                                       hd.removeCallbacks(check[0]);
                                       if (el < tmo) hd.postDelayed(check[0], loading ? 400 : 800); else finish.accept(null);
@@ -428,7 +553,7 @@ jobs:
                           };
                           w.setWebViewClient(new WebViewClient() {
                               /* Cloudflare ya dejó pasar y carga la página real: se esconde al instante */
-                              @Override public void onPageStarted(WebView v, String u, Bitmap f) { hideBox.run(); }
+                              @Override public void onPageStarted(WebView v, String u, Bitmap f) { cleanN[0] = 0; if (bar.getVisibility() == View.VISIBLE) tv.setText("Verificado ✓ Cargando…"); }
                               @Override public void onPageFinished(WebView v, String u) { hd.removeCallbacks(check[0]); hd.postDelayed(check[0], 300); }
                           });
                           hd.postDelayed(() -> { if (!done[0]) finish.accept(null); }, tmo + 35000);
@@ -495,6 +620,8 @@ jobs:
               @PluginMethod
               public void openAutostart(PluginCall call) {
                   String[][] list = {
+                      {"com.transsion.phonemaster", "com.cyin.himgr.autostart.AutoStartActivity"},
+                      {"com.transsion.phonemaster", "com.cyin.himgr.startup.view.StartupAppListActivity"},
                       {"com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"},
                       {"com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity"},
                       {"com.oplus.safecenter", "com.oplus.safecenter.permission.startup.StartupAppListActivity"},
@@ -507,6 +634,180 @@ jobs:
                   for (String[] it : list) { Intent i = new Intent(); i.setComponent(new ComponentName(it[0], it[1])); if (launch(i)) { ok = true; break; } }
                   if (!ok) ok = appDetails();
                   done(call, ok);
+              }
+
+              /* ===== Descargas para ver sin internet ===== */
+              @PluginMethod
+              public void dlStart(PluginCall call) {
+                  try {
+                      JSObject it = call.getObject("item");
+                      if (it == null) { call.reject("sin datos"); return; }
+                      org.json.JSONObject o = new org.json.JSONObject(it.toString());
+                      String id = o.optString("id", "");
+                      if (id.isEmpty() || o.optString("url", "").isEmpty()) { call.reject("faltan datos"); return; }
+                      org.json.JSONObject old = NexoraDownload.get(getContext(), id);
+                      JSObject r = new JSObject();
+                      if (old != null && !"error".equals(old.optString("status"))) { r.put("ok", true); r.put("exists", true); call.resolve(r); return; }
+                      o.put("status", "queued"); o.put("added", System.currentTimeMillis());
+                      o.put("done", 0); o.put("total", 0); o.put("bytes", 0); o.remove("err");
+                      NexoraDownload.put(getContext(), o);
+                      NexoraDownload.enqueue(getContext(), id);
+                      r.put("ok", true); call.resolve(r);
+                  } catch (Exception e) { call.reject(String.valueOf(e.getMessage())); }
+              }
+
+              @PluginMethod
+              public void dlList(PluginCall call) {
+                  JSObject r = new JSObject();
+                  try {
+                      r.put("items", new JSArray(NexoraDownload.all(getContext()).toString()));
+                      java.io.File base = getContext().getExternalFilesDir(null);
+                      if (base == null) base = getContext().getFilesDir();
+                      r.put("free", base.getUsableSpace()); r.put("space", base.getTotalSpace());
+                  } catch (Exception e) { r.put("items", new JSArray()); }
+                  call.resolve(r);
+              }
+
+              /* Cancelar o borrar: se quita de la lista y se borran sus archivos (la descarga en curso se detiene sola) */
+              @PluginMethod
+              public void dlRemove(PluginCall call) {
+                  final String id = call.getString("id", "");
+                  if (id.isEmpty()) { done(call, false); return; }
+                  NexoraDownload.remove(getContext(), id);
+                  final Context c = getContext();
+                  new Thread(() -> { try { NexoraDownload.deleteDir(NexoraDownload.dirOf(c, id)); Thread.sleep(2500); NexoraDownload.deleteDir(NexoraDownload.dirOf(c, id)); } catch (Exception e) { } }).start();
+                  done(call, true);
+              }
+
+              @PluginMethod
+              public void dlRetry(PluginCall call) {
+                  String id = call.getString("id", "");
+                  org.json.JSONObject o = NexoraDownload.get(getContext(), id);
+                  if (o == null) { done(call, false); return; }
+                  try { o.put("status", "queued"); o.remove("err"); } catch (Exception e) { }
+                  NexoraDownload.put(getContext(), o);
+                  NexoraDownload.enqueue(getContext(), id);
+                  done(call, true);
+              }
+
+              /* TV: el OK del control toca el reproductor web (play dentro de la página del servidor) */
+              @PluginMethod
+              public void tapAt(PluginCall call) {
+                  final float x = call.getFloat("x", 0f), y = call.getFloat("y", 0f);
+                  getActivity().runOnUiThread(() -> {
+                      try {
+                          final WebView wv = getBridge().getWebView();
+                          lastTap = System.currentTimeMillis();
+                          float d = getContext().getResources().getDisplayMetrics().density;
+                          final float px = x * d, py = y * d;
+                          final long t = android.os.SystemClock.uptimeMillis();
+                          android.view.MotionEvent a = android.view.MotionEvent.obtain(t, t, android.view.MotionEvent.ACTION_DOWN, px, py, 0);
+                          a.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN); wv.dispatchTouchEvent(a); a.recycle();
+                          new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                              android.view.MotionEvent b = android.view.MotionEvent.obtain(t, android.os.SystemClock.uptimeMillis(), android.view.MotionEvent.ACTION_UP, px, py, 0);
+                              b.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN); wv.dispatchTouchEvent(b); b.recycle();
+                          }, 80);
+                          call.resolve();
+                      } catch (Exception e) { call.reject(String.valueOf(e.getMessage())); }
+                  });
+              }
+
+              /* Reproductor web: bloquea las ventanas de publicidad que abren las páginas de los servidores */
+              volatile boolean blockNav = false;
+              volatile String frameRoot = "";
+              volatile long lastTap = 0;
+              static final String[] VIDK = { "filemoon", "moon", "voe", "wish", "streamwish", "dood", "d000d", "ok.ru", "okru", "mp4upload", "yourupload", "vidcache", "streamtape", "tape", "mixdrop", "vidhide",
+                  "filelions", "lions", "lulu", "byse", "uqload", "mega", "upstream", "vidguard", "streamvid", "dropload", "zilla", "vidmoly", "vidoza", "sendvid", "netu", "hqq", "waaw", "embed", "player",
+                  "stream", "video", "vid", "play", "cdn", "hls", "jwp", "cloudflare", "gstatic", "google", "youtube", "animeav1", "animeflv", "tioanime", "monoschinos", "pixeldrain", "maru", "fembed" };
+              static boolean isVideoHost(String h) { if (h == null) return false; String l = h.toLowerCase(); for (String k : VIDK) if (l.contains(k)) return true; return false; }
+              private long lastBlockNote = 0;
+              static final java.util.Set<String> learned = java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+              static final String[] ADK = { "doubleclick", "googlesyndication", "googleadservices", "adservice", "adsystem", "adserver", "adnxs", "popads", "popcash", "propeller", "onclick", "onclkds",
+                  "adsterra", "a-ads", "exoclick", "exosrv", "exdynsrv", "juicyads", "trafficjunky", "hilltopads", "clickadu", "adcash", "monetag", "realsrv", "admaven", "ad-maven", "bidgear",
+                  "tsyndicate", "taboola", "outbrain", "yllix", "clickaine", "purpleads", "richads", "pushads", "notix", "galaksion", "mgid", "revcontent", "adskeeper", "pemsrv", "clicksgear",
+                  "pushnami", "zeroredirect", "adspyglass", "popmyads", "cpmrate", "gatecpm", "cpmgate", "displaynetwork", "performanceformat", "ratecpm", "adblockeroff", "pushnotif", "push-notif" };
+              static String rootOf(String h) {
+                  if (h == null) return "";
+                  String[] p = h.toLowerCase().split("[.]");
+                  return p.length >= 2 ? p[p.length - 2] + "." + p[p.length - 1] : h.toLowerCase();
+              }
+              /* lista grande de dominios de publicidad (se guarda como huellas de 64 bits ordenadas: poca memoria y búsqueda rápida) */
+              static volatile long[] adHashes = new long[0];
+              static long fnv(String x) { long hh = 0xcbf29ce484222325L; for (int i = 0; i < x.length(); i++) { hh ^= x.charAt(i); hh *= 0x100000001b3L; } return hh; }
+              static void loadAdList(Context ctx) {
+                  new Thread(() -> {
+                      try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(ctx.getAssets().open("adhosts.txt")))) {
+                          long[] a = new long[200000]; int n = 0; String ln;
+                          while ((ln = br.readLine()) != null) {
+                              ln = ln.trim(); if (ln.isEmpty()) continue;
+                              if (n == a.length) a = java.util.Arrays.copyOf(a, n * 2);
+                              a[n++] = fnv(ln.toLowerCase());
+                          }
+                          long[] b = java.util.Arrays.copyOf(a, n); java.util.Arrays.sort(b); adHashes = b;
+                      } catch (Exception e) { }
+                  }).start();
+              }
+              static boolean inAdList(String h) {
+                  long[] a = adHashes; if (a.length == 0 || h == null) return false;
+                  String x = h.toLowerCase();
+                  while (true) {
+                      if (java.util.Arrays.binarySearch(a, fnv(x)) >= 0) return true;
+                      int d = x.indexOf('.'); if (d < 0 || x.indexOf('.', d + 1) < 0) return false;
+                      x = x.substring(d + 1);
+                  }
+              }
+              static boolean isAdHost(String h) {
+                  if (h == null) return false;
+                  String l = h.toLowerCase();
+                  if (inAdList(l)) return true;
+                  for (String k : ADK) if (l.contains(k)) return true;
+                  for (String lab : l.split("[.]")) if (lab.equals("ads") || lab.equals("ad") || lab.equals("adserver") || lab.equals("pop") || lab.equals("popup") || lab.equals("track") || lab.equals("tracking")) return true;
+                  return learned.contains(rootOf(l));
+              }
+              static class AdClient extends com.getcapacitor.BridgeWebViewClient {
+                  final NexoraScreen pl;
+                  AdClient(com.getcapacitor.Bridge b, NexoraScreen p) { super(b); pl = p; }
+                  @Override
+                  public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, android.webkit.WebResourceRequest req) {
+                      try {
+                          if (pl.blockNav && req != null && !req.isForMainFrame() && req.getUrl() != null) {
+                              String h = req.getUrl().getHost();
+                              String pth = String.valueOf(req.getUrl().getPath()).toLowerCase();
+                              boolean media = pth.contains("/hls") || pth.endsWith(".m3u8") || pth.endsWith(".ts") || pth.endsWith(".mp4") || pth.endsWith(".m4s") || pth.endsWith(".key") || pth.endsWith(".vtt") || pth.endsWith(".mpd");
+                              if (h != null && !media && !rootOf(h).equals(pl.frameRoot)) {
+                                  if (isAdHost(h)) return new android.webkit.WebResourceResponse("text/plain", "utf-8", new java.io.ByteArrayInputStream(new byte[0]));
+                                  /* justo después de un toque, una página nueva de otro sitio que no es de video = anuncio (p. ej. "Confirm you're not a robot") */
+                                  String acc = null;
+                                  java.util.Map<String, String> hd0 = req.getRequestHeaders();
+                                  if (hd0 != null) for (java.util.Map.Entry<String, String> en : hd0.entrySet()) if ("accept".equalsIgnoreCase(en.getKey())) acc = en.getValue();
+                                  if (acc != null && acc.contains("text/html") && System.currentTimeMillis() - pl.lastTap < 5000 && !isVideoHost(h)) {
+                                      learned.add(rootOf(h));
+                                      return new android.webkit.WebResourceResponse("text/html", "utf-8", new java.io.ByteArrayInputStream(new byte[0]));
+                                  }
+                              }
+                          }
+                      } catch (Exception e) { }
+                      return super.shouldInterceptRequest(view, req);
+                  }
+              }
+              @PluginMethod
+              public void navBlock(PluginCall call) {
+                  blockNav = Boolean.TRUE.equals(call.getBoolean("on", false));
+                  String fh = call.getString("host", "");
+                  if (fh != null && fh.length() > 0) frameRoot = rootOf(fh);
+                  done(call, true);
+              }
+              @Override
+              public Boolean shouldOverrideLoad(Uri url) {
+                  if (!blockNav || url == null) return null;
+                  String h = url.getHost(), sc = url.getScheme();
+                  if (h != null && (h.equals("localhost") || h.equals("127.0.0.1"))) return null;
+                  if (sc != null && (sc.equals("data") || sc.equals("blob") || sc.equals("about") || sc.equals("javascript"))) return null;
+                  /* quien intentó abrir publicidad queda en la lista: sus anuncios dentro del reproductor también se bloquean */
+                  if (h != null && !rootOf(h).equals(frameRoot)) learned.add(rootOf(h));
+                  long now = System.currentTimeMillis();
+                  if (now - lastBlockNote > 4000) { lastBlockNote = now; JSObject d = new JSObject(); d.put("url", String.valueOf(url)); notifyListeners("nxBlocked", d, false); }
+                  return Boolean.TRUE;
               }
 
               @PluginMethod
@@ -592,6 +893,13 @@ jobs:
           grep -q REQUEST_INSTALL_PACKAGES AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <application|' AndroidManifest.xml
           grep -q REQUEST_IGNORE_BATTERY_OPTIMIZATIONS AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>\n    <application|' AndroidManifest.xml
           grep -q POST_NOTIFICATIONS AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application|' AndroidManifest.xml
+          # Descargas: servicio en primer plano (WorkManager) para seguir bajando con la app cerrada
+          grep -q 'android.permission.FOREGROUND_SERVICE"' AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <application|' AndroidManifest.xml
+          grep -q FOREGROUND_SERVICE_DATA_SYNC AndroidManifest.xml || sed -i 's|<application|<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>\n    <application|' AndroidManifest.xml
+          grep -q 'xmlns:tools' AndroidManifest.xml || sed -i '0,/<manifest /s|<manifest |<manifest xmlns:tools="http://schemas.android.com/tools" |' AndroidManifest.xml
+          grep -q 'xmlns:tools' AndroidManifest.xml || { echo "Falta xmlns:tools"; exit 1; }
+          sed -i 's|</application>|    <service android:name="androidx.work.impl.foreground.SystemForegroundService" android:foregroundServiceType="dataSync" tools:node="merge"/>\n    </application>|' AndroidManifest.xml
+          grep -q SystemForegroundService AndroidManifest.xml && echo "Descargas: servicio OK" || { echo "No se pudo declarar el servicio de descargas"; exit 1; }
           cat > $RES/drawable/nx_icon_mono.xml <<'EOF'
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
               android:width="108dp" android:height="108dp"
@@ -923,6 +1231,7 @@ jobs:
                   }
                   boolean fast = getInputData().getBoolean("fast", false);
                   JSONArray news = new JSONArray();
+                  c.getSharedPreferences(PREFS, 0).edit().putLong("last_run", System.currentTimeMillis()).apply();
                   synchronized (LOCK) { scan(c, fast, news); }
                   if (news.length() > 0) post(c, news, false);
                   if (fast) fast(c, 5, false); else fast(c, 5, true);
@@ -1154,6 +1463,326 @@ jobs:
           print('sonido listo', out)
           PY
           grep -q "package ${APP_ID};" $JDIR/NexoraCheck.java && echo "Revisor nativo OK" || { echo "No se pudo crear el revisor"; exit 1; }
+
+      - name: Descargas nativas (ver sin internet)
+        run: |
+          cd _build/android/app/src/main
+          JDIR=java/$(echo "$APP_ID" | tr . /)
+          mkdir -p $JDIR
+          cat > $JDIR/NexoraDownload.java <<'JAVA'
+          package __PKG__;
+
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.content.pm.ServiceInfo;
+          import android.os.Build;
+          import androidx.annotation.NonNull;
+          import androidx.core.app.NotificationCompat;
+          import androidx.core.app.NotificationManagerCompat;
+          import androidx.work.Constraints;
+          import androidx.work.Data;
+          import androidx.work.ExistingWorkPolicy;
+          import androidx.work.ForegroundInfo;
+          import androidx.work.NetworkType;
+          import androidx.work.OneTimeWorkRequest;
+          import androidx.work.WorkManager;
+          import androidx.work.Worker;
+          import androidx.work.WorkerParameters;
+          import java.io.ByteArrayOutputStream;
+          import java.io.File;
+          import java.io.FileOutputStream;
+          import java.io.InputStream;
+          import java.io.OutputStream;
+          import java.net.HttpURLConnection;
+          import java.net.URL;
+          import java.util.ArrayList;
+          import java.util.List;
+          import java.util.regex.Matcher;
+          import java.util.regex.Pattern;
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+
+          /**
+           * Descargas de episodios para ver sin internet (MP4 directo o HLS por partes).
+           * Corre con WorkManager en primer plano: sigue aunque salgas de la app y muestra el progreso en una notificación.
+           */
+          public class NexoraDownload extends Worker {
+              static final String PREFS = "nexora_dl", CH = "nexora_descargas";
+              static final String UA = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36";
+              static final Object LOCK = new Object();
+
+              public NexoraDownload(@NonNull Context c, @NonNull WorkerParameters p) { super(c, p); }
+
+              /* ---------- estado guardado ---------- */
+              static JSONArray all(Context c) {
+                  try { return new JSONArray(c.getSharedPreferences(PREFS, 0).getString("items", "[]")); } catch (Exception e) { return new JSONArray(); }
+              }
+              static void saveAll(Context c, JSONArray a) { c.getSharedPreferences(PREFS, 0).edit().putString("items", a.toString()).apply(); }
+              static JSONObject get(Context c, String id) {
+                  synchronized (LOCK) {
+                      JSONArray a = all(c);
+                      for (int i = 0; i < a.length(); i++) { JSONObject o = a.optJSONObject(i); if (o != null && id.equals(o.optString("id"))) return o; }
+                      return null;
+                  }
+              }
+              static void put(Context c, JSONObject it) {
+                  synchronized (LOCK) {
+                      JSONArray a = all(c), b = new JSONArray(); boolean done = false;
+                      for (int i = 0; i < a.length(); i++) {
+                          JSONObject o = a.optJSONObject(i); if (o == null) continue;
+                          if (it.optString("id").equals(o.optString("id"))) { b.put(it); done = true; } else b.put(o);
+                      }
+                      if (!done) b.put(it);
+                      saveAll(c, b);
+                  }
+              }
+              static void remove(Context c, String id) {
+                  synchronized (LOCK) {
+                      JSONArray a = all(c), b = new JSONArray();
+                      for (int i = 0; i < a.length(); i++) { JSONObject o = a.optJSONObject(i); if (o != null && !id.equals(o.optString("id"))) b.put(o); }
+                      saveAll(c, b);
+                  }
+              }
+              static void patch(Context c, String id, String k, Object v) {
+                  synchronized (LOCK) { JSONObject o = get(c, id); if (o == null) return; try { o.put(k, v); } catch (Exception e) { } put(c, o); }
+              }
+              static File dirOf(Context c, String id) {
+                  File base = c.getExternalFilesDir(null); if (base == null) base = c.getFilesDir();
+                  return new File(new File(base, "descargas"), id.replaceAll("[^A-Za-z0-9_-]", "_"));
+              }
+              static void deleteDir(File f) {
+                  if (f == null || !f.exists()) return;
+                  File[] l = f.listFiles(); if (l != null) for (File x : l) deleteDir(x);
+                  f.delete();
+              }
+
+              public static void enqueue(Context c, String id) {
+                  Constraints k = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
+                  OneTimeWorkRequest r = new OneTimeWorkRequest.Builder(NexoraDownload.class)
+                      .setInputData(new Data.Builder().putString("id", id).build()).setConstraints(k).addTag("dl_" + id).build();
+                  WorkManager.getInstance(c).enqueueUniqueWork("nexora_dl", ExistingWorkPolicy.APPEND_OR_REPLACE, r);
+              }
+
+              /* ---------- notificaciones ---------- */
+              static void channel(Context c) {
+                  NotificationManager nm = c.getSystemService(NotificationManager.class);
+                  if (nm == null || nm.getNotificationChannel(CH) != null) return;
+                  NotificationChannel ch = new NotificationChannel(CH, "Descargas", NotificationManager.IMPORTANCE_LOW);
+                  ch.setDescription("Progreso de los episodios que descargas");
+                  nm.createNotificationChannel(ch);
+              }
+              static PendingIntent openApp(Context c) {
+                  Intent i = new Intent(c, MainActivity.class);
+                  i.setAction("nexora.downloads"); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                  i.putExtra("nx_dl", true);
+                  return PendingIntent.getActivity(c, 7310, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+              }
+              ForegroundInfo info(String title, String text, int pct) {
+                  Context c = getApplicationContext(); channel(c);
+                  android.app.Notification n = new NotificationCompat.Builder(c, CH)
+                      .setSmallIcon(R.drawable.ic_stat_nexora).setColor(0xFF8B6BFF)
+                      .setContentTitle(title).setContentText(text).setOnlyAlertOnce(true).setOngoing(true)
+                      .setProgress(100, Math.max(0, pct), pct < 0).setContentIntent(openApp(c)).build();
+                  if (Build.VERSION.SDK_INT >= 29) return new ForegroundInfo(7311, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+                  return new ForegroundInfo(7311, n);
+              }
+              long lastNote = 0, lastChk = 0;
+              /* cancelar o borrar desde la app: se marca en el estado y aquí se detiene */
+              void checkStop(String id) throws Exception {
+                  if (isStopped()) throw new Exception("cancelado");
+                  long now = System.currentTimeMillis(); if (now - lastChk < 600) return; lastChk = now;
+                  JSONObject o = get(getApplicationContext(), id);
+                  if (o == null || "canceled".equals(o.optString("status"))) throw new Exception("cancelado");
+              }
+              void progress(JSONObject it, long done, long total, long bytes) throws Exception {
+                  if (isStopped()) throw new Exception("cancelado");
+                  Context c = getApplicationContext();
+                  synchronized (LOCK) {
+                      JSONObject o = get(c, it.optString("id"));
+                      if (o == null || "canceled".equals(o.optString("status"))) throw new Exception("cancelado");
+                      it.put("done", done); it.put("total", total); it.put("bytes", bytes); it.put("status", "downloading");
+                      put(c, it);
+                  }
+                  long now = System.currentTimeMillis();
+                  if (now - lastNote > 900) {
+                      lastNote = now; int pct = total > 0 ? (int) (done * 100 / total) : -1;
+                      try { setForegroundAsync(info(it.optString("title"), it.optString("sub") + (pct >= 0 ? " · " + pct + "%" : ""), pct)); } catch (Exception e) { }
+                  }
+              }
+              @android.annotation.SuppressLint("MissingPermission")
+              void doneNote(JSONObject it, boolean ok, String err) {
+                  Context c = getApplicationContext(); channel(c);
+                  try {
+                      NotificationManagerCompat nm = NotificationManagerCompat.from(c);
+                      if (!nm.areNotificationsEnabled()) return;
+                      nm.notify(it.optString("id").hashCode() & 0x7fffffff, new NotificationCompat.Builder(c, CH)
+                          .setSmallIcon(R.drawable.ic_stat_nexora).setColor(0xFF8B6BFF)
+                          .setContentTitle(ok ? "Descarga lista" : "La descarga falló")
+                          .setContentText(it.optString("title") + " · " + it.optString("sub") + (ok ? "" : " · " + err))
+                          .setAutoCancel(true).setContentIntent(openApp(c)).build());
+                  } catch (Exception e) { }
+              }
+
+              /* ---------- red ---------- */
+              HttpURLConnection open(String u, JSONObject it, long from) throws Exception {
+                  HttpURLConnection h = (HttpURLConnection) new URL(u).openConnection();
+                  h.setRequestProperty("User-Agent", it.optString("ua", UA));
+                  String ref = it.optString("referer", ""); if (!ref.isEmpty()) h.setRequestProperty("Referer", ref);
+                  if (from > 0) h.setRequestProperty("Range", "bytes=" + from + "-");
+                  h.setConnectTimeout(20000); h.setReadTimeout(30000); h.setInstanceFollowRedirects(true);
+                  return h;
+              }
+              String text(String u, JSONObject it) throws Exception {
+                  HttpURLConnection h = open(u, it, 0);
+                  int code = h.getResponseCode(); if (code >= 400) throw new Exception("el servidor respondió " + code);
+                  try (InputStream in = h.getInputStream()) {
+                      ByteArrayOutputStream o = new ByteArrayOutputStream(); byte[] b = new byte[16384]; int n;
+                      while ((n = in.read(b)) > 0) o.write(b, 0, n);
+                      return o.toString("UTF-8");
+                  } finally { h.disconnect(); }
+              }
+              long fetch(String u, File f, JSONObject it) throws Exception {
+                  File tmp = new File(f.getPath() + ".part");
+                  HttpURLConnection h = open(u, it, 0);
+                  int code = h.getResponseCode(); if (code >= 400) throw new Exception("el servidor respondió " + code);
+                  long n = 0;
+                  try (InputStream in = h.getInputStream(); OutputStream out = new FileOutputStream(tmp)) {
+                      byte[] b = new byte[65536]; int r;
+                      while ((r = in.read(b)) > 0) { checkStop(it.optString("id")); out.write(b, 0, r); n += r; }
+                  } finally { h.disconnect(); }
+                  if (!tmp.renameTo(f)) throw new Exception("no se pudo guardar");
+                  return n;
+              }
+              static String abs(String base, String u) throws Exception { return new URL(new URL(base), u.trim()).toString(); }
+
+              /* ---------- MP4 (con reanudación) ---------- */
+              String mp4(JSONObject it, File dir) throws Exception {
+                  File f = new File(dir, "video.mp4"), part = new File(dir, "video.mp4.part");
+                  long have = part.exists() ? part.length() : 0;
+                  HttpURLConnection h = open(it.optString("url"), it, have);
+                  int code = h.getResponseCode();
+                  if (code >= 400) { h.disconnect(); throw new Exception("el servidor respondió " + code); }
+                  boolean append = code == 206 && have > 0; if (!append) have = 0;
+                  long len = h.getContentLengthLong(), total = len > 0 ? len + have : 0, done = have;
+                  try (InputStream in = h.getInputStream(); OutputStream out = new FileOutputStream(part, append)) {
+                      byte[] b = new byte[65536]; int r; long t = 0;
+                      while ((r = in.read(b)) > 0) {
+                          checkStop(it.optString("id"));
+                          out.write(b, 0, r); done += r;
+                          long now = System.currentTimeMillis(); if (now - t > 700) { t = now; progress(it, done, total, done); }
+                      }
+                  } finally { h.disconnect(); }
+                  if (total > 0 && done < total) throw new Exception("la descarga se cortó");
+                  if (!part.renameTo(f)) throw new Exception("no se pudo guardar");
+                  it.put("bytes", f.length());
+                  return f.getAbsolutePath();
+              }
+
+              /* ---------- HLS: se baja cada parte y se arma una lista local ---------- */
+              String hls(JSONObject it, File dir) throws Exception {
+                  String url = it.optString("url"), txt = text(url, it);
+                  if (txt.contains("#EXT-X-STREAM-INF")) {
+                      int maxH = it.optInt("maxH", 720); String best = null, low = null; int bestH = -1, lowH = 99999;
+                      String[] L = txt.split("\n");
+                      for (int i = 0; i < L.length; i++) {
+                          String l = L[i].trim(); if (!l.startsWith("#EXT-X-STREAM-INF")) continue;
+                          int h = 0; Matcher m = Pattern.compile("RESOLUTION=\\d+x(\\d+)").matcher(l); if (m.find()) h = Integer.parseInt(m.group(1));
+                          String u = null; for (int j = i + 1; j < L.length; j++) { String x = L[j].trim(); if (!x.isEmpty() && !x.startsWith("#")) { u = x; break; } }
+                          if (u == null) continue;
+                          if (h <= maxH && h > bestH) { bestH = h; best = u; }
+                          if (h < lowH) { lowH = h; low = u; }
+                      }
+                      String pick = best != null ? best : low; if (pick == null) throw new Exception("lista de video sin calidades");
+                      url = abs(url, pick); txt = text(url, it);
+                      if (bestH > 0 || lowH < 99999) it.put("q", (best != null ? bestH : lowH) + "p");
+                  }
+                  List<String> out = new ArrayList<>(); List<String[]> segs = new ArrayList<>(); int n = 0, k = 0;
+                  Pattern uri = Pattern.compile("URI=\"([^\"]+)\"");
+                  for (String raw : txt.split("\n")) {
+                      String l = raw.trim(); if (l.isEmpty()) continue;
+                      if (l.startsWith("#EXT-X-KEY") || l.startsWith("#EXT-X-MAP")) {
+                          Matcher m = uri.matcher(l);
+                          if (m.find() && !m.group(1).startsWith("data:")) {
+                              String name = (l.startsWith("#EXT-X-KEY") ? "key" : "init") + (k++) + ".bin";
+                              segs.add(new String[]{name, abs(url, m.group(1))});
+                              l = l.substring(0, m.start(1)) + name + l.substring(m.end(1));
+                          }
+                          out.add(l);
+                      } else if (l.startsWith("#")) out.add(l);
+                      else { n++; String name = String.format(java.util.Locale.ROOT, "s%05d.ts", n); segs.add(new String[]{name, abs(url, l)}); out.add(name); }
+                  }
+                  if (n == 0) throw new Exception("la lista de video está vacía");
+                  if (!out.contains("#EXT-X-ENDLIST")) out.add("#EXT-X-ENDLIST");
+                  long bytes = 0; int done = 0;
+                  for (String[] s : segs) {
+                      checkStop(it.optString("id"));
+                      File f = new File(dir, s[0]);
+                      if (!(f.exists() && f.length() > 0)) {
+                          Exception last = null;
+                          for (int t = 0; t < 3; t++) { try { fetch(s[1], f, it); last = null; break; } catch (Exception e) { last = e; if ("cancelado".equals(e.getMessage())) throw e; Thread.sleep(1500); } }
+                          if (last != null) throw last;
+                      }
+                      bytes += f.length(); done++;
+                      progress(it, done, segs.size(), bytes);
+                  }
+                  File pl = new File(dir, "local.m3u8");
+                  try (OutputStream o = new FileOutputStream(pl)) { o.write(String.join("\n", out).getBytes("UTF-8")); }
+                  it.put("bytes", bytes);
+                  return pl.getAbsolutePath();
+              }
+
+              @NonNull
+              @Override
+              public Result doWork() {
+                  Context c = getApplicationContext();
+                  String id = getInputData().getString("id");
+                  JSONObject it = id == null ? null : get(c, id);
+                  if (it == null || "done".equals(it.optString("status"))) return Result.success();
+                  if ("canceled".equals(it.optString("status"))) { deleteDir(dirOf(c, id)); remove(c, id); return Result.success(); }
+                  try { setForegroundAsync(info(it.optString("title"), it.optString("sub") + " · preparando…", -1)); } catch (Exception e) { }
+                  File dir = dirOf(c, id); dir.mkdirs();
+                  try {
+                      it.put("status", "downloading"); it.remove("err"); put(c, it);
+                      /* si la fuente falla se prueban las copias del mismo servidor */
+                      String path = null; Exception last = null;
+                      JSONArray alts = it.optJSONArray("alts");
+                      for (int a = 0; path == null; a++) {
+                          try { path = "hls".equals(it.optString("kind")) ? hls(it, dir) : mp4(it, dir); }
+                          catch (Exception e) {
+                              String em = String.valueOf(e.getMessage());
+                              /* si el servidor rechaza por el Referer, se intenta otra vez sin él */
+                              if ((em.contains("403") || em.contains("401")) && !it.optString("referer", "").isEmpty()) { it.put("referer", ""); a--; continue; }
+                              if ("cancelado".equals(e.getMessage()) || alts == null || a >= alts.length()) throw e;
+                              last = e; String nu = alts.optString(a, "");
+                              if (nu.isEmpty()) throw e;
+                              deleteDir(dir); dir.mkdirs();
+                              it.put("url", nu); it.put("kind", nu.matches("(?i).*(\\.m3u8|/hls|master).*") ? "hls" : "mp4");
+                          }
+                      }
+                      JSONObject now = get(c, id);
+                      if (now == null || "canceled".equals(now.optString("status"))) { deleteDir(dir); if (now != null) remove(c, id); return Result.success(); }
+                      it.put("status", "done"); it.put("path", path); it.put("finished", System.currentTimeMillis()); it.put("done", it.optLong("total", 1));
+                      put(c, it); doneNote(it, true, "");
+                      return Result.success();
+                  } catch (Exception e) {
+                      /* nunca se devuelve "failure": así las demás descargas en cola siguen */
+                      JSONObject now = get(c, id);
+                      if (now == null || "canceled".equals(now.optString("status"))) { deleteDir(dir); if (now != null) remove(c, id); return Result.success(); }
+                      if (isStopped()) return Result.retry();
+                      String msg = String.valueOf(e.getMessage());
+                      try { it.put("err", msg); it.put("status", "error"); } catch (Exception x) { }
+                      put(c, it); doneNote(it, false, msg);
+                      return Result.success();
+                  }
+              }
+          }
+          JAVA
+          sed -i "s/__PKG__/${APP_ID}/" $JDIR/NexoraDownload.java
+          grep -q "package ${APP_ID};" $JDIR/NexoraDownload.java && echo "Descargas OK" || { echo "No se pudo crear el descargador"; exit 1; }
 
       - name: Firma fija del APK (para poder actualizar sin desinstalar)
         env:

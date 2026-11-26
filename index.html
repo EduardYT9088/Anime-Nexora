@@ -924,6 +924,9 @@ h2.sec .vt2{font-size:13px;font-weight:700;color:#a78bfa}
 .tv .art:not(.wide) .bgb{filter:brightness(.42) saturate(1.2)!important}
 .tv .sk{animation:none}.tv .cm-sk{animation:none}
 .tv #detail .frow .card,.tv #detail .reccards .card{content-visibility:auto;contain-intrinsic-size:150px 260px}
+.fnext{position:absolute;right:18px;top:calc(var(--top) + 70px);z-index:6;display:none;align-items:center;gap:8px;padding:12px 18px;border-radius:14px;background:rgba(124,92,255,.92);color:#fff;font-weight:800;font-size:15px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.fnext.on{display:flex}.fnext .i{width:20px;height:20px}
+.tv .fnext{top:28px;right:28px;font-size:18px;padding:14px 22px}
 </style>
 </head>
 <body>
@@ -1262,6 +1265,7 @@ h2.sec .vt2{font-size:13px;font-weight:700;color:#a78bfa}
     </div>
   </div>
   <div id="lockui"><button id="p-unlock" aria-label="Desbloquear"><svg class="i"><use href="#i-lock"/></svg></button><div id="lockmsg"><svg class="i" style="width:16px;height:16px"><use href="#i-lock"/></svg><span id="lockt">Mantén presionada la pantalla para desbloquear</span><i id="lockbar"></i></div></div>
+  <button id="fnext" class="fnext"><span>Siguiente episodio</span><svg class="i"><use href="#i-next"/></svg></button>
   <button id="skipop" class="skipop" aria-label="Saltar intro"><svg class="i"><use href="#i-next"/></svg>Saltar intro</button>
   <div id="next"><p>Siguiente episodio en <b id="n-sec">8</b> s</p>
     <div class="btnrow"><button class="btn sec" id="n-cancel">Cancelar</button><button class="btn pri" id="n-go">Ir ahora</button></div></div>
@@ -2670,10 +2674,10 @@ function noDirect(tk){
   if(alt)$('#pe-alt').onclick=()=>{$('#ploader .spin').style.display='';P.lang=o;playLang(++P.tk)};
   if(KBD)setTimeout(()=>($('#pe-alt')||$('#pe-retry')).focus(),450)}
 /* mientras se usa el reproductor web, la app no deja que la página abra publicidad ni el navegador */
-let NAVB=false;function navBlock(on){if(NAVB===on)return;NAVB=on;try{if(NXS&&NXS.navBlock)NXS.navBlock({on}).catch(()=>{})}catch(e){}}
+let NAVB=false;function navBlock(on,host){if(NAVB===on&&!host)return;NAVB=on;try{if(NXS&&NXS.navBlock)NXS.navBlock({on,host:host||''}).catch(()=>{})}catch(e){}}
 /* la publicidad se bloquea en silencio (sin avisos que tapen el video); en TV el control vuelve a la app */
 if(NXS&&NXS.addListener)try{NXS.addListener('nxBlocked',()=>{if(isTV&&P.mode==='frame')setTimeout(()=>{try{if(document.activeElement===F)F.blur();$('#player').focus({preventScroll:true});vcur()}catch(e){}},150)}).catch?.(()=>{})}catch(e){}
-function resetMedia(){navBlock(false);if($('#vcur'))vcur(false);
+function resetMedia(){navBlock(false);if($('#vcur'))vcur(false);clearTimeout(P.fnT);$('#fnext').classList.remove('on');
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}
   V.pause();V.removeAttribute('src');V.load();F.src='about:blank';F.classList.add('hide');V.classList.remove('hide');P.mode='video';
   $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op,#p-q').forEach(x=>x.classList.remove('hide'));setSeek(0,0);$('#p-seek').style.setProperty('--b','0%');paintQ()
@@ -2727,7 +2731,10 @@ function useFrame(it,tk){
   /* reproductor web (también en TV): la app bloquea las ventanas de publicidad; en TV el OK del control toca el video */
   if(!it)return noDirect(tk);
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}V.pause();V.removeAttribute('src');V.classList.add('hide');
-  P.mode='frame';navBlock(true);F.classList.remove('hide');F.src=it.url;loader(false);
+  P.mode='frame';navBlock(true,hostOf(it.url));F.classList.remove('hide');F.src=it.url;loader(false);
+  /* el reproductor web no avisa cuando termina: a los 15 min aparece "Siguiente episodio" (se pulsa con el cursor o el dedo) */
+  clearTimeout(P.fnT);$('#fnext').classList.remove('on');const i0=P.list.findIndex(e=>e.url===P.ep.url);
+  if(i0>=0&&i0<P.list.length-1)P.fnT=setTimeout(()=>{if(P.mode==='frame'&&tk===P.tk)$('#fnext').classList.add('on')},15*60e3);
   $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op,#p-q').forEach(x=>x.classList.add('hide'));updSrvName();
   $('#ctl').classList.remove('off');clearTimeout(P.hideT);P.hideT=setTimeout(()=>$('#ctl').classList.add('off'),4000);
   if(isTV){F.tabIndex=-1;VC.x=-1;setTimeout(()=>{if(P.mode==='frame'&&tk===P.tk){vcur();toast('Reproductor web: mueve el cursor con las flechas y pulsa OK · arriba del todo: opciones',6000)}},1800);
@@ -2908,7 +2915,7 @@ function onEnded(early){
 }
 function cancelNext(byUser){clearInterval(P.cdT);$('#next').classList.remove('on');if(byUser===true)P.endCancel=true}
 function goEp(d){const n=epAt(d);if(!n)return toast(d>0?'Es el último episodio':'Es el primer episodio');saveProg(true);P.noLocal='';P.ep=n;P.resume=0;P.endShown=false;P.endCancel=false;paintEpLabel();cancelNext();loadEpisode()}
-$('#p-nx').onclick=stop(()=>goEp(1));$('#p-prev').onclick=stop(()=>goEp(-1));
+$('#p-nx').onclick=stop(()=>goEp(1));$('#fnext').onclick=stop(()=>goEp(1));$('#p-prev').onclick=stop(()=>goEp(-1));
 $('#n-go').onclick=()=>{cancelNext();goEp(1)};$('#n-cancel').onclick=()=>cancelNext(true);
 /* hojas */
 function sheet(html){const b=$('#sheet-box');b.innerHTML=html;b.scrollTop=0;

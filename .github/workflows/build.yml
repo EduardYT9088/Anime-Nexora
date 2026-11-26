@@ -184,6 +184,9 @@ jobs:
               @Override
               public void load() {
                   NexoraCheck.schedule(getContext());
+                  /* reproductor web: bloquea las peticiones de publicidad dentro de la página del servidor */
+                  final NexoraScreen self = this;
+                  try { getActivity().runOnUiThread(() -> { try { getBridge().getWebView().setWebViewClient(new AdClient(getBridge(), self)); } catch (Exception e) { } }); } catch (Exception e) { }
                   try { fromNotification(getActivity().getIntent()); } catch (Exception e) { }
               }
 
@@ -697,16 +700,56 @@ jobs:
               }
 
               /* Reproductor web: bloquea las ventanas de publicidad que abren las páginas de los servidores */
-              private volatile boolean blockNav = false;
+              volatile boolean blockNav = false;
+              volatile String frameRoot = "";
               private long lastBlockNote = 0;
+              static final java.util.Set<String> learned = java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+              static final String[] ADK = { "doubleclick", "googlesyndication", "googleadservices", "adservice", "adsystem", "adserver", "adnxs", "popads", "popcash", "propeller", "onclick", "onclkds",
+                  "adsterra", "a-ads", "exoclick", "exosrv", "exdynsrv", "juicyads", "trafficjunky", "hilltopads", "clickadu", "adcash", "monetag", "realsrv", "admaven", "ad-maven", "bidgear",
+                  "tsyndicate", "taboola", "outbrain", "yllix", "clickaine", "purpleads", "richads", "pushads", "notix", "galaksion", "mgid", "revcontent", "adskeeper", "pemsrv", "clicksgear",
+                  "pushnami", "zeroredirect", "adspyglass", "popmyads", "cpmrate", "gatecpm", "cpmgate", "displaynetwork", "performanceformat", "ratecpm", "adblockeroff", "pushnotif", "push-notif" };
+              static String rootOf(String h) {
+                  if (h == null) return "";
+                  String[] p = h.toLowerCase().split("[.]");
+                  return p.length >= 2 ? p[p.length - 2] + "." + p[p.length - 1] : h.toLowerCase();
+              }
+              static boolean isAdHost(String h) {
+                  if (h == null) return false;
+                  String l = h.toLowerCase();
+                  for (String k : ADK) if (l.contains(k)) return true;
+                  for (String lab : l.split("[.]")) if (lab.equals("ads") || lab.equals("ad") || lab.equals("adserver") || lab.equals("pop") || lab.equals("popup") || lab.equals("track") || lab.equals("tracking")) return true;
+                  return learned.contains(rootOf(l));
+              }
+              static class AdClient extends com.getcapacitor.BridgeWebViewClient {
+                  final NexoraScreen pl;
+                  AdClient(com.getcapacitor.Bridge b, NexoraScreen p) { super(b); pl = p; }
+                  @Override
+                  public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, android.webkit.WebResourceRequest req) {
+                      try {
+                          if (pl.blockNav && req != null && !req.isForMainFrame() && req.getUrl() != null) {
+                              String h = req.getUrl().getHost();
+                              if (h != null && !rootOf(h).equals(pl.frameRoot) && isAdHost(h))
+                                  return new android.webkit.WebResourceResponse("text/plain", "utf-8", new java.io.ByteArrayInputStream(new byte[0]));
+                          }
+                      } catch (Exception e) { }
+                      return super.shouldInterceptRequest(view, req);
+                  }
+              }
               @PluginMethod
-              public void navBlock(PluginCall call) { blockNav = Boolean.TRUE.equals(call.getBoolean("on", false)); done(call, true); }
+              public void navBlock(PluginCall call) {
+                  blockNav = Boolean.TRUE.equals(call.getBoolean("on", false));
+                  String fh = call.getString("host", "");
+                  if (fh != null && fh.length() > 0) frameRoot = rootOf(fh);
+                  done(call, true);
+              }
               @Override
               public Boolean shouldOverrideLoad(Uri url) {
                   if (!blockNav || url == null) return null;
                   String h = url.getHost(), sc = url.getScheme();
                   if (h != null && (h.equals("localhost") || h.equals("127.0.0.1"))) return null;
                   if (sc != null && (sc.equals("data") || sc.equals("blob") || sc.equals("about") || sc.equals("javascript"))) return null;
+                  /* quien intentó abrir publicidad queda en la lista: sus anuncios dentro del reproductor también se bloquean */
+                  if (h != null && !rootOf(h).equals(frameRoot)) learned.add(rootOf(h));
                   long now = System.currentTimeMillis();
                   if (now - lastBlockNote > 4000) { lastBlockNote = now; JSObject d = new JSObject(); d.put("url", String.valueOf(url)); notifyListeners("nxBlocked", d, false); }
                   return Boolean.TRUE;

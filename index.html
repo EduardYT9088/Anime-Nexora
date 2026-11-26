@@ -927,6 +927,9 @@ h2.sec .vt2{font-size:13px;font-weight:700;color:#a78bfa}
 .fnext{position:absolute;right:18px;top:calc(var(--top) + 70px);z-index:6;display:none;align-items:center;gap:8px;padding:12px 18px;border-radius:14px;background:rgba(124,92,255,.92);color:#fff;font-weight:800;font-size:15px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
 .fnext.on{display:flex}.fnext .i{width:20px;height:20px}
 .tv .fnext{top:28px;right:28px;font-size:18px;padding:14px 22px}
+.fother{position:absolute;left:18px;bottom:calc(var(--bot,0px) + 22px);z-index:6;display:none;align-items:center;gap:7px;padding:10px 15px;border-radius:13px;background:rgba(20,17,44,.9);border:1px solid rgba(255,255,255,.18);color:#fff;font-weight:700;font-size:13.5px}
+.fother.on{display:flex}.fother .i{width:17px;height:17px}
+.tv .fother{left:28px;bottom:28px;font-size:16px;padding:12px 18px}
 </style>
 </head>
 <body>
@@ -1265,6 +1268,7 @@ h2.sec .vt2{font-size:13px;font-weight:700;color:#a78bfa}
     </div>
   </div>
   <div id="lockui"><button id="p-unlock" aria-label="Desbloquear"><svg class="i"><use href="#i-lock"/></svg></button><div id="lockmsg"><svg class="i" style="width:16px;height:16px"><use href="#i-lock"/></svg><span id="lockt">Mantén presionada la pantalla para desbloquear</span><i id="lockbar"></i></div></div>
+  <button id="fother" class="fother"><svg class="i"><use href="#i-srv"/></svg><span>Otro servidor</span></button>
   <button id="fnext" class="fnext"><span>Siguiente episodio</span><svg class="i"><use href="#i-next"/></svg></button>
   <button id="skipop" class="skipop" aria-label="Saltar intro"><svg class="i"><use href="#i-next"/></svg>Saltar intro</button>
   <div id="next"><p>Siguiente episodio en <b id="n-sec">8</b> s</p>
@@ -2705,7 +2709,7 @@ function noDirect(tk){
 let NAVB=false;function navBlock(on,host){if(NAVB===on&&!host)return;NAVB=on;try{if(NXS&&NXS.navBlock)NXS.navBlock({on,host:host||''}).catch(()=>{})}catch(e){}}
 /* la publicidad se bloquea en silencio (sin avisos que tapen el video); en TV el control vuelve a la app */
 if(NXS&&NXS.addListener)try{NXS.addListener('nxBlocked',()=>{if(isTV&&P.mode==='frame')setTimeout(()=>{try{if(document.activeElement===F)F.blur();$('#player').focus({preventScroll:true});vcur()}catch(e){}},150)}).catch?.(()=>{})}catch(e){}
-function resetMedia(){navBlock(false);if($('#vcur'))vcur(false);clearTimeout(P.fnT);$('#fnext').classList.remove('on');
+function resetMedia(){navBlock(false);if($('#vcur'))vcur(false);clearTimeout(P.fnT);$('#fnext').classList.remove('on');$('#fother').classList.remove('on');
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}
   V.pause();V.removeAttribute('src');V.load();F.src='about:blank';F.classList.add('hide');V.classList.remove('hide');P.mode='video';
   $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op,#p-q').forEach(x=>x.classList.remove('hide'));setSeek(0,0);$('#p-seek').style.setProperty('--b','0%');paintQ()
@@ -2759,8 +2763,17 @@ async function autoFrame(l,tk){
   loader(true,'Buscando un servidor que funcione…');
   /* los que ya fallaron al extraer (p. ej. Filemoon con el video borrado) solo se abren si su página tiene reproductor */
   const alive=await Promise.all(order.map(x=>embedAlive(x.url,SRC.canResolve(x)&&(P.rfail||new Set()).has(x.url))));if(tk!==P.tk)return;
-  const it=order.find((x,i)=>alive[i]);if(!it)return noDirect(tk);
-  P.idx=l.indexOf(it);useFrame(it,tk)}
+  P.fq=order.filter((x,i)=>alive[i]);P.fl=l;frameNext(tk)}
+/* abre en el reproductor web el siguiente servidor que de verdad tenga el video (se comprueba la página ya dibujada, en oculto) */
+async function frameNext(tk){if(tk!==P.tk)return;const q=P.fq||[];
+  while(q.length){const it=q.shift();loader(true,`Comprobando ${it.server||'servidor'}…`);$('#ploader').classList.remove('err');
+    const ok=await renderAlive(it.url);if(tk!==P.tk)return;if(ok){P.idx=(P.fl||P.servers[P.lang]||[]).indexOf(it);return useFrame(it,tk)}}
+  noDirect(tk)}
+const RJS="(function(){var n=0;function t(){n++;var b=document.body?document.body.innerText:'';var v=document.querySelector('video,iframe,canvas,object,embed');if(n>=16||(n>=5&&(b.length>15||v))){window.__nxr=JSON.stringify({t:b.slice(0,3000),ti:document.title||'',v:!!v})}else setTimeout(t,500)}t()})()";
+async function renderAlive(u){const key=u+'|r';if(ALIVE.has(key))return ALIVE.get(key);if(!NXS||!NXS.webGet)return true;let ok=true;
+  try{const w=await Promise.race([NXS.webGet({url:u,timeout:14000,quiet:99999999,js:RJS}),sleep(20000).then(()=>null)]);
+    const r=w&&w.result&&!/^ERR/.test(w.result)?JSON.parse(w.result):null;if(r)ok=!DEADRX.test(r.ti+'\n'+r.t)}catch(e){}
+  ALIVE.set(key,ok);return ok}
 function useFrame(it,tk){
   if(tk!==P.tk)return;
   /* reproductor web (también en TV): la app bloquea las ventanas de publicidad; en TV el OK del control toca el video */
@@ -2768,7 +2781,7 @@ function useFrame(it,tk){
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}V.pause();V.removeAttribute('src');V.classList.add('hide');
   P.mode='frame';navBlock(true,hostOf(it.url));F.classList.remove('hide');F.src=it.url;loader(false);
   /* el reproductor web no avisa cuando termina: a los 15 min aparece "Siguiente episodio" (se pulsa con el cursor o el dedo) */
-  clearTimeout(P.fnT);$('#fnext').classList.remove('on');const i0=P.list.findIndex(e=>e.url===P.ep.url);
+  $('#fother').classList.add('on');clearTimeout(P.fnT);$('#fnext').classList.remove('on');const i0=P.list.findIndex(e=>e.url===P.ep.url);
   if(i0>=0&&i0<P.list.length-1)P.fnT=setTimeout(()=>{if(P.mode==='frame'&&tk===P.tk)$('#fnext').classList.add('on')},15*60e3);
   $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op,#p-q').forEach(x=>x.classList.add('hide'));updSrvName();
   $('#ctl').classList.remove('off');clearTimeout(P.hideT);P.hideT=setTimeout(()=>$('#ctl').classList.add('off'),4000);
@@ -2950,7 +2963,7 @@ function onEnded(early){
 }
 function cancelNext(byUser){clearInterval(P.cdT);$('#next').classList.remove('on');if(byUser===true)P.endCancel=true}
 function goEp(d){const n=epAt(d);if(!n)return toast(d>0?'Es el último episodio':'Es el primer episodio');saveProg(true);P.noLocal='';P.ep=n;P.resume=0;P.endShown=false;P.endCancel=false;paintEpLabel();cancelNext();loadEpisode()}
-$('#p-nx').onclick=stop(()=>goEp(1));$('#fnext').onclick=stop(()=>goEp(1));$('#p-prev').onclick=stop(()=>goEp(-1));
+$('#p-nx').onclick=stop(()=>goEp(1));$('#fnext').onclick=stop(()=>goEp(1));$('#fother').onclick=stop(()=>{const tk=++P.tk;resetMedia();frameNext(tk)});$('#p-prev').onclick=stop(()=>goEp(-1));
 $('#n-go').onclick=()=>{cancelNext();goEp(1)};$('#n-cancel').onclick=()=>cancelNext(true);
 /* hojas */
 function sheet(html){const b=$('#sheet-box');b.innerHTML=html;b.scrollTop=0;

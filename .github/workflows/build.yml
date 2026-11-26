@@ -11,9 +11,10 @@ jobs:
           set +e; mkdir out; cd out
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
           g(){ code=$(curl -s -L -m 30 -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o "$1" -w '%{http_code}' "$2"); echo "$1 $code $(wc -c < "$1") $2" | tee -a index.txt; }
-          g byse.js "https://byselapuix.com/assets/index-DocunfmE.js"
-          grep -oE '"/api/[^"]{0,80}"|`/api/[^`]{0,80}`|/api/v[0-9]/[a-zA-Z/_${}.-]{0,60}' byse.js | sort -u | head -60 > api.txt; cat api.txt
-          for u in "https://byselapuix.com/api/videos/vdkne9r0g1sg" "https://byselapuix.com/api/video/vdkne9r0g1sg" "https://byselapuix.com/api/videos/vdkne9r0g1sg/embed/details" "https://byselapuix.com/api/videos/vdkne9r0g1sg/embed/playback" "https://byselapuix.com/api/v1/videos/vdkne9r0g1sg"; do n=$(echo "$u" | md5sum | cut -c1-6); g "api-$n.json" "$u"; head -c 400 "api-$n.json"; echo; done
+          g vpb.js "https://byselapuix.com/assets/videoPagesBundle-Bgi0QmPo.js"
+          g pow.js "https://byselapuix.com/assets/pow-DEJGtdh2.js"
+          g api.json "https://byselapuix.com/api/videos/vdkne9r0g1sg"
+          g api404.json "https://byselapuix.com/api/videos/zzzzzzzzzzzz"
           python3 - <<'PY' >> index.txt
           import struct,glob
           def size(f):

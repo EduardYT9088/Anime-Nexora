@@ -186,7 +186,10 @@ jobs:
                   NexoraCheck.schedule(getContext());
                   /* reproductor web: bloquea las peticiones de publicidad dentro de la página del servidor */
                   final NexoraScreen self = this;
-                  try { getActivity().runOnUiThread(() -> { try { getBridge().getWebView().setWebViewClient(new AdClient(getBridge(), self)); } catch (Exception e) { } }); } catch (Exception e) { }
+                  try { getActivity().runOnUiThread(() -> { try { getBridge().getWebView().setWebViewClient(new AdClient(getBridge(), self));
+                      /* se recuerda cuándo se tocó la pantalla: la publicidad salta justo después de un toque */
+                      getBridge().getWebView().setOnTouchListener((tv0, me) -> { if (me.getAction() == android.view.MotionEvent.ACTION_DOWN) lastTap = System.currentTimeMillis(); return false; });
+                  } catch (Exception e) { } }); } catch (Exception e) { }
                   try { fromNotification(getActivity().getIntent()); } catch (Exception e) { }
               }
 
@@ -685,6 +688,7 @@ jobs:
                   getActivity().runOnUiThread(() -> {
                       try {
                           final WebView wv = getBridge().getWebView();
+                          lastTap = System.currentTimeMillis();
                           float d = getContext().getResources().getDisplayMetrics().density;
                           final float px = x * d, py = y * d;
                           final long t = android.os.SystemClock.uptimeMillis();
@@ -702,6 +706,11 @@ jobs:
               /* Reproductor web: bloquea las ventanas de publicidad que abren las páginas de los servidores */
               volatile boolean blockNav = false;
               volatile String frameRoot = "";
+              volatile long lastTap = 0;
+              static final String[] VIDK = { "filemoon", "moon", "voe", "wish", "streamwish", "dood", "d000d", "ok.ru", "okru", "mp4upload", "yourupload", "vidcache", "streamtape", "tape", "mixdrop", "vidhide",
+                  "filelions", "lions", "lulu", "byse", "uqload", "mega", "upstream", "vidguard", "streamvid", "dropload", "zilla", "vidmoly", "vidoza", "sendvid", "netu", "hqq", "waaw", "embed", "player",
+                  "stream", "video", "vid", "play", "cdn", "hls", "jwp", "cloudflare", "gstatic", "google", "youtube", "animeav1", "animeflv", "tioanime", "monoschinos", "pixeldrain", "maru", "fembed" };
+              static boolean isVideoHost(String h) { if (h == null) return false; String l = h.toLowerCase(); for (String k : VIDK) if (l.contains(k)) return true; return false; }
               private long lastBlockNote = 0;
               static final java.util.Set<String> learned = java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
               static final String[] ADK = { "doubleclick", "googlesyndication", "googleadservices", "adservice", "adsystem", "adserver", "adnxs", "popads", "popcash", "propeller", "onclick", "onclkds",
@@ -728,8 +737,17 @@ jobs:
                       try {
                           if (pl.blockNav && req != null && !req.isForMainFrame() && req.getUrl() != null) {
                               String h = req.getUrl().getHost();
-                              if (h != null && !rootOf(h).equals(pl.frameRoot) && isAdHost(h))
-                                  return new android.webkit.WebResourceResponse("text/plain", "utf-8", new java.io.ByteArrayInputStream(new byte[0]));
+                              if (h != null && !rootOf(h).equals(pl.frameRoot)) {
+                                  if (isAdHost(h)) return new android.webkit.WebResourceResponse("text/plain", "utf-8", new java.io.ByteArrayInputStream(new byte[0]));
+                                  /* justo después de un toque, una página nueva de otro sitio que no es de video = anuncio (p. ej. "Confirm you're not a robot") */
+                                  String acc = null;
+                                  java.util.Map<String, String> hd0 = req.getRequestHeaders();
+                                  if (hd0 != null) for (java.util.Map.Entry<String, String> en : hd0.entrySet()) if ("accept".equalsIgnoreCase(en.getKey())) acc = en.getValue();
+                                  if (acc != null && acc.contains("text/html") && System.currentTimeMillis() - pl.lastTap < 5000 && !isVideoHost(h)) {
+                                      learned.add(rootOf(h));
+                                      return new android.webkit.WebResourceResponse("text/html", "utf-8", new java.io.ByteArrayInputStream(new byte[0]));
+                                  }
+                              }
                           }
                       } catch (Exception e) { }
                       return super.shouldInterceptRequest(view, req);

@@ -2636,7 +2636,7 @@ function paintEpLabel(){$('#p-sub').textContent=`Episodio ${P.ep.number}`;const 
 function paintLang(){$('#p-langn').textContent=FLAG[P.lang]+' '+LNAME[P.lang];$('#p-langf').textContent=FLAG[P.lang];$('#p-langb').textContent=LSHORT[P.lang]}
 async function loadEpisode(){
   if(!P.resume&&P.ep&&P.lastEp===P.ep.url&&P.lastT>5)P.resume=P.lastT;
-  const tk=++P.tk;P.diag=[];P.xTried=0;P.xweb=[];P.endShown=false;P.endCancel=false;P.nextPre=0;loadSkips(tk);resetMedia();paintLang();loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
+  const tk=++P.tk;P.diag=[];P.xTried=0;P.xweb=[];P.rfail=new Set();P.endShown=false;P.endCancel=false;P.nextPre=0;loadSkips(tk);resetMedia();paintLang();loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
   /* episodio descargado: se ve desde el teléfono, sin gastar datos */
   const loc=dlLocal(P.ep,P.lang);P.isLocal=false;
   if(loc&&P.noLocal!==P.ep.url){P.isLocal=true;P.servers={sub:[],dub:[]};P.idx=0;P.alts=[];loader(true,'Abriendo la descarga…');attach(dlSrc(loc),loc.kind==='hls'?'hls':'mp4',tk);
@@ -2665,7 +2665,7 @@ async function playLang(tk,skip){
     try{const r=await SRC.resolve(sup.map(x=>x.url));if(tk!==P.tk)return;
       const from=r.resolvedFrom||sup[0].url;skip.add(from);
       P.idx=Math.max(0,list.findIndex(x=>x.url===from));P.alts=r.alts||[];return attach(r.streamUrl,r.mediaType,tk)}
-    catch(e){if(tk!==P.tk)return;sup.forEach(x=>skip.add(x.url));if(!P.xTried)extraServers(P.ep,P.lang)}
+    catch(e){if(tk!==P.tk)return;sup.forEach(x=>{skip.add(x.url);(P.rfail=P.rfail||new Set()).add(x.url)});if(!P.xTried)extraServers(P.ep,P.lang)}
   }
   /* los de la fuente principal fallaron: el mismo episodio en otras fuentes (sin que se repitan servidores) */
   if(!P.xTried&&!P.isLocal){P.xTried=1;loader(true,`${FLAG[P.lang]} Buscando más servidores…`);
@@ -2733,17 +2733,19 @@ async function attach(url,type,tk){
 /* ¿el video de este servidor sigue existiendo? (evita abrir páginas que dicen "File is no longer available") */
 const DEADRX=/no longer available|has been deleted|was deleted|been removed|file (?:is )?(?:not found|removed|expired)|video (?:not found|has been removed|is unavailable|was removed)|archivo (?:no existe|eliminado|no disponible)|el video (?:no existe|fue eliminado|ha sido eliminado)|видео заблокировано|видео удалено|\b404 not found\b|<title>\s*(?:404|not found|file not found|error)|video (?:no encontrado|no disponible)|file (?:does not exist|doesn't exist)|this (?:video|file) (?:is no longer available|has been deleted|does not exist|was deleted)|sorry,? (?:this|the) (?:video|file)/i;
 const ALIVE=new Map();
-async function embedAlive(u){if(ALIVE.has(u))return ALIVE.get(u);let ok=true;
-  try{const r=await Promise.race([get(u,{'User-Agent':FF}),sleep(6000).then(()=>null)]);if(r){const h=String(r.data||'');ok=!(h.length<60||DEADRX.test(h.slice(0,80000)))}}
+const PLAYRX=/eval\(function\(p,a,c,k|<video|jwplayer|videojs|video\.js|plyr|clappr|sources\s*[:=]|\.m3u8|\.mp4|file\s*:|<iframe/i;
+async function embedAlive(u,strict){const key=u+(strict?'|s':'');if(ALIVE.has(key))return ALIVE.get(key);let ok=true;
+  try{const r=await Promise.race([get(u,{'User-Agent':FF}),sleep(6000).then(()=>null)]);if(r){const h=String(r.data||'').slice(0,120000);ok=!(h.length<60||DEADRX.test(h))&&(!strict||PLAYRX.test(h))}else if(strict)ok=false}
   catch(e){const m=String(e.message||'');ok=/respondi[oó] (403|429|5\d\d)/.test(m)}
-  ALIVE.set(u,ok);if(ALIVE.size>300)ALIVE.delete(ALIVE.keys().next().value);return ok}
+  if(strict&&!ok)ok=false;ALIVE.set(key,ok);if(ALIVE.size>300)ALIVE.delete(ALIVE.keys().next().value);return ok}
 async function autoFrame(l,tk){
   if(!P.xTried&&!P.isLocal){P.xTried=1;loader(true,'Buscando más servidores…');try{const ex=await extraServers(P.ep,P.lang);if(tk!==P.tk)return;const have=new Set(l.map(x=>x.url));P.xweb=ex.filter(x=>!have.has(x.url))}catch(e){}}
   const seen=new Set(),all=[...l,...(P.xweb||[])].filter(x=>x&&x.url&&!seen.has(x.url)&&seen.add(x.url));
   if(all.length>l.length){l.push(...all.slice(l.length))}
   const order=[...all.filter(x=>!SRC.canResolve(x)&&!isMega(x)),...all.filter(x=>SRC.canResolve(x)),...all.filter(x=>!SRC.canResolve(x)&&isMega(x))];
   loader(true,'Buscando un servidor que funcione…');
-  const alive=await Promise.all(order.map(x=>embedAlive(x.url)));if(tk!==P.tk)return;
+  /* los que ya fallaron al extraer (p. ej. Filemoon con el video borrado) solo se abren si su página tiene reproductor */
+  const alive=await Promise.all(order.map(x=>embedAlive(x.url,SRC.canResolve(x)&&(P.rfail||new Set()).has(x.url))));if(tk!==P.tk)return;
   const it=order.find((x,i)=>alive[i]);if(!it)return noDirect(tk);
   P.idx=l.indexOf(it);useFrame(it,tk)}
 function useFrame(it,tk){

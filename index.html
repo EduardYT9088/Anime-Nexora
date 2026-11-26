@@ -920,6 +920,10 @@ h2.sec .vt2{font-size:13px;font-weight:700;color:#a78bfa}
 .tv .chip{background:rgba(30,26,60,.85)}.tv .btn.sec,.tv .sl.hx .btn.sec{background:rgba(24,20,52,.88)}
 .tv .dlg{background:rgba(4,3,12,.86)}
 .tv .sl.hx .art:not(.wide) .bgb{filter:brightness(.42) saturate(1.2)!important}
+/* TV: fondos difuminados sin filtro de desenfoque (muy costoso al desplazarse) y sin animaciones de carga continuas */
+.tv .art:not(.wide) .bgb{filter:brightness(.42) saturate(1.2)!important}
+.tv .sk{animation:none}.tv .cm-sk{animation:none}
+.tv #detail .frow .card,.tv #detail .reccards .card{content-visibility:auto;contain-intrinsic-size:150px 260px}
 </style>
 </head>
 <body>
@@ -1595,7 +1599,8 @@ async function getCF(url,headers,js){let why='';
   if(!NXS||!NXS.webGet)throw new Error('Bloqueado por Cloudflare ('+why+')');
   if(/animeonline\.ninja/i.test(url))NJWEB=true;
   /* una sola verificación a la vez: si otra ya pasó mientras esperaba, se usa esa (no aparece la casilla dos veces seguidas) */
-  if(!(NJINT>0))return getCFweb(url,js);
+  /* en TV no se abren páginas ocultas en segundo plano (consumen mucho y ponen lenta la app); se verifica solo cuando eliges Latino */
+  if(!(NJINT>0)){if(isTV&&!js)throw new Error('Bloqueado por Cloudflare');return getCFweb(url,js)}
   const ck0=NJW&&NJW.cookie,t0=Date.now();let rel;const prev=CFLOCK;CFLOCK=new Promise(r=>rel=r);await prev;
   try{
     if(CFCAN>t0)throw new Error('Verificación cancelada');
@@ -3022,7 +3027,8 @@ function moveFocus(dir){
     else{const near=c.filter(o=>Math.abs(o.y-cy)<Math.max(60,r.height*1.5));if(near.length)best=near.reduce((a,o)=>(Math.abs(o.x-cx)+Math.abs(o.y-cy)*2.2)<(Math.abs(a.x-cx)+Math.abs(a.y-cy)*2.2)?o:a,near[0])}
   }
   if(!best)return;const el=best.el;el.focus({preventScroll:true});
-  if(!best.pin)el.scrollIntoView({block:vert?'center':'nearest',inline:'nearest',behavior:cfg.lite?'auto':'smooth'});
+  /* en TV el desplazamiento es instantáneo: el suave se traba en televisores con poca potencia */
+  if(!best.pin)el.scrollIntoView({block:vert?'center':'nearest',inline:'nearest',behavior:(cfg.lite||isTV)?'auto':'smooth'});
 }
 /* vigilante: si lo seleccionado desaparece, se vuelve a seleccionar algo visible */
 const isTextEl=el=>!!(el&&el.matches&&el.matches('input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]),textarea,[contenteditable=true]'));

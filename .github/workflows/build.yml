@@ -511,7 +511,6 @@ jobs:
                                               }));
                                           } catch (Exception e) { prevCb[0] = null; }
                                           w.evaluateJavascript("(function(){try{var f=document.querySelector('iframe');if(f)f.focus()}catch(e){}})()", null);
-                                          if (onTv) hd.postDelayed(() -> { if (!done[0] && bar.getVisibility() == View.VISIBLE) tapBox.run(); }, 3500);
                                       } else if (chal && bar.getVisibility() == View.VISIBLE) {
                                           tv.setText(onTv ? tvMsg : "Verificación rápida\nToca la casilla de abajo para ver en Latino");
                                           if (!w.hasFocus()) w.requestFocus();

@@ -1807,10 +1807,21 @@ async function rOk(u){const id=(u.match(/(?:videoembed|video)\/(\d+)/)||[])[1];i
 async function rMix(u){const pg=u.replace(/\/f\//,'/e/');const{data:h}=await get(pg,{'User-Agent':FF,'Referer':new URL(pg).origin+'/'});
   const pk=h.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]*?\.split\('\|'\)[^)]*\)\)/);const t=(pk&&unpack(pk[0]))||h;
   const m=t.match(/MDCore\.wurl\s*=\s*"([^"]+)"/)||t.match(/MDCore\.vsrc\s*=\s*"([^"]+)"/);if(!m)throw new Error('sin enlace');return m[1].startsWith('//')?'https:'+m[1]:m[1]}
+/* Byse (antes Filemoon): la página pide el video a su API; viene cifrado (AES-256-GCM) con la llave en la misma respuesta */
+const BYSEHOST=/byse|filemoon|moonplayer|fmoonembed/i;
+const b64u=x=>{x=String(x).replace(/-/g,'+').replace(/_/g,'/');x+='==='.slice((x.length+3)%4);const r=atob(x),a=new Uint8Array(r.length);for(let i=0;i<r.length;i++)a[i]=r.charCodeAt(i);return a};
+async function rByse(u){const U=new URL(u);const code=(U.pathname.match(/\/(?:e|d|v|f|download)\/([A-Za-z0-9]+)/)||[])[1];if(!code)throw new Error('sin código');
+  let r;try{r=await get(`${U.origin}/api/videos/${code}`,{'Accept':'application/json','Referer':U.origin+'/'})}catch(e){if(/respondi[oó] 404/.test(e.message))throw new Error('Video borrado del servidor');throw e}
+  const j=JSON.parse(r.data||'{}');const pb=j.playback;if(!pb||!Array.isArray(pb.key_parts)||!pb.key_parts.length)throw new Error('sin datos de video');
+  const v=+pb.version,n=pb.key_parts.length;const parts=(v>=1&&v<=20&&v<=n&&31-v>=1&&31-v<=n)?[pb.key_parts[v-1],pb.key_parts[31-v-1]]:pb.key_parts;
+  const ks=parts.map(b64u),key=new Uint8Array(ks.reduce((a,x)=>a+x.length,0));let o=0;for(const x of ks){key.set(x,o);o+=x.length}
+  const ck=await crypto.subtle.importKey('raw',key,'AES-GCM',false,['decrypt']);
+  const pt=JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b64u(pb.iv)},ck,b64u(pb.payload))));
+  const src=(pt.sources||[]).filter(x=>x&&x.url).sort((a,c)=>(c.height||0)-(a.height||0));if(!src.length)throw new Error('sin video');return src.map(x=>x.url)}
 /* YourUpload: el video está en la página */
 async function rYu(u){const{data:h}=await get(u.replace('/watch/','/embed/'),{'User-Agent':FF,'Referer':'https://www.yourupload.com/'});const m=h.match(/file\s*:\s*['"](https?:[^'"]+\.(?:mp4|m3u8)[^'"]*)['"]/i);if(!m)throw new Error('sin enlace');return m[1]}
 function resolverFor(u){const h=hostOf(u);
-  if(/yourupload/i.test(h))return rYu;
+  if(/yourupload/i.test(h))return rYu;if(BYSEHOST.test(h))return rByse;
   if(SWHOST.test(h))return rSw;if(/voe/i.test(h))return rVoe;if(/pixeldrain|pdrain/i.test(h))return rPixel;
   if(/streamtape|strtape|stape|tapecontent|streamta\.pe/i.test(h))return rTape;if(/(^|\.)ok\.ru$|okru/i.test(h))return rOk;if(/mixdrop|mxdrop|mixdroop|m1xdrop/i.test(h))return rMix;
   if(/vidhide|filelions|zilla|dropload|streamvid|vidguard/i.test(h))return rGeneric;return null}
@@ -2731,10 +2742,12 @@ async function attach(url,type,tk){
   updSrvName();
 }
 /* ¿el video de este servidor sigue existiendo? (evita abrir páginas que dicen "File is no longer available") */
-const DEADRX=/no longer available|has been deleted|was deleted|been removed|file (?:is )?(?:not found|removed|expired)|video (?:not found|has been removed|is unavailable|was removed)|archivo (?:no existe|eliminado|no disponible)|el video (?:no existe|fue eliminado|ha sido eliminado)|видео заблокировано|видео удалено|\b404 not found\b|<title>\s*(?:404|not found|file not found|error)|video (?:no encontrado|no disponible)|file (?:does not exist|doesn't exist)|this (?:video|file) (?:is no longer available|has been deleted|does not exist|was deleted)|sorry,? (?:this|the) (?:video|file)/i;
+const DEADRX=/no longer available|has been deleted|was deleted|been removed|file (?:is )?(?:not found|removed|expired)|video (?:not found|has been removed|is unavailable|was removed)|archivo (?:no existe|eliminado|no disponible)|el video (?:no existe|fue eliminado|ha sido eliminado)|видео заблокировано|видео удалено|\b404 not found\b|<title>\s*(?:404|not found|file not found|error)|video (?:no encontrado|no disponible)|file (?:does not exist|doesn't exist)|this (?:video|file) (?:is no longer available|has been deleted|does not exist|was deleted)|sorry,? (?:this|the) (?:video|file)|video record missing/i;
 const ALIVE=new Map();
 const PLAYRX=/eval\(function\(p,a,c,k|<video|jwplayer|videojs|video\.js|plyr|clappr|sources\s*[:=]|\.m3u8|\.mp4|file\s*:|<iframe/i;
 async function embedAlive(u,strict){const key=u+(strict?'|s':'');if(ALIVE.has(key))return ALIVE.get(key);let ok=true;
+  /* Byse: la página es una app vacía; se pregunta a su API si el video existe */
+  if(BYSEHOST.test(hostOf(u))){try{const U=new URL(u),c=(U.pathname.match(/\/(?:e|d|v|f)\/([A-Za-z0-9]+)/)||[])[1];if(c)await get(`${U.origin}/api/videos/${c}`,{'Accept':'application/json'})}catch(e){ok=!/respondi[oó] (404|410)|no responde/.test(e.message)}ALIVE.set(key,ok);return ok}
   try{const r=await Promise.race([get(u,{'User-Agent':FF}),sleep(6000).then(()=>null)]);if(r){const h=String(r.data||'').slice(0,120000);ok=!(h.length<60||DEADRX.test(h))&&(!strict||PLAYRX.test(h))}else if(strict)ok=false}
   catch(e){const m=String(e.message||'');ok=/respondi[oó] (403|429|5\d\d)/.test(m)}
   if(strict&&!ok)ok=false;ALIVE.set(key,ok);if(ALIVE.size>300)ALIVE.delete(ALIVE.keys().next().value);return ok}

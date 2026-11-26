@@ -107,7 +107,7 @@ jobs:
           # Lista de dominios de publicidad (HaGeZi Pro mini + Pop-Up Ads) para el reproductor web; si no descarga, la app usa su lista interna
           mkdir -p assets
           : > assets/adhosts.txt
-          for L in https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.mini.txt https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/popupads.txt; do
+          for L in https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro.mini-onlydomains.txt https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/popupads-onlydomains.txt; do
             curl -sfL --retry 3 -m 60 "$L" | grep -v '^#' | tr -d '\r' | grep -E '^[a-z0-9.-]+$' >> assets/adhosts.txt || true
           done
           sort -u -o assets/adhosts.txt assets/adhosts.txt || true

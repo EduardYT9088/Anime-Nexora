@@ -1627,7 +1627,7 @@ async function postForm(url,data,headers={}){const h={'User-Agent':(NJW&&NJW.ua)
   if(NXS&&NXS.httpPost){let r;try{r=await NXS.httpPost({url,body,headers:h})}catch(e){throw new Error('La fuente de Latino no responde')}if(r.status>=400)throw new Error('La fuente de Latino respondió '+r.status);return r.data}
   if(NH){let r;try{r=await NH.request({url,method:'POST',headers:h,data:body,responseType:'text',connectTimeout:15000,readTimeout:25000})}catch(e){throw new Error('La fuente de Latino no responde')}return r.data}
   const r=await fetch(url,{method:'POST',body:new URLSearchParams(data)});return r.text()}
-let NJLAST='';const NJC=store.get('nx_njv',0)<5?{}:store.get('nx_njc',{});store.set('nx_njv',5);
+let NJLAST='';const NJC=store.get('nx_njv',0)<6?{}:store.get('nx_njc',{});store.set('nx_njv',6);
 function njSave(){const k=Object.keys(NJC);if(k.length>30)k.sort((a,b)=>NJC[a].t-NJC[b].t).slice(0,k.length-30).forEach(x=>delete NJC[x]);store.set('nx_njc',NJC)}
 /* lista de episodios de la página: {temporada: [enlaces en orden]} y la lista completa */
 function njEpisodes(html){const out={all:[],by:{}};
@@ -1655,7 +1655,7 @@ async function njFind(d,count,key=D.url,fb=D.frBase){
   const tryPick=async pick=>{if(tried.has(pick.url))return null;tried.add(pick.url);
     const page=await getCF(pick.url);const E=njEpisodes(page.data);NJLAST=`${E.all.length} episodios, ${(page.data||'').length} bytes${page.via?', navegador':''}`;
     let eps=null;const ss=E.by[sn]||[];
-    if(ss.length&&near(ss.filter(Boolean).length))eps=ss;else if(near(E.all.length))eps=E.all;
+    if(ss.length&&near(ss.filter(Boolean).length))eps=ss;else if((sn<=1||seasonN(slugT(pick.url))===sn)&&near(E.all.length))eps=E.all;
     if(!eps)return null;const r=save({eps,p:pick.url});if(key===D.url)setTimeout(()=>njMark(r),0);return r};
   /* 1) la lista de Latino ya sabe la dirección: sin buscar */
   const ix=latIdx(d);
@@ -2009,7 +2009,7 @@ async function mostViewed(sigs){
     return out}catch(e){return[]}
 }
 /* ===== ¿Tiene Latino? Revisa los servidores del episodio y lo recuerda 7 días ===== */
-let DUB=store.get('nx_dub',{});if(store.get('nx_dubv',0)<5){DUB={};store.set('nx_dub',{});store.set('nx_dubv',5)}const dubQ=[];let dubBusy=0,dubSaveT;
+let DUB=store.get('nx_dub',{});if(store.get('nx_dubv',0)<6){DUB={};store.set('nx_dub',{});store.set('nx_dubv',6)}const dubQ=[];let dubBusy=0,dubSaveT;
 function langsOf(u){const v=DUB[u];if(!v)return null;const age=Date.now()-v.t;return age<(v.d?7:1)*864e5?v:null}
 function checkEp(u,front){return new Promise(res=>{const c=langsOf(u);if(c)return res(c);const job={u,res};front?dubQ.unshift(job):dubQ.push(job);pumpDub()})}
 function pumpDub(){while(dubBusy<(latMax||(cfg.lite?2:3))&&dubQ.length){const j=dubQ.shift();const c=langsOf(j.u);if(c){j.res(c);continue}dubBusy++;
@@ -2035,8 +2035,10 @@ async function latLoad(){const c=store.get('nx_latx',null);if(c&&c.i&&!LATX){lat
 /* ¿este anime está en la lista de Latino? devuelve su dirección en la fuente de respaldo */
 function latIdx(d){if(!LATX||!d||!d.title)return null;const base=baseTitle(d.title);
   const want=[...new Set([d.title,d.esTitle,...(d.alt||[]),base].filter(Boolean).map(skel).filter(x=>x.length>=3))];
-  for(const w of want){const sl=LATX.map.get(w);if(sl)return sl}
-  for(const w of want){if(w.length<10)continue;for(const [k,sl] of LATX.pre)if(w.startsWith(k)||k.startsWith(w))return sl}
+  /* la lista ignora "2nd Season": sin esto la 2.ª temporada heredaba el Latino de la 1.ª */
+  const sn=seasonN(d.title),same=sl=>seasonN(String(sl).replace(/-\d{5,}$/,'').replace(/-/g,' '))===sn;
+  for(const w of want){const sl=LATX.map.get(w);if(sl&&same(sl))return sl}
+  for(const w of want){if(w.length<10)continue;for(const [k,sl] of LATX.pre)if((w.startsWith(k)||k.startsWith(w))&&same(sl))return sl}
   return null}
 /* la etiqueta LAT de la lista solo se pone en la 1.ª temporada (otras temporadas pueden no estar dobladas todavía) */
 const latS2=t=>/\b(2nd|3rd|[4-9]th|\d+(st|nd|rd|th) season)\b|\b(season|temporada|part|parte|cour)\s*[2-9]\b|\b(ii|iii|iv)\b\s*$|\bs[2-9]\b/i.test(String(t||''));
@@ -2727,7 +2729,7 @@ const DEADRX=/no longer available|has been deleted|was deleted|been removed|file
 const ALIVE=new Map();
 async function embedAlive(u){if(ALIVE.has(u))return ALIVE.get(u);let ok=true;
   try{const r=await Promise.race([get(u,{'User-Agent':FF}),sleep(6000).then(()=>null)]);if(r){const h=String(r.data||'');ok=!(h.length<60||DEADRX.test(h.slice(0,80000)))}}
-  catch(e){ok=!/respondi[oó] (404|410)/.test(e.message)}
+  catch(e){const m=String(e.message||'');ok=/respondi[oó] (403|429|5\d\d)/.test(m)}
   ALIVE.set(u,ok);if(ALIVE.size>300)ALIVE.delete(ALIVE.keys().next().value);return ok}
 async function autoFrame(l,tk){
   const order=[...l.filter(x=>!SRC.canResolve(x)&&!isMega(x)),...l.filter(x=>SRC.canResolve(x)),...l.filter(x=>!SRC.canResolve(x)&&isMega(x))];

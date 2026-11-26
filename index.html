@@ -3341,8 +3341,14 @@ async function dlPrepare(it){
   const run=()=>epFull(it.epUrl,it.lang==='dub');const s=it.it?await inter(run):await run();
   let lang=it.lang,list=(s[lang]||[]).filter(x=>SRC.canResolve(x));
   if(!list.length){const o=lang==='sub'?'dub':'sub',l2=(s[o]||[]).filter(x=>SRC.canResolve(x));if(l2.length){lang=o;list=l2}}
-  if(!list.length)throw new Error((s.sub||[]).length||(s.dub||[]).length?'Solo tiene reproductor web, no se puede descargar':'Sin servidores disponibles ahora');
-  const r=await SRC.resolve(list.map(x=>x.url));if(!r||!r.streamUrl)throw new Error('No se encontró el video');
+  /* si los servidores de la fuente principal no sirven, el mismo episodio se busca en AnimeFLV, TioAnime y MonosChinos */
+  const extra=async lg=>{if(isBk(it.anime)||useApi())return[];const d={...(cache.get(it.anime)||(D.url===it.anime&&D.data)||{}),url:it.anime,title:(cache.get(it.anime)||{}).title||it.orig||it.title};
+    const rr=await Promise.allSettled(['animeflv','tioanime','monoschinos'].map(pv=>Promise.race([xProv(pv,d,it.ep,lg),sleep(15000).then(()=>[])])));
+    return rr.flatMap(x=>x.status==='fulfilled'?x.value:[]).filter(x=>SRC.canResolve(x))};
+  let r=null;
+  if(list.length){try{r=await SRC.resolve(list.map(x=>x.url))}catch(e){r=null}}
+  if(!r||!r.streamUrl){for(const lg of [lang,lang==='sub'?'dub':'sub']){const ex=await extra(lg);if(!ex.length)continue;try{r=await SRC.resolve(ex.map(x=>x.url));if(r&&r.streamUrl){lang=lg;break}}catch(e){r=null}}}
+  if(!r||!r.streamUrl)throw new Error((s.sub||[]).length||(s.dub||[]).length?'Ningún servidor permite descargar este episodio ahora (solo se puede ver en el reproductor web)':'Sin servidores disponibles ahora');
   let ref='';try{ref=r.resolvedFrom?new URL(r.resolvedFrom).origin+'/':''}catch(e){}
   await NXS.dlStart({item:{id:it.id,url:r.streamUrl,ua:navigator.userAgent,referer:ref,alts:(r.alts||[]).slice(0,4),kind:r.mediaType==='hls'?'hls':'mp4',title:it.title,orig:it.orig,
     sub:`Episodio ${it.ep} · ${LNAME[lang]}`,ep:it.ep,lang,anime:it.anime,image:it.image,epUrl:it.epUrl,maxH:+cfg.dlq||720}})}

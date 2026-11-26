@@ -11,12 +11,9 @@ jobs:
           set +e; mkdir out; cd out
           UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
           g(){ code=$(curl -s -L -m 30 -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o "$1" -w '%{http_code}' "$2"); echo "$1 $code $(wc -c < "$1") $2" | tee -a index.txt; }
-          g av-op2.html "https://animeav1.com/media/one-piece/2"
-          g nj-op2.html "https://ww4.animeonline.ninja/episodio/one-piece-1x2/"
-          cat av-op2.html nj-op2.html | grep -oiE 'https?:\\?/\\?/[^"\\ ]*(moon|byse|bysezoxexe|f75s|filemoon|kerapoxy)[^"\\ ]*' | sed 's#\\/#/#g' | sort -u > emb.txt
-          cat emb.txt
-          n=0; while read u; do n=$((n+1)); g "fm-$n-noref.html" "$u"; code=$(curl -s -L -m 30 -A "$UA" -e "https://animeav1.com/" -o "fm-$n-ref.html" -w '%{http_code}' "$u"); echo "fm-$n-ref $code $(wc -c < fm-$n-ref.html)" | tee -a index.txt; curl -s -I -L -m 20 -A "$UA" "$u" > "fm-$n-head.txt"; done < emb.txt
-          grep -o 'data-video="[^"]*"\|https://[a-z0-9.]*moon[^"]*' av-op2.html | head -20 >> index.txt
+          g byse.js "https://byselapuix.com/assets/index-DocunfmE.js"
+          grep -oE '"/api/[^"]{0,80}"|`/api/[^`]{0,80}`|/api/v[0-9]/[a-zA-Z/_${}.-]{0,60}' byse.js | sort -u | head -60 > api.txt; cat api.txt
+          for u in "https://byselapuix.com/api/videos/vdkne9r0g1sg" "https://byselapuix.com/api/video/vdkne9r0g1sg" "https://byselapuix.com/api/videos/vdkne9r0g1sg/embed/details" "https://byselapuix.com/api/videos/vdkne9r0g1sg/embed/playback" "https://byselapuix.com/api/v1/videos/vdkne9r0g1sg"; do n=$(echo "$u" | md5sum | cut -c1-6); g "api-$n.json" "$u"; head -c 400 "api-$n.json"; echo; done
           python3 - <<'PY' >> index.txt
           import struct,glob
           def size(f):

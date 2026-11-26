@@ -104,6 +104,14 @@ jobs:
         run: |
           cd _build/android/app/src/main
           RES=res
+          # Lista de dominios de publicidad (HaGeZi Pro mini + Pop-Up Ads) para el reproductor web; si no descarga, la app usa su lista interna
+          mkdir -p assets
+          : > assets/adhosts.txt
+          for L in https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.mini.txt https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/popupads.txt; do
+            curl -sfL --retry 3 -m 60 "$L" | grep -v '^#' | tr -d '\r' | grep -E '^[a-z0-9.-]+$' >> assets/adhosts.txt || true
+          done
+          sort -u -o assets/adhosts.txt assets/adhosts.txt || true
+          echo "Dominios de publicidad: $(wc -l < assets/adhosts.txt)"
           # Pantalla completa: usa la zona de la cámara perforada y oculta las barras al ver un episodio
           JDIR=java/$(echo "$APP_ID" | tr . /)
           mkdir -p $JDIR
@@ -186,6 +194,7 @@ jobs:
                   NexoraCheck.schedule(getContext());
                   /* reproductor web: bloquea las peticiones de publicidad dentro de la página del servidor */
                   final NexoraScreen self = this;
+                  loadAdList(getContext());
                   try { getActivity().runOnUiThread(() -> { try { getBridge().getWebView().setWebViewClient(new AdClient(getBridge(), self));
                       /* se recuerda cuándo se tocó la pantalla: la publicidad salta justo después de un toque */
                       getBridge().getWebView().setOnTouchListener((tv0, me) -> { if (me.getAction() == android.view.MotionEvent.ACTION_DOWN) lastTap = System.currentTimeMillis(); return false; });
@@ -722,9 +731,35 @@ jobs:
                   String[] p = h.toLowerCase().split("[.]");
                   return p.length >= 2 ? p[p.length - 2] + "." + p[p.length - 1] : h.toLowerCase();
               }
+              /* lista grande de dominios de publicidad (se guarda como huellas de 64 bits ordenadas: poca memoria y búsqueda rápida) */
+              static volatile long[] adHashes = new long[0];
+              static long fnv(String x) { long hh = 0xcbf29ce484222325L; for (int i = 0; i < x.length(); i++) { hh ^= x.charAt(i); hh *= 0x100000001b3L; } return hh; }
+              static void loadAdList(Context ctx) {
+                  new Thread(() -> {
+                      try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(ctx.getAssets().open("adhosts.txt")))) {
+                          long[] a = new long[200000]; int n = 0; String ln;
+                          while ((ln = br.readLine()) != null) {
+                              ln = ln.trim(); if (ln.isEmpty()) continue;
+                              if (n == a.length) a = java.util.Arrays.copyOf(a, n * 2);
+                              a[n++] = fnv(ln.toLowerCase());
+                          }
+                          long[] b = java.util.Arrays.copyOf(a, n); java.util.Arrays.sort(b); adHashes = b;
+                      } catch (Exception e) { }
+                  }).start();
+              }
+              static boolean inAdList(String h) {
+                  long[] a = adHashes; if (a.length == 0 || h == null) return false;
+                  String x = h.toLowerCase();
+                  while (true) {
+                      if (java.util.Arrays.binarySearch(a, fnv(x)) >= 0) return true;
+                      int d = x.indexOf('.'); if (d < 0 || x.indexOf('.', d + 1) < 0) return false;
+                      x = x.substring(d + 1);
+                  }
+              }
               static boolean isAdHost(String h) {
                   if (h == null) return false;
                   String l = h.toLowerCase();
+                  if (inAdList(l)) return true;
                   for (String k : ADK) if (l.contains(k)) return true;
                   for (String lab : l.split("[.]")) if (lab.equals("ads") || lab.equals("ad") || lab.equals("adserver") || lab.equals("pop") || lab.equals("popup") || lab.equals("track") || lab.equals("tracking")) return true;
                   return learned.contains(rootOf(l));
@@ -737,7 +772,9 @@ jobs:
                       try {
                           if (pl.blockNav && req != null && !req.isForMainFrame() && req.getUrl() != null) {
                               String h = req.getUrl().getHost();
-                              if (h != null && !rootOf(h).equals(pl.frameRoot)) {
+                              String pth = String.valueOf(req.getUrl().getPath()).toLowerCase();
+                              boolean media = pth.contains("/hls") || pth.endsWith(".m3u8") || pth.endsWith(".ts") || pth.endsWith(".mp4") || pth.endsWith(".m4s") || pth.endsWith(".key") || pth.endsWith(".vtt") || pth.endsWith(".mpd");
+                              if (h != null && !media && !rootOf(h).equals(pl.frameRoot)) {
                                   if (isAdHost(h)) return new android.webkit.WebResourceResponse("text/plain", "utf-8", new java.io.ByteArrayInputStream(new byte[0]));
                                   /* justo después de un toque, una página nueva de otro sitio que no es de video = anuncio (p. ej. "Confirm you're not a robot") */
                                   String acc = null;

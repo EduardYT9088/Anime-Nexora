@@ -15,7 +15,7 @@ permissions:
 
 env:
   APP_NAME: "Animes Nexora Plus"
-  APP_VERSION: "1.0.4"   # <- cambia aquí la versión del APK
+  APP_VERSION: "1.0.5"   # <- cambia aquí la versión del APK
   # Comentarios (Supabase): pega aquí la "Project URL" y la clave pública ("anon" o "publishable")
   NX_SB_URL: "https://lvnuolgcqttvlkvgagde.supabase.co"
   NX_SB_KEY: "sb_publishable_vvj-N9C2rbS-_rXPtxOHtg_iRBDuPaq"
@@ -389,7 +389,6 @@ jobs:
                           final boolean[] done = {false};
                           final boolean[] ran = {false};
                           final boolean[] shown = {false};
-                          final Window.Callback[] prevCb = {null};
                           final int[] cleanN = {0};
                           /* deja solo la casilla de verificación sobre el fondo de la app (oculta textos, logo y pie de página) */
                           final String clean = "(function(){try{var b=document.body;if(!b)return;if(!document.getElementById('nxcf')){var s=document.createElement('style');s.id='nxcf';"
@@ -411,7 +410,7 @@ jobs:
                               r.put("cookie", CookieManager.getInstance().getCookie(url));
                               if (res != null) r.put("result", res);
                               call.resolve(r);
-                              hd.post(() -> { try { if (prevCb[0] != null) { getActivity().getWindow().setCallback(prevCb[0]); prevCb[0] = null; } if (shown[0]) getBridge().getWebView().setOnKeyListener(null); root.removeView(box); w.stopLoading(); w.destroy(); } catch (Exception e) { } });
+                              hd.post(() -> { try { if (shown[0]) { View av = getBridge().getWebView(); av.setOnKeyListener(null); av.setFocusable(true); av.setFocusableInTouchMode(true); av.requestFocus(); } root.removeView(box); w.stopLoading(); w.destroy(); } catch (Exception e) { } });
                           };
                           bt.setOnClickListener(v -> finish.accept("ERR cancelado"));
                           /* TV: OK = toque real sobre la casilla de Cloudflare (se busca su posición en la página); flechas = Tab; Atrás = cancelar */
@@ -512,19 +511,8 @@ jobs:
                                           shown[0] = true; sel[0] = 0; paintSel.run();
                                           if (onTv) hd.postDelayed(() -> aimBox.accept(false), 600);
                                           try { getBridge().getWebView().setOnKeyListener(keys); } catch (Exception e) { }
-                                          /* el control se intercepta a nivel de toda la ventana: así llega aunque el foco del televisor esté en otra parte */
-                                          if (prevCb[0] == null) try {
-                                              final Window wnd = getActivity().getWindow();
-                                              prevCb[0] = wnd.getCallback();
-                                              final Window.Callback base = prevCb[0];
-                                              wnd.setCallback((Window.Callback) java.lang.reflect.Proxy.newProxyInstance(Window.Callback.class.getClassLoader(), new Class<?>[]{ Window.Callback.class }, (proxy, mth, args) -> {
-                                                  if ("dispatchKeyEvent".equals(mth.getName()) && args != null && args.length == 1 && args[0] instanceof KeyEvent) {
-                                                      KeyEvent kev = (KeyEvent) args[0];
-                                                      if (keys.onKey(w, kev.getKeyCode(), kev)) return Boolean.TRUE;
-                                                  }
-                                                  try { return mth.invoke(base, args); } catch (java.lang.reflect.InvocationTargetException ite) { throw ite.getCause(); }
-                                              }));
-                                          } catch (Exception e) { prevCb[0] = null; }
+                                          /* el control llega a la verificación: la pantalla de atrás deja de poder tomar el foco mientras tanto */
+                                          try { View av = getBridge().getWebView(); av.setFocusable(false); av.setFocusableInTouchMode(false); w.requestFocus(); } catch (Exception e) { }
                                           w.evaluateJavascript("(function(){try{var f=document.querySelector('iframe');if(f)f.focus()}catch(e){}})()", null);
                                       } else if (chal && bar.getVisibility() == View.VISIBLE) {
                                           tv.setText(onTv ? tvMsg : "Verificación rápida\nToca la casilla de abajo para ver en Latino");
@@ -1790,7 +1778,10 @@ jobs:
         run: |
           if [ -n "$NEXORA_KEYSTORE" ]; then
             echo "$NEXORA_KEYSTORE" | base64 -d > _build/android/app/nexora.keystore
-            sed -i "0,/^android {/s//android {\n    signingConfigs { debug { storeFile file('nexora.keystore'); storePassword 'android'; keyAlias 'androiddebugkey'; keyPassword 'android' } }/" _build/android/app/build.gradle
+            sed -i "0,/^android {/s//android {\n    lint { checkReleaseBuilds false; abortOnError false }\n    signingConfigs { debug { storeFile file('nexora.keystore'); storePassword 'android'; keyAlias 'androiddebugkey'; keyPassword 'android' }\n        release { storeFile file('nexora.keystore'); storePassword 'android'; keyAlias 'androiddebugkey'; keyPassword 'android' } }/" _build/android/app/build.gradle
+            # versión final (no de prueba): misma llave, así se actualiza encima sin desinstalar; los antivirus desconfían menos
+            sed -i "0,/minifyEnabled false/s//minifyEnabled false\n            signingConfig signingConfigs.release/" _build/android/app/build.gradle
+            grep -q "signingConfig signingConfigs.release" _build/android/app/build.gradle && echo "Compilación final OK" || { echo "No se pudo configurar la compilación final"; exit 1; }
             grep -q "nexora.keystore" _build/android/app/build.gradle && echo "Firma Nexora OK" || { echo "No se pudo configurar la firma"; exit 1; }
           else
             echo "::warning::Falta el secreto NEXORA_KEYSTORE. El APK se firmará con una clave temporal y no se podrá instalar encima de la versión anterior."
@@ -1800,12 +1791,12 @@ jobs:
         run: |
           cd _build/android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          if [ -f app/nexora.keystore ]; then ./gradlew assembleRelease --no-daemon --stacktrace; APK=app/build/outputs/apk/release/app-release.apk; else ./gradlew assembleDebug --no-daemon --stacktrace; APK=app/build/outputs/apk/debug/app-debug.apk; fi
           mkdir -p ../../out
-          AS=$(ls -d $ANDROID_HOME/build-tools/*/ | sort -V | tail -1)apksigner; "$AS" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | grep -i "DN\|SHA-256" || true
-          cp app/build/outputs/apk/debug/app-debug.apk "../../out/AnimesNexoraPlus-v${APP_VERSION}.apk"
+          AS=$(ls -d $ANDROID_HOME/build-tools/*/ | sort -V | tail -1)apksigner; "$AS" verify --print-certs "$APK" | grep -i "DN\|SHA-256" || true
+          cp "$APK" "../../out/AnimesNexoraPlus-v${APP_VERSION}.apk"
           # Copia con nombre fijo: el enlace .../releases/latest/download/AnimesNexoraPlus.apk siempre da la última versión oficial
-          cp app/build/outputs/apk/debug/app-debug.apk "../../out/AnimesNexoraPlus.apk"
+          cp "$APK" "../../out/AnimesNexoraPlus.apk"
 
       - name: Subir APK (Artifacts)
         uses: actions/upload-artifact@v4

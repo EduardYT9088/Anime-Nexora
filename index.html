@@ -1751,7 +1751,7 @@ async function xProv(prov,d,n,lang){const P0=PROV[prov];if(!P0)return[];const ke
   if(!hit)return[];const slug=new URL(hit).pathname.split('/').filter(Boolean).pop();
   const eu=prov==='animeflv'?`${FLV}/ver/${slug}-${n}`:prov==='tioanime'?`${TIO}/ver/${slug}-${n}`:`${MC}/ver/${slug.replace(/-sub-espanol$/,'')}-episodio-${n}`;
   const s=await P0.episode(eu);const nm={animeflv:'AnimeFLV',tioanime:'TioAnime',monoschinos:'MonosChinos'}[prov];
-  return (s[lang]||[]).filter(x=>SRC.canResolve(x)).map(x=>({...x,server:(x.server||hostOf(x.url))+' · '+nm,xp:prov}))}
+  return (s[lang]||[]).filter(x=>!isMega(x)).map(x=>({...x,server:(x.server||hostOf(x.url))+' · '+nm,xp:prov}))}
 const XSV=new Map();
 function extraServers(ep,lang){if(!ep||!D.data||isBk(D.url)||/animeflv/i.test(D.url)||useApi())return Promise.resolve([]);const k=ep.url+'|'+lang;const c=XSV.get(k);if(c&&Date.now()-c.t<10*60e3)return c.p;
   const n=ep.number;const p=Promise.allSettled(['animeflv','tioanime','monoschinos'].map(pv=>Promise.race([xProv(pv,D.data,n,lang),sleep(15000).then(()=>[])])))
@@ -2636,7 +2636,7 @@ function paintEpLabel(){$('#p-sub').textContent=`Episodio ${P.ep.number}`;const 
 function paintLang(){$('#p-langn').textContent=FLAG[P.lang]+' '+LNAME[P.lang];$('#p-langf').textContent=FLAG[P.lang];$('#p-langb').textContent=LSHORT[P.lang]}
 async function loadEpisode(){
   if(!P.resume&&P.ep&&P.lastEp===P.ep.url&&P.lastT>5)P.resume=P.lastT;
-  const tk=++P.tk;P.diag=[];P.xTried=0;P.endShown=false;P.endCancel=false;P.nextPre=0;loadSkips(tk);resetMedia();paintLang();loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
+  const tk=++P.tk;P.diag=[];P.xTried=0;P.xweb=[];P.endShown=false;P.endCancel=false;P.nextPre=0;loadSkips(tk);resetMedia();paintLang();loader(true,`${FLAG[P.lang]} Cargando en ${LNAME[P.lang]}…`);
   /* episodio descargado: se ve desde el teléfono, sin gastar datos */
   const loc=dlLocal(P.ep,P.lang);P.isLocal=false;
   if(loc&&P.noLocal!==P.ep.url){P.isLocal=true;P.servers={sub:[],dub:[]};P.idx=0;P.alts=[];loader(true,'Abriendo la descarga…');attach(dlSrc(loc),loc.kind==='hls'?'hls':'mp4',tk);
@@ -2671,7 +2671,8 @@ async function playLang(tk,skip){
   if(!P.xTried&&!P.isLocal){P.xTried=1;loader(true,`${FLAG[P.lang]} Buscando más servidores…`);
     const ex=await extraServers(P.ep,P.lang).catch(()=>[]);if(tk!==P.tk)return;
     const have=new Set(list.map(x=>x.url));const add=ex.filter(x=>!have.has(x.url));
-    if(add.length){list.push(...add);return playLang(tk,skip)}}
+    P.xweb=add.filter(x=>!SRC.canResolve(x));const dir=add.filter(x=>SRC.canResolve(x));
+    if(dir.length){list.push(...dir);return playLang(tk,skip)}}
   /* sin video directo: se abre el reproductor web (publicidad bloqueada) */
   autoFrame(list,tk);
 }
@@ -2679,9 +2680,11 @@ function noDirect(tk){
   if(tk!==P.tk)return;const o=P.lang==='sub'?'dub':'sub';const alt=(P.servers[o]||[]).some(x=>SRC.canResolve(x));
   loader(true,'');$('#ploader .spin').style.display='none';$('#ploader').classList.add('err');
   const dg=[...new Set(P.diag||[])].slice(-3).join(' · ');
-  $('#ptxt').innerHTML=`<b style="font-size:16px;color:#fff">Este episodio no tiene video directo</b><br><span style="font-weight:500">${alt?`Puedes verlo en ${LNAME[o]}.`:'Los servidores de este episodio no responden ahora. Intenta de nuevo en un rato.'}</span><div class="btnrow" style="justify-content:center;margin-top:14px"><button class="btn sec" id="pe-back">Volver</button>${alt?`<button class="btn pri" id="pe-alt">${FLAG[o]} Ver en ${LNAME[o]}</button>`:''}<button class="btn ${alt?'sec':'pri'}" id="pe-retry">Reintentar</button></div>${dg?`<small class="pdiag">Detalle: ${esc(dg)}</small>`:''}`;
+  const i0=P.list.findIndex(e=>e.url===P.ep.url),hasNx=i0>=0&&i0<P.list.length-1;
+  $('#ptxt').innerHTML=`<b style="font-size:16px;color:#fff">Servidores no disponibles</b><br><span style="font-weight:500">${alt?`Puedes verlo en ${LNAME[o]}.`:'Se revisaron todos los servidores de todas las fuentes y ninguno tiene este episodio ahora. Intenta de nuevo en un rato.'}</span><div class="btnrow" style="justify-content:center;margin-top:14px;flex-wrap:wrap"><button class="btn sec" id="pe-back">Volver</button>${alt?`<button class="btn pri" id="pe-alt">${FLAG[o]} Ver en ${LNAME[o]}</button>`:''}<button class="btn ${alt?'sec':'pri'}" id="pe-retry">Reintentar</button>${hasNx?`<button class="btn sec" id="pe-next">Siguiente episodio</button>`:''}</div>${dg?`<small class="pdiag">Detalle: ${esc(dg)}</small>`:''}`;
   $('#pe-back').onclick=()=>closeTop();
-  $('#pe-retry').onclick=()=>{$('#ploader .spin').style.display='';loadEpisode()};
+  $('#pe-retry').onclick=()=>{$('#ploader .spin').style.display='';ALIVE.clear();XSV.clear();loadEpisode()};
+  if(hasNx)$('#pe-next').onclick=()=>{$('#ploader .spin').style.display='';$('#ploader').classList.remove('err');goEp(1)};
   if(alt)$('#pe-alt').onclick=()=>{$('#ploader .spin').style.display='';P.lang=o;playLang(++P.tk)};
   if(KBD)setTimeout(()=>($('#pe-alt')||$('#pe-retry')).focus(),450)}
 /* mientras se usa el reproductor web, la app no deja que la página abra publicidad ni el navegador */
@@ -2725,14 +2728,17 @@ async function attach(url,type,tk){
   updSrvName();
 }
 /* ¿el video de este servidor sigue existiendo? (evita abrir páginas que dicen "File is no longer available") */
-const DEADRX=/no longer available|has been deleted|was deleted|been removed|file (?:is )?(?:not found|removed|expired)|video (?:not found|has been removed|is unavailable|was removed)|archivo (?:no existe|eliminado|no disponible)|el video (?:no existe|fue eliminado|ha sido eliminado)|видео заблокировано|видео удалено/i;
+const DEADRX=/no longer available|has been deleted|was deleted|been removed|file (?:is )?(?:not found|removed|expired)|video (?:not found|has been removed|is unavailable|was removed)|archivo (?:no existe|eliminado|no disponible)|el video (?:no existe|fue eliminado|ha sido eliminado)|видео заблокировано|видео удалено|\b404 not found\b|<title>\s*(?:404|not found|file not found|error)|video (?:no encontrado|no disponible)|file (?:does not exist|doesn't exist)|this (?:video|file) (?:is no longer available|has been deleted|does not exist|was deleted)|sorry,? (?:this|the) (?:video|file)/i;
 const ALIVE=new Map();
 async function embedAlive(u){if(ALIVE.has(u))return ALIVE.get(u);let ok=true;
   try{const r=await Promise.race([get(u,{'User-Agent':FF}),sleep(6000).then(()=>null)]);if(r){const h=String(r.data||'');ok=!(h.length<60||DEADRX.test(h.slice(0,80000)))}}
   catch(e){const m=String(e.message||'');ok=/respondi[oó] (403|429|5\d\d)/.test(m)}
   ALIVE.set(u,ok);if(ALIVE.size>300)ALIVE.delete(ALIVE.keys().next().value);return ok}
 async function autoFrame(l,tk){
-  const order=[...l.filter(x=>!SRC.canResolve(x)&&!isMega(x)),...l.filter(x=>SRC.canResolve(x)),...l.filter(x=>!SRC.canResolve(x)&&isMega(x))];
+  if(!P.xTried&&!P.isLocal){P.xTried=1;loader(true,'Buscando más servidores…');try{const ex=await extraServers(P.ep,P.lang);if(tk!==P.tk)return;const have=new Set(l.map(x=>x.url));P.xweb=ex.filter(x=>!have.has(x.url))}catch(e){}}
+  const seen=new Set(),all=[...l,...(P.xweb||[])].filter(x=>x&&x.url&&!seen.has(x.url)&&seen.add(x.url));
+  if(all.length>l.length){l.push(...all.slice(l.length))}
+  const order=[...all.filter(x=>!SRC.canResolve(x)&&!isMega(x)),...all.filter(x=>SRC.canResolve(x)),...all.filter(x=>!SRC.canResolve(x)&&isMega(x))];
   loader(true,'Buscando un servidor que funcione…');
   const alive=await Promise.all(order.map(x=>embedAlive(x.url)));if(tk!==P.tk)return;
   const it=order.find((x,i)=>alive[i]);if(!it)return noDirect(tk);

@@ -911,7 +911,7 @@ h2.sec .vt2{font-size:13px;font-weight:700;color:#a78bfa}
 .tv .sl.hx .art:not(.wide) .fg{display:block;left:auto;right:5%;top:7%;height:86%;width:auto;max-width:36%;transform:none}
 #vcur{position:fixed;left:0;top:0;z-index:60;width:30px;height:30px;pointer-events:none;display:none;filter:drop-shadow(0 2px 4px rgba(0,0,0,.7));transition:opacity .4s}
 #vcur svg{width:100%;height:100%;fill:#fff;stroke:#2a1b6e;stroke-width:1.4}
-#vcur.dim{opacity:.35}
+#vcur.dim{opacity:.75}
 #vcur:after{content:"";position:absolute;left:-14px;top:-14px;width:34px;height:34px;border-radius:50%;border:3px solid #7c5cff;opacity:0}
 #vcur.tap:after{animation:vctap .5s ease-out}
 @keyframes vctap{0%{opacity:1;transform:scale(.4)}100%{opacity:0;transform:scale(1.3)}}
@@ -2658,7 +2658,7 @@ async function playLang(tk,skip){
     const have=new Set(list.map(x=>x.url));const add=ex.filter(x=>!have.has(x.url));
     if(add.length){list.push(...add);return playLang(tk,skip)}}
   /* sin video directo: se abre el reproductor web (publicidad bloqueada) */
-  const web=list.findIndex(x=>!SRC.canResolve(x));P.idx=web<0?0:web;useFrame(list[P.idx],tk);
+  autoFrame(list,tk);
 }
 function noDirect(tk){
   if(tk!==P.tk)return;const o=P.lang==='sub'?'dub':'sub';const alt=(P.servers[o]||[]).some(x=>SRC.canResolve(x));
@@ -2671,7 +2671,8 @@ function noDirect(tk){
   if(KBD)setTimeout(()=>($('#pe-alt')||$('#pe-retry')).focus(),450)}
 /* mientras se usa el reproductor web, la app no deja que la página abra publicidad ni el navegador */
 let NAVB=false;function navBlock(on){if(NAVB===on)return;NAVB=on;try{if(NXS&&NXS.navBlock)NXS.navBlock({on}).catch(()=>{})}catch(e){}}
-if(NXS&&NXS.addListener)try{NXS.addListener('nxBlocked',()=>toast('Se bloqueó una ventana de publicidad del servidor')).catch?.(()=>{})}catch(e){}
+/* la publicidad se bloquea en silencio (sin avisos que tapen el video); en TV el control vuelve a la app */
+if(NXS&&NXS.addListener)try{NXS.addListener('nxBlocked',()=>{if(isTV&&P.mode==='frame')setTimeout(()=>{try{if(document.activeElement===F)F.blur();$('#player').focus({preventScroll:true});vcur()}catch(e){}},150)}).catch?.(()=>{})}catch(e){}
 function resetMedia(){navBlock(false);if($('#vcur'))vcur(false);
   if(P.hls){try{P.hls.destroy()}catch(e){}P.hls=null}
   V.pause();V.removeAttribute('src');V.load();F.src='about:blank';F.classList.add('hide');V.classList.remove('hide');P.mode='video';
@@ -2690,7 +2691,7 @@ async function attach(url,type,tk){
     if(P.alts&&P.alts.length){const n=P.alts.shift();V.onerror=null;attach(n,mtype(n),tk);return}
     const skip=P.skip||new Set();const it=l[P.idx];if(it)skip.add(it.url);
     if(l.some(x=>SRC.canResolve(x)&&!skip.has(x.url))||!P.xTried){V.onerror=null;playLang(tk,skip);return}
-    const w=l.find(x=>!SRC.canResolve(x))||l[P.idx]||l[0];if(w){if(!isTV)toast('El video directo falló, usando reproductor web');P.idx=l.indexOf(w);useFrame(w,tk)}else playerError('No se pudo reproducir el video.')};
+    if(l.length)autoFrame(l,tk);else playerError('No se pudo reproducir el video.')};
   V.onerror=()=>fail('video '+(V.error?'código '+V.error.code:'con error'));
   if(type==='hls'&&window.Hls&&Hls.isSupported()){
     /* empieza con la calidad que aguanta TU internet (velocidad medida en los videos anteriores), no siempre alta ni siempre baja */
@@ -2708,6 +2709,19 @@ async function attach(url,type,tk){
   }else{V.src=url;V.play().catch(()=>{})}
   updSrvName();
 }
+/* ¿el video de este servidor sigue existiendo? (evita abrir páginas que dicen "File is no longer available") */
+const DEADRX=/no longer available|has been deleted|was deleted|been removed|file (?:is )?(?:not found|removed|expired)|video (?:not found|has been removed|is unavailable|was removed)|archivo (?:no existe|eliminado|no disponible)|el video (?:no existe|fue eliminado|ha sido eliminado)|видео заблокировано|видео удалено/i;
+const ALIVE=new Map();
+async function embedAlive(u){if(ALIVE.has(u))return ALIVE.get(u);let ok=true;
+  try{const r=await Promise.race([get(u,{'User-Agent':FF}),sleep(6000).then(()=>null)]);if(r){const h=String(r.data||'');ok=!(h.length<60||DEADRX.test(h.slice(0,80000)))}}
+  catch(e){ok=!/respondi[oó] (404|410)/.test(e.message)}
+  ALIVE.set(u,ok);if(ALIVE.size>300)ALIVE.delete(ALIVE.keys().next().value);return ok}
+async function autoFrame(l,tk){
+  const order=[...l.filter(x=>!SRC.canResolve(x)&&!isMega(x)),...l.filter(x=>SRC.canResolve(x)),...l.filter(x=>!SRC.canResolve(x)&&isMega(x))];
+  loader(true,'Buscando un servidor que funcione…');
+  const alive=await Promise.all(order.map(x=>embedAlive(x.url)));if(tk!==P.tk)return;
+  const it=order.find((x,i)=>alive[i]);if(!it)return noDirect(tk);
+  P.idx=l.indexOf(it);useFrame(it,tk)}
 function useFrame(it,tk){
   if(tk!==P.tk)return;
   /* reproductor web (también en TV): la app bloquea las ventanas de publicidad; en TV el OK del control toca el video */
@@ -2716,7 +2730,8 @@ function useFrame(it,tk){
   P.mode='frame';navBlock(true);F.classList.remove('hide');F.src=it.url;loader(false);
   $$('#p-mid,#p-seek,#p-cur,#p-dur,#p-fit,#p-speed,#p-op,#p-q').forEach(x=>x.classList.add('hide'));updSrvName();
   $('#ctl').classList.remove('off');clearTimeout(P.hideT);P.hideT=setTimeout(()=>$('#ctl').classList.add('off'),4000);
-  if(isTV){F.tabIndex=-1;VC.x=-1;setTimeout(()=>{if(P.mode==='frame'&&tk===P.tk){vcur();toast('Reproductor web: mueve el cursor con las flechas y pulsa OK · arriba del todo: opciones',6000)}},1800)}
+  if(isTV){F.tabIndex=-1;VC.x=-1;setTimeout(()=>{if(P.mode==='frame'&&tk===P.tk){vcur();toast('Reproductor web: mueve el cursor con las flechas y pulsa OK · arriba del todo: opciones',6000)}},1800);
+    clearInterval(P.fgI);P.fgI=setInterval(()=>{if(P.mode!=='frame'||tk!==P.tk){clearInterval(P.fgI);return}if(document.activeElement===F){try{F.blur();$('#player').focus({preventScroll:true})}catch(e){}}},700)}
 }
 /* TV: cursor que se mueve con las flechas (como en Downloader); OK = toque real donde está el cursor; luego el control vuelve a la app */
 const VC={x:-1,y:-1};
@@ -2724,7 +2739,7 @@ function vcur(show){let c=$('#vcur');if(!c){c=document.createElement('div');c.id
   if(show===false){c.style.display='none';return}const r=F.getBoundingClientRect();
   if(VC.x<0){VC.x=r.left+r.width/2;VC.y=r.top+r.height/2}VC.x=Math.max(r.left+2,Math.min(r.right-4,VC.x));VC.y=Math.max(r.top+2,Math.min(r.bottom-4,VC.y));
   c.style.display='block';c.style.transform=`translate(${VC.x-3}px,${VC.y-2}px)`;clearTimeout(vcur.t);vcur.t=setTimeout(()=>c.classList.add('dim'),4000);c.classList.remove('dim')}
-function vcMove(k,rep){const st=Math.min(60,14+(rep||0)*6);if(k==='ArrowLeft')VC.x-=st;if(k==='ArrowRight')VC.x+=st;if(k==='ArrowUp')VC.y-=st;if(k==='ArrowDown')VC.y+=st;vcur()}
+function vcMove(k,rep){const st=Math.min(90,26+(rep||0)*10);if(k==='ArrowLeft')VC.x-=st;if(k==='ArrowRight')VC.x+=st;if(k==='ArrowUp')VC.y-=st;if(k==='ArrowDown')VC.y+=st;vcur()}
 function frameTap(center){const r=F.getBoundingClientRect();if(!r.width)return;
   if(VC.x<0||center){VC.x=r.left+r.width/2;VC.y=r.top+r.height/2}vcur();
   const x=VC.x,y=VC.y;const c=$('#vcur');if(c){c.classList.remove('tap');void c.offsetWidth;c.classList.add('tap')}

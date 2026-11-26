@@ -2677,15 +2677,18 @@ async function playLang(tk,skip){
   autoFrame(list,tk);
 }
 function noDirect(tk){
-  if(tk!==P.tk)return;const o=P.lang==='sub'?'dub':'sub';const alt=(P.servers[o]||[]).some(x=>SRC.canResolve(x));
+  if(tk!==P.tk)return;const o=P.lang==='sub'?'dub':'sub';
+  /* en Latino siempre se ofrece japonés (casi todos los episodios lo tienen); en japonés, Latino solo si hay servidores */
+  const alt=o==='sub'||(P.servers[o]||[]).length>0;const oName=o==='sub'?'japonés (subtitulado)':'Latino';
   loader(true,'');$('#ploader .spin').style.display='none';$('#ploader').classList.add('err');
   const dg=[...new Set(P.diag||[])].slice(-3).join(' · ');
   const i0=P.list.findIndex(e=>e.url===P.ep.url),hasNx=i0>=0&&i0<P.list.length-1;
-  $('#ptxt').innerHTML=`<b style="font-size:16px;color:#fff">Servidores no disponibles</b><br><span style="font-weight:500">${alt?`Puedes verlo en ${LNAME[o]}.`:'Se revisaron todos los servidores de todas las fuentes y ninguno tiene este episodio ahora. Intenta de nuevo en un rato.'}</span><div class="btnrow" style="justify-content:center;margin-top:14px;flex-wrap:wrap"><button class="btn sec" id="pe-back">Volver</button>${alt?`<button class="btn pri" id="pe-alt">${FLAG[o]} Ver en ${LNAME[o]}</button>`:''}<button class="btn ${alt?'sec':'pri'}" id="pe-retry">Reintentar</button>${hasNx?`<button class="btn sec" id="pe-next">Siguiente episodio</button>`:''}</div>${dg?`<small class="pdiag">Detalle: ${esc(dg)}</small>`:''}`;
+  $('#ptxt').innerHTML=`<b style="font-size:16px;color:#fff">Servidores no disponibles</b><br><span style="font-weight:500">${alt?(o==='sub'?'Ningún servidor tiene este episodio en Latino ahora. Selecciona japonés (subtitulado) para verlo.':'Ningún servidor tiene este episodio en japonés ahora. Puedes verlo en Latino.'):'Se revisaron todos los servidores de todas las fuentes y ninguno tiene este episodio ahora. Intenta de nuevo en un rato.'}</span><div class="btnrow" style="justify-content:center;margin-top:14px;flex-wrap:wrap"><button class="btn sec" id="pe-back">Volver</button>${alt?`<button class="btn pri" id="pe-alt">${FLAG[o]} Ver en ${oName}</button>`:''}<button class="btn ${alt?'sec':'pri'}" id="pe-retry">Reintentar</button>${hasNx?`<button class="btn sec" id="pe-next">Siguiente episodio</button>`:''}</div>${dg?`<small class="pdiag">Detalle: ${esc(dg)}</small>`:''}`;
   $('#pe-back').onclick=()=>closeTop();
   $('#pe-retry').onclick=()=>{$('#ploader .spin').style.display='';ALIVE.clear();XSV.clear();loadEpisode()};
   if(hasNx)$('#pe-next').onclick=()=>{$('#ploader .spin').style.display='';$('#ploader').classList.remove('err');goEp(1)};
-  if(alt)$('#pe-alt').onclick=()=>{$('#ploader .spin').style.display='';P.lang=o;playLang(++P.tk)};
+  if(alt)$('#pe-alt').onclick=()=>{$('#ploader .spin').style.display='';$('#ploader').classList.remove('err');P.lang=o;P.xTried=0;P.xweb=[];paintLang();
+    if((P.servers[o]||[]).length)playLang(++P.tk);else loadEpisode()};
   if(KBD)setTimeout(()=>($('#pe-alt')||$('#pe-retry')).focus(),450)}
 /* mientras se usa el reproductor web, la app no deja que la página abra publicidad ni el navegador */
 let NAVB=false;function navBlock(on,host){if(NAVB===on&&!host)return;NAVB=on;try{if(NXS&&NXS.navBlock)NXS.navBlock({on,host:host||''}).catch(()=>{})}catch(e){}}

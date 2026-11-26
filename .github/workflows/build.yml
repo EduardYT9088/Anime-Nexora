@@ -1,17 +1,36 @@
-name: Limpieza
-on: workflow_dispatch
+name: Compilar APK
+on:
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
-  limpiar:
+  diag:
     runs-on: ubuntu-latest
     steps:
-      - name: Borrar rama y prueba de monedas
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          R: ${{ github.repository }}
-        run: |
-          gh release delete v1.0.4-monedas-prueba -R "$R" --yes --cleanup-tag || true
-          gh api -X DELETE "repos/$R/git/refs/heads/prueba-monedas" || true
-          gh api "repos/$R/branches" --jq '.[].name'
-          gh api "repos/$R/releases" --jq '.[].tag_name'
+      - run: |
+          set +e; mkdir out; cd out
+          UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
+          g(){ code=$(curl -s -L -m 30 -A "$UA" -H 'Accept-Language: es-ES,es;q=0.9' -o "$1" -w '%{http_code}' "$2"); echo "$1 $code $(wc -c < "$1") $2" | tee -a index.txt; }
+          g av-op2.html "https://animeav1.com/media/one-piece/2"
+          g nj-op2.html "https://ww4.animeonline.ninja/episodio/one-piece-1x2/"
+          cat av-op2.html nj-op2.html | grep -oiE 'https?:\\?/\\?/[^"\\ ]*(moon|byse|bysezoxexe|f75s|filemoon|kerapoxy)[^"\\ ]*' | sed 's#\\/#/#g' | sort -u > emb.txt
+          cat emb.txt
+          n=0; while read u; do n=$((n+1)); g "fm-$n-noref.html" "$u"; code=$(curl -s -L -m 30 -A "$UA" -e "https://animeav1.com/" -o "fm-$n-ref.html" -w '%{http_code}' "$u"); echo "fm-$n-ref $code $(wc -c < fm-$n-ref.html)" | tee -a index.txt; curl -s -I -L -m 20 -A "$UA" "$u" > "fm-$n-head.txt"; done < emb.txt
+          grep -o 'data-video="[^"]*"\|https://[a-z0-9.]*moon[^"]*' av-op2.html | head -20 >> index.txt
+          python3 - <<'PY' >> index.txt
+          import struct,glob
+          def size(f):
+              d=open(f,'rb').read()
+              if d[:2]!=b'\xff\xd8': return 'no-jpg'
+              i=2
+              while i<len(d):
+                  if d[i]!=0xFF: i+=1; continue
+                  m=d[i+1]
+                  if m in (0xC0,0xC1,0xC2):
+                      h,w=struct.unpack('>HH',d[i+5:i+9]); return f'{w}x{h}'
+                  l=struct.unpack('>H',d[i+2:i+4])[0]; i+=2+l
+              return '?'
+          for f in sorted(glob.glob('*.jpg')): print('SIZE',f,size(f))
+          PY
+          git init -q && git checkout -q -b diag-datos && git add -A && git -c user.name=diag -c user.email=diag@x commit -q -m datos
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" diag-datos

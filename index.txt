@@ -1,0 +1,8 @@
+404 14 https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.mini.txt
+404: Not Found
+404 14 https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/popupads.txt
+404: Not Found
+403 152 https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/domains/pro.mini.txt
+Package size exceeded the configured limit of 150 MB. Try https://github.com/hagezi/dns-blocklists/tree/37522026.330.57568/domains/pro.mini.txt instead.
+200 2046948 https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro.mini-onlydomains.txt
+# Title: HaGeZi's Multi PRO mini (best for browser/mobile ad blockers)|# Description: A size-optimized version made for DNS or browser blockers, like devices with limited RAM. This only contains domains from the full Pro list that show up on Top 1M/10M lists (Umbrella, Cloudflare, Tranco, Chrome, Bu
